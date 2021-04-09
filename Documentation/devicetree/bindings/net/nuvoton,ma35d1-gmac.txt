@@ -1,0 +1,55 @@
+Nuvoton MA35D1 GMAC driver
+
+Required properties:
+- compatible: "nuvoton,ma35d1-gmac"
+- reg: Address and length of the register set for the device
+- interrupts: Should contain the EMAC interrupts
+- interrupt-names: Should contain the interrupt names "macirq".
+- nuvoton,ma35d1-sys: phandle to the syscon setting for gmac.
+- clocks: First entry is the GMAC engine clock, and the second entry
+	is <&clk epll_div8> for PTP clock.
+- clock-names: Should be "stmmaceth" and "ptp_ref".
+- resets: = Should contain the reset source of GMAC
+- reset-names: Always "stmmaceth";
+- clk_scr: Defines the MDIO clock rate, should set to 4.
+- mac-id: Ether 0 or 1 depends on the GMAC instance
+- phy-mode: see ethernet.txt [1].
+- phy-handle: see ethernet.txt [1].
+
+The MAC address will be determined using the properties defined in
+ethernet.txt[1].
+
+- PHY subnode: inherits from phy binding [2]
+
+[1] Documentation/devicetree/bindings/net/ethernet.txt
+[2] Documentation/devicetree/bindings/net/phy.txt
+
+Examples:
+
+gmac0: ethernet@40120000 {
+	compatible = "nuvoton,ma35d1-gmac";
+	reg = <0x0 0x40120000 0x0 0x10000>;
+	interrupts = <GIC_SPI 23 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-names = "macirq";
+	mac-address = [ 00 11 22 33 44 55 ];
+	nuvoton,ma35d1-sys = <&sys>;
+	clocks = <&clk emac0_gate>, <&clk epll_div8>;
+	clock-names = "stmmaceth", "ptp_ref";
+	resets = <&reset MA35D1_RESET_GMAC0>;
+	reset-names = "stmmaceth";
+	mac-id = <0>;
+	clk_csr = <4>;
+	status = "okay";
+
+	phy-mode = "rgmii-id";
+	phy-handle = <&eth_phy0>;
+	mdio0 {
+		compatible = "snps,dwmac-mdio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		eth_phy0: ethernet-phy@0 {
+			reg = <1>;
+		};
+	};
+};

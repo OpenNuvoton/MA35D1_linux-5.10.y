@@ -1,0 +1,51 @@
+* Nuvoton MA35D1 PDMA Controller
+
+Required properties:
+- compatible should contain:
+  * "nuvoton,ma35d1-pdma" for ma35d1 compatible PDMA
+
+- reg: The base address of the PDMA register bank.
+
+- interrupts: A single interrupt specifier.
+ One interrupt per dma-requests, or 10 if no dma-requests property is present
+
+- dma-requests: The number of DMA channels
+
+
+Examples:
+
+
+        pdma0: pdma@40080000 {
+                compatible = "nuvoton,ma35d1-pdma";
+                reg = <0x0 0x40080000 0x0 0x2000>;
+                interrupts = <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>;
+                #dma-cells = <1>;
+                #dma-channels = <10>;
+                #dma-requests = <32>;
+                status = "okay";
+        };
+        pdma1: pdma@40090000 {
+                compatible = "nuvoton,ma35d1-pdma";
+                reg = <0x0 0x40090000 0x0 0x2000>;
+                interrupts = <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
+                #dma-cells = <1>;
+                #dma-channels = <10>;
+                status = "disabled";
+        };
+        pdma2: pdma@400A0000 {
+                compatible = "nuvoton,ma35d1-pdma";
+                reg = <0x0 0x400A0000 0x0 0x2000>;
+                interrupts = <GIC_SPI 42 IRQ_TYPE_LEVEL_HIGH>;
+                #dma-cells = <1>;
+                #dma-channels = <10>;
+                status = "disabled";
+        };
+        pdma3: pdma@400B0000 {
+                compatible = "nuvoton,ma35d1-pdma";
+                reg = <0x0 0x400B0000 0x0 0x2000>;
+                interrupts = <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>;
+                #dma-cells = <1>;
+                #dma-channels = <10>;
+                status = "disabled";
+        };
+

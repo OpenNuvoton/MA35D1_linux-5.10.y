@@ -752,6 +752,8 @@ patternProperties:
     description: NutsBoard
   "^nuvoton,.*":
     description: Nuvoton Technology Corporation
+  "^novatek,.*":
+    description: Novatek Technology Corporation
   "^nvd,.*":
     description: New Vision Display
   "^nvidia,.*":

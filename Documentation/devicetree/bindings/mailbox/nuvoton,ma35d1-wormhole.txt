@@ -1,0 +1,45 @@
+* Nuvoton MA35D1 Wormhole Controller
+
+MA35D1 Wormhole Controller supports
+a. 4 bi-direction channels (#0~#3) for data transfer with fix message size 4 words
+b. 4 general interrupt channels (#4~#7) for sending sinal only
+c. 1 status channel (#8) for detecting CM4 status power status change and reset event
+
+
+Mailbox Device Node:
+====================
+Required properties:
+- compatible:   Must be "nuvoton,ma35d1-wormhole"
+- reg:          Register address range (base address and length)
+- interrupts:   Interrupt specifiers for wormhole controller.
+- #mbox-cells:  Number of cells required for the mailbox specifier. Must be 1.
+                The data contained in the mbox specifier of the "mboxes"
+                property in the client node is the mailbox channel index.
+
+Optional properties:
+- wakeup-source: Flag to indicate whether this device can wake up the system
+
+
+
+Example:
+	wormhole: mailbox@403A0000 {
+		compatible = "nuvoton,ma35d1-wormhole";
+		reg = <0x0 0x403A0000 0x0 0x1000>;
+		interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
+		wakeup-source;
+		#mbox-cells = <1>;
+		status = "okay";
+	};
+
+
+Mailbox client
+===============
+Required properties:
+- mboxes:		Standard property to specify a Mailbox channel (See ./mailbox.txt)
+			Cells must match 'mbox-cells' (See Mailbox Device Node above).
+
+Example of client using channel 1 for Tx/Rx:
+	wormhole_test: wormhole_test{
+		...
+		mboxes = <&wormhole 1>;
+	};

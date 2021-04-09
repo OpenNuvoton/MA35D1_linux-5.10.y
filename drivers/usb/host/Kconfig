@@ -264,6 +264,13 @@ config USB_EHCI_HCD_STI
 	help
 	  Enable support for the on-chip EHCI controller found on
 	  STMicroelectronics consumer electronics SoC's.
+	  
+config USB_EHCI_HCD_MA35D1
+        tristate  "Support for Nuvoton MA35D1 EHCI USB controller"
+        depends on USB_EHCI_HCD && ARCH_MA35D1
+        default y
+        ---help---
+          Enables support for Nuvoton MA35D1 EHCI USB controller.
 
 config USB_EHCI_HCD_AT91
 	tristate  "Support for Atmel on-chip EHCI USB controller"
@@ -510,6 +517,13 @@ config USB_OHCI_HCD_DAVINCI
 	  Enables support for the DaVinci DA8xx integrated OHCI
 	  controller. This driver cannot currently be a loadable
 	  module because it lacks a proper PHY abstraction.
+
+config USB_OHCI_HCD_MA35D1
+        tristate  "Support for Nuvoton MA35D1 OHCI USB controller"
+        depends on USB_OHCI_HCD && ARCH_MA35D1
+        default y
+        ---help---
+          Enables support for Nuvoton MA35D1 OHCI USB controller.
 
 config USB_OHCI_HCD_PPC_OF_BE
 	bool "OHCI support for OF platform bus (big endian)"

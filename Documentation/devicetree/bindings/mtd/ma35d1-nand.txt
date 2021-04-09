@@ -1,0 +1,54 @@
+Nuvoton MA35D1 NAND Flash Interface (NFI) controller DT binding
+
+Required properties:
+
+- compatible: "nuvoton,ma35d1-nand"
+- reg: address range of the nand block
+- interrupts: irq to be used
+- sys: reference to the system register
+- clk: reference to the system clock
+
+- nand-ecc-mode: support hw oob first mode.
+- nand-bus-width: support 8-bit
+- nand-on-flash-bbt: see nand-controller.yaml
+
+Optional properties:
+
+- nand-ecc-strength:   Number of bits to correct per ECC step.
+- nand-ecc-step-size:  Number of data bytes covered by a single ECC step.
+
+Flash chip may optionally contain additional sub-nodes describing partitions of
+the address space. See partition.txt for more detail.
+
+Example:
+
+	nand:nand@401A0000 {
+		compatible = "nuvoton,ma35d1-nand";
+		reg = <0x0 0x401A0000 0x0 0x1000>;
+		interrupts = <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>;	/* 70-32 */
+		nuvoton,sys = <&sys>;
+		nuvoton,clk = <&clk>;
+		clock-enable = "nand_gate";
+		nand-ecc-mode = "hw_oob_first";
+		nand-ecc-algo = "bch";
+		nand-bus-width = <8>;
+		nand-ecc-strength = <8>;
+		nand-ecc-step-size = <512>;
+		nand-on-flash-bbt;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			uboot@0 {
+				label = "uboot";
+				reg = <0x0000000 0x100000>;
+				read-only;
+			};
+
+			...
+
+	};
+
+

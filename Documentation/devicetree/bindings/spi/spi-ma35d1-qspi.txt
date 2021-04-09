@@ -1,0 +1,102 @@
+* Nuvoton MA35D1 QSPI Controller
+
+The Nuvoton MA35D1 has 2 QSPI controllers that supports Quad mode transfer.
+
+Required Properties:
+
+- compatible: should be "nuvoton,nu3500-qspi"
+- reg: physical base address of the controller and length of memory mapped
+	region.
+- interrupts: The interrupt number to the cpu. The interrupt specifier format
+	depends on the interrupt controller.
+- clocks: clock-names of QSPI.
+- num_cs: number of chip select.
+- lsb: lsb first.
+- txneg: tx on falling edge.
+- clkpol: clock polarity when idle.
+- rxneg: rx on falling edge.
+- sleep: suspend interval between two successive transmit/receive transaction
+	in a transfer.
+- txbitlen: tx bit length.
+- quad: support Quad mode.
+- bus_num: bus number.
+
+
+Example: including SPI NOR and NAND 
+	qspi0: qspi0@40680000 {
+		compatible = "nuvoton,nu3500-qspi";
+		reg = <0x0 0x40680000 0x0 0x10000>;
+		interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk qspi0_gate>;
+		num_cs = <2>;
+		lsb = <0>;
+		txneg = <1>;
+		clkpol = <0>;
+		rxneg = <0>;
+		sleep = <0>;
+		txbitlen = <8>;
+		quad = <0>;
+		bus_num = <0>;
+		status = "ok";
+
+		flash@0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "winbond,w25q128";
+			spi-max-frequency = <10000000>;
+			reg = <0 0x0 0x2000000>;
+
+			partition@0 {
+				label = "U-Boot";
+				reg = <0x0 0x40000>;
+			};
+			partition@40000 {
+				label = "Linux";
+				reg = <0x40000 0x40000>;
+			};
+			partition@80000 {
+				label = "Rootfs";
+				reg = <0x80000 0x40000>;
+			};
+		};
+
+	};
+
+	qspi1: qspi1@40690000 {
+		compatible = "nuvoton,nu3500-qspi";
+		reg = <0x0 0x40690000 0x0 0x10000>;
+		interrupts = <GIC_SPI 58 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk qspi1_gate>;
+		num_cs = <2>;
+		lsb = <0>;
+		txneg = <1>;
+		clkpol = <0>;
+		rxneg = <0>;
+		sleep = <0>;
+		txbitlen = <8>;
+		quad = <0>;
+		bus_num = <1>;
+		status = "disabled";
+
+		flash: flash@0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "spi-nand";
+			reg = <0>;
+			spi-max-frequency = <10000000>;
+
+			partition@0 {
+				label = "U-Boot";
+				reg = <0x0 0x100000>;
+			};
+			partition@100000 {
+				label = "Linux";
+				reg = <0x100000 0x200000>;
+			};
+			partition@30000 {
+				label = "Rootfs";
+				reg = <0x300000 0x300000>;
+			};
+		};
+	};
+

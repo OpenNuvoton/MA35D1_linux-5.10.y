@@ -1,0 +1,19 @@
+MA35D1 Enhanced Pulse Width Modulator(EPWM)
+
+The chip provides three EPWM generators including EPWM0 ~ EPWM2
+Each EPWM supports 6 channels.
+
+Required Properties of EPWM:
+
+- compatible : Should be "nuvoton,ma35d1-epwm"
+- reg : address and length of the register for the device.
+- clocks: Enable EPWM clock.
+
+Example:
+
+	pwm0: pwm0@40580000 {
+		compatible = "nuvoton,ma35d1-epwm";
+		reg = <0x0 0x40580000 0x0 0x10000>;
+		clocks = <&clk epwm0_gate>;
+		status = "okay";
+	};

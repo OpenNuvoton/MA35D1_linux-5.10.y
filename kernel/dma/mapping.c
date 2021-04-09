@@ -440,6 +440,7 @@ void *dma_alloc_attrs(struct device *dev, size_t size, dma_addr_t *dma_handle,
 		return NULL;
 
 	debug_dma_alloc_coherent(dev, size, *dma_handle, cpu_addr);
+
 	return cpu_addr;
 }
 EXPORT_SYMBOL(dma_alloc_attrs);

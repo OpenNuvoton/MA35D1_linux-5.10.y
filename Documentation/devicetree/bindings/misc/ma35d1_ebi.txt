@@ -1,0 +1,38 @@
+NUC3500 External Bus Interface(EBI)
+
+This chip is equipped with an external bus interface for external device 
+use. The EBI supports three chip selects that can connect three external 
+devices with different timing setting requirements.
+
+Required Properties of EBI:
+
+- compatible : Should be "nuvoton,ma35d1-ebi"
+- reg : address and length of the register for the device.
+- bank: Bank number for EBI. Should be 0~2
+- clock-enable: Enable EBI clock.
+- busmode: EBI Address/Data Bus Separate Mode 1:Enable, 0:Disable.
+- csactiveLevel: Chip Select Pin Polar Inverse. 0:active low, 1:active High
+- datawidth: EBI data width is 0:8-bit or 1:16-bit
+Configure EBI timing parameters includes MCLKDIV, tALE, tACC, tAHD and IDLE.
+	- MCLKDIV:EBI output clock divide selection.(EBI_CTL0[10:8])
+	- tALE:ALE High Period.(EBI_CTL0[18:16])
+	- tACC:Data Access Time.(EBI_TCTLx[7:3])
+	- tAHD:Data Access Hold Time.(EBI_TCTLx[10:9])
+	- IDLE:Idle Cycle of Write command(W2X(EBI_TCTLx[27:24])) finish and 
+		Idle of Read-to-Read(R2R(EBI_TCTLx[15:12]))
+
+Example:
+
+	ebi0: ebi@40100000 {
+		compatible = "nuvoton,ma35d1-ebi";
+		reg = <0x0 0x40100000 0x0 0x10>;
+		bank = <0>;
+		clock-enable = "ebi_gate";
+		busmode = <1>;//Address/Data Bus Separate Mode. 0:Disabled, 1:Enabled
+		csactiveLevel = <0>;//0:Low, 1: High
+		datawidth = <1>;//0:8bit, 1: 16bit
+		tALE = <1>;//0 ~ 7,EBI_CTL0[18:16]
+		tACC = <1>;//0 ~ 31, EBI_TCTLx[7:3]
+		tAHD = <1>;//0 ~ 7, EBI_TCTLx[10:9]
+		IDLE  = <3>;//0 ~ 15, EBI_TCTLx[27:24] and EBI_TCTLx[15:12]
+	};

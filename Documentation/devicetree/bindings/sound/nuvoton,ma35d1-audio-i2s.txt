@@ -1,0 +1,48 @@
+Nuvoton MA35D1 I2S controller
+
+1. I2S driver
+Required properties:
+ - compatible : Must be "nuvoton,ma35d1-audio-i2s"
+ - reg : Must contain I2S core's registers location and length
+ - clocks : Specify I2S controller's clocks.
+ - resets : Specify I2S IP reset number.
+ - powerdown-gpios : Control the output of Audio JK_EN I/O pin.
+ - pdma_reqsel_tx : Designate I2S Tx PDMA request number.
+ - pdma_reqsel_rx : Designate I2S Rx PDMA request number.
+
+
+Example:
+	i2s0: i2s@40480000 {
+		compatible = "nuvoton,ma35d1-audio-i2s";
+		reg = <0x0 0x40480000 0x0 0x10000>;
+		interrupts = <GIC_SPI 70 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk i2s0_gate>;
+		resets = <&reset MA35D1_RESET_I2S0>;
+		powerdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>; /* PD13 */
+		pdma_reqsel_tx = <86>;
+		pdma_reqsel_rx = <87>;
+	};
+
+
+2. I2S platform driver
+Required properties:
+ - compatible : Must be "nuvoton,ma35d1-audio-pcm"
+
+Example:
+	i2s_pcm: i2s_pcm {
+		compatible = "nuvoton,ma35d1-audio-pcm";
+	};
+
+3. I2S Audio control driver
+Required properties:
+ - compatible : Must be "nuvoton,ma35d1-audio"
+ - i2s-controller : Specify using which I2S controler for Audio codec
+ - i2s-platform : Specify I2S platform driver
+
+Example:
+	sound {
+		compatible = "nuvoton,ma35d1-audio";
+		i2s-controller = <&i2s0>;
+		i2s-platform = <&i2s_pcm>;
+	};
+

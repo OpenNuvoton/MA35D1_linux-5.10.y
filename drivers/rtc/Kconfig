@@ -1894,6 +1894,12 @@ config RTC_DRV_STM32
 	   This driver can also be built as a module, if so, the module
 	   will be called "rtc-stm32".
 
+config RTC_DRV_MA35D1
+	tristate "MA35D1 RTC driver"
+	help
+	  If you say yes here you get support for the RTC subsystem of the
+	  MA35D1 used in embedded systems.
+
 config RTC_DRV_CPCAP
 	depends on MFD_CPCAP
 	tristate "Motorola CPCAP RTC"

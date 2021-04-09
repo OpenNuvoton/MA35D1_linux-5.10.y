@@ -258,6 +258,14 @@ config IMG_MDC_DMA
 	help
 	  Enable support for the IMG multi-threaded DMA controller (MDC).
 
+config MA35D1_DMA
+	tristate "MA35D1 DMA support"
+	depends on ARCH_MA35D1
+	select DMA_ENGINE
+	help
+	  Support the MA35D1 DMA engine. This engine is integrated into
+	  NUVOTON MA35D1 chips.
+
 config IMX_DMA
 	tristate "i.MX DMA support"
 	depends on ARCH_MXC

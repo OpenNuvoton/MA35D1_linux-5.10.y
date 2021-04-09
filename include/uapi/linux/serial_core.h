@@ -279,4 +279,7 @@
 /* Freescale LINFlexD UART */
 #define PORT_LINFLEXUART	122
 
+/* MA35D1 UART */
+#define PORT_MA35D1	123
+
 #endif /* _UAPILINUX_SERIAL_CORE_H */

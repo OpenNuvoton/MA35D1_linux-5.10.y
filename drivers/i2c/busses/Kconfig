@@ -1193,6 +1193,14 @@ config I2C_XLP9XX
 	  This driver can also be built as a module.  If so, the module will
 	  be called i2c-xlp9xx.
 
+config I2C_MA35D1
+	tristate "MA35D1 I2C support"
+	depends on ARCH_MA35D1
+	select I2C_SLAVE
+	help
+	  Say Y here to include support for I2C controller in the
+	  Nuvoton MA35D1 based System-on-Chip devices.
+
 config I2C_RCAR
 	tristate "Renesas R-Car I2C Controller"
 	depends on ARCH_RENESAS || COMPILE_TEST

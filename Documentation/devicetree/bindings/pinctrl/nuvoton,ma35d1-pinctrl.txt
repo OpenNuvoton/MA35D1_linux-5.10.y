@@ -1,0 +1,54 @@
+* Nuvoton MA35D1 Pin Controller
+
+Required properties for pin controller:
+  - compatible: should be "nuvoton,ma35d1-pinctrl"
+  - nuvoton,sys: phandle referencing a syscon providing MFP setting register
+
+
+Required properties for pin configuration node:
+  - nuvoton,pins: 4 integers array, representing
+			1. MFP register offset
+			2. Bitmask shift value
+			3. MFP value
+			4. Pin config
+
+Examples:
+
+#include "ma35d1-pinfunc.h"
+
+...
+
+	&gmac0 {
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gmac0>;
+	};
+
+	pinctrl: pinctrl {
+		compatible = "nuvoton,ma35d1-pinctrl";
+		nuvoton,sys = <&sys>;
+		status = "okay";
+		pcfg_default: pcfg-default {
+			slew-rate = <0>;
+			input-schmitt-disable;
+			bias-disable;
+		};
+		gmac0 {
+			pinctrl_gmac0: gmac0grp{
+				nuvoton,pins =
+					<SYS_GPE_MFPL_PE0MFP_RGMII0_MDC 	&pcfg_default>,
+					<SYS_GPE_MFPL_PE1MFP_RGMII0_MDIO	&pcfg_default>,
+					<SYS_GPE_MFPL_PE2MFP_RGMII0_TXCTL	&pcfg_default>,
+					<SYS_GPE_MFPL_PE3MFP_RGMII0_TXD0	&pcfg_default>,
+					<SYS_GPE_MFPL_PE4MFP_RGMII0_TXD1	&pcfg_default>,
+					<SYS_GPE_MFPL_PE5MFP_RGMII0_RXCLK	&pcfg_default>,
+					<SYS_GPE_MFPL_PE6MFP_RGMII0_RXCTL	&pcfg_default>,
+					<SYS_GPE_MFPL_PE7MFP_RGMII0_RXD0	&pcfg_default>,
+					<SYS_GPE_MFPH_PE8MFP_RGMII0_RXD1	&pcfg_default>,
+					<SYS_GPE_MFPH_PE9MFP_RGMII0_RXD2	&pcfg_default>,
+					<SYS_GPE_MFPH_PE10MFP_RGMII0_RXD3	&pcfg_default>,
+					<SYS_GPE_MFPH_PE11MFP_RGMII0_TXCLK	&pcfg_default>,
+					<SYS_GPE_MFPH_PE12MFP_RGMII0_TXD2	&pcfg_default>,
+					<SYS_GPE_MFPH_PE13MFP_RGMII0_TXD3	&pcfg_default>;
+			};
+		};
+	};

@@ -1,0 +1,18 @@
+Binding for Nuvoton MA35D1 reset controller
+
+Please also refer to reset.txt in this directory for common reset
+controller binding usage.
+
+Required Properties:
+- compatible: has to be "nuvoton,ma35d1-reset"
+- nuvoton,ma35d1-sys: phandle referencing a syscon providing reset control register
+- #reset-cells : Specifies the number of cells needed to encode reset
+                 line, should be 1
+
+Example:
+
+	reset: reset-controller {
+		compatible = "nuvoton,ma35d1-reset";
+		nuvoton,ma35d1-sys = <&sys>;
+		#reset-cells = <1>;
+	};

@@ -1,0 +1,26 @@
+Nuvoton Window Watchdog
+
+The window watchdog supports a pre-timeout interrupt that fires 10ms before the
+expiry.
+
+Required properties:
+- compatible      : must be "nuvoton,ma35d1-wwdt"
+- reg             : Offset and length of the register set for the device.
+- interrupts      : Contain the timer interrupt with flags for
+                    falling edge.
+
+Required clocking property, have to be one of:
+- clk             : reference to the system clock
+
+
+Example:
+
+	wwdt1: wwdt@40400100 {
+		compatible = "nuvoton,ma35d1-wwdt";
+		reg = <0x0 0x40440100 0x0 0x100>;
+		interrupts = <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>;	/* 76-32 */
+		nuvoton,clk = <&clk>;
+		clock-enable = "wdt1_gate";
+		clock-names = "wwdt1_mux";
+	};
+

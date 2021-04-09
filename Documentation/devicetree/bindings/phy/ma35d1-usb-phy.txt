@@ -1,0 +1,21 @@
+Nuvoton ma35d1 USB PHY
+=====================
+
+Required properties:
+--------------------
+ - compatible: Must be "nuvoton,ma35d1-usb-phy".
+ - #phy-cells: Must be 0.  See ./phy-bindings.txt for details.
+ - clocks: Must contain an entry for each entry in clock-names.
+   See ../clock/clock-bindings.txt for details.
+ - nuvoton,sys: Must constain a phandle to the SYS node.
+
+Example:
+--------
+	usb_phy: usb-phy {
+		compatible = "nuvoton,ma35d1-usb-phy";
+		clocks = <&clk usbd_gate>;
+		clock-enable = "usbd_gate";
+		nuvoton,sys = <&sys>;
+		#phy-cells = <0>;
+	};
+

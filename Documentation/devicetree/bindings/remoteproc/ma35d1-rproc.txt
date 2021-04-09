@@ -1,0 +1,14 @@
+MA35D1 Co-Processor Bindings
+----------------------------------------
+
+This binding provides support for ARM Cortex M4 Co-processor found on
+Nuvoton MA35D1 SoC.
+
+Required properties:
+- compatible		Should be "nuvoton, ma35d1-rproc"
+
+Example:
+	rproc {
+		compatible	= "nuvoton, ma35d1-rproc";
+	};
+

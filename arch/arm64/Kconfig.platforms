@@ -327,4 +327,17 @@ config ARCH_ZYNQMP
 	help
 	  This enables support for Xilinx ZynqMP Family
 
+config ARCH_MA35D1
+	bool "Nuvoton MA35D1 SOC Family"
+	select PINCTRL
+	select PINCTRL_MA35D1
+	select PM
+	select GPIOLIB
+	select SOC_BUS
+	select VIDEOMODE_HELPERS
+	select FB_MODE_HELPERS
+	help
+	  This enables support for Nuvoton MA35D1 SOC Family.
+
+
 endmenu

@@ -1,0 +1,71 @@
+Camera Capture Interface Controller (CCAP) 
+========================
+
+The camera capture interface controller(CCAP) is designed to 
+capture image data from a sensor. After capturing or fetching image data, 
+it will process the image data. 
+And then embedded DMA controller will move 
+the data from the internal FIFO to system memory with AHB bus.
+
+Required properties:
+- compatible: should be "nuvoton,<soc>-ccap", where SoC can be one of ma35d1
+- reg: the register base and size for the device registers
+- interrupts: the CCAP interrupt.
+
+Example:
+
+	ccap0: ccap@40240000{
+		compatible = "nuvoton,ma35d1-ccap";
+		reg = <0x0 0x40240000 0x0 0x2000>;
+		interrupts = <GIC_SPI 21 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk ccap0_gate>;
+		clock-names = "core";
+		clock-frequency = <12000000>;
+		status = "okay";
+		port {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			/* Parallel bus endpoint */
+			ccap0_1: endpoint {
+				remote-endpoint = <&nt99141_0>;
+				bus-type = <5>;  	/* 5:Parallel, 6:Bt.656 */ 
+				bus-width = <8>;        /* Used data lines */
+				hsync-active = <0>;     /* Active low */
+				vsync-active = <0>;     /* Active low */
+				pclk-sample = <1>;      /* Rising */
+                        };
+                };
+	};
+
+	i2c_gpio@0 {
+		compatible = "i2c-gpio";
+		gpios = <&gpio 3 0 /* sda */
+ 			 &gpio 4 0 /* scl */
+			>;
+		i2c-gpio,sda-open-drain;
+		i2c-gpio,scl-open-drain;
+		i2c-gpio,delay-us = <2>;	/* ~100 kHz */
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+		nt99141@2a {
+			compatible = "nuvoton,nt99141";
+			reg = <0x2a>;
+			port {
+                                nt99141_0: endpoint {
+					remote-endpoint = <&ccap0_1>;
+                                };
+                        };
+		};
+
+	};
+
+	ccap1: ccap@40250000{
+		compatible = "nuvoton,ma35d1-ccap";
+		reg = <0x0 0x40250000 0x0 0x2000>;
+		interrupts = <GIC_SPI 22 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk ccap1_gate>;
+		clock-names = "core";
+		status = "okay";
+        };

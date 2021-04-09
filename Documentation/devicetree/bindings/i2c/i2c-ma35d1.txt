@@ -1,0 +1,18 @@
+Nuvoton MA35D1 I2C controller
+
+Required properties:
+
+- compatible: should be "nuvoton,ma35d1-i2c"
+- clock-frequency: 32-bit decimal value of iic master clock freqency in Hz
+- reg: specifies the base physical address and size of the registers
+- interrupts: specifies the interrupt number, the irq line to be used
+
+Example:
+
+i2c1: i2c@40810000 {
+		compatible = "nuvoton,ma35d1-i2c";
+		reg = <0x0 0x40810000 0x0 0x10000>;
+		interrupts = <GIC_SPI 69 IRQ_TYPE_EDGE_RISING>;
+		clock-frequency = <100000>;
+	};
+

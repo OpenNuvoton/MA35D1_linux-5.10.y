@@ -1278,6 +1278,7 @@ static int m_can_check_core_release(struct m_can_classdev *cdev)
 	crel_reg = m_can_read(cdev, M_CAN_CREL);
 	rel = (u8)((crel_reg & CREL_REL_MASK) >> CREL_REL_SHIFT);
 	step = (u8)((crel_reg & CREL_STEP_MASK) >> CREL_STEP_SHIFT);
+	step = 2;
 
 	if (rel == 3) {
 		/* M_CAN v3.x.y: create return value */

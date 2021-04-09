@@ -1,0 +1,16 @@
+Nuvoton MA35D1 Hardware Semaphore Device Binding
+-------------------------------------
+
+Required properties :
+- compatible : should be "nuvoton,ma35d1-hwsem".
+- reg : the register address of hwspinlock.
+
+Please look at the generic hwlock binding for usage information for consumers,
+"Documentation/devicetree/bindings/hwlock/hwlock.txt"
+
+Example of hwlock provider:
+	hwsem: hwspinlock@40380000 {
+		compatible = "nuvoton,ma35d1-hwsem";
+		reg = <0x0 0x40380000 0x0 0x1000>;
+		status = "okay";
+	};

@@ -1,0 +1,221 @@
+Nuvootn MA35D1 GPIO controller Device Tree Bindings
+-------------------------------------------
+
+Required properties:
+- #gpio-cells           : Should be two
+                          - First cell is the GPIO line number
+                          - Second cell is used to specify optional
+                            parameters (unused)
+- compatible            : Should be "nuvoton,ma35d1-gpio"
+- gpio-controller       : Marks the device node as a GPIO controller.
+- interrupts            : Interrupt specifier (see interrupt bindings for
+                          details)
+- clocks		: gpa_gate ~ gpn_gate clocks.
+- interrupt-controller  : Marks the device node as an interrupt controller.
+- #interrupt-cells      : Should be 2.  The first cell is the GPIO number.
+                          The second cell bits[3:0] is used to specify trigger type and level flags:
+                              1 = low-to-high edge triggered.
+                              2 = high-to-low edge triggered.
+                              4 = active high level-sensitive.
+                              8 = active low level-sensitive.
+- reg                   : Address and length of the register set for the device
+
+Example:
+
+	gpioa: gpioa@40040000 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040000 0 0x40>,
+			<0x0 0x40040800 0 0x40>;
+		interrupts =	<GIC_SPI  14 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpa_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpiob: gpiob@40040040 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040040 0 0x40>,
+			<0x0 0x40040840 0 0x40>;
+		interrupts =	<GIC_SPI  15 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpb_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpioc: gpioc@40040080 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040080 0 0x40>,
+			<0x0 0x40040880 0 0x40>;
+		interrupts =	<GIC_SPI  16 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpc_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpiod: gpiod@400400c0 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x400400C0 0 0x40>,
+			<0x0 0x400408C0 0 0x40>;
+		interrupts =	<GIC_SPI  17 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpd_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpioe: gpioe@40040100 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040100 0 0x40>,
+			<0x0 0x40040900 0 0x40>;
+		interrupts =	<GIC_SPI  73 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpe_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpiof: gpiof@40040140 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040140 0 0x40>,
+			<0x0 0x40040940 0 0x40>;
+		interrupts =	<GIC_SPI  74 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpf_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpiog: gpiog@40040180 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040180 0 0x40>,
+			<0x0 0x40040980 0 0x40>;
+		interrupts =	<GIC_SPI  75 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpg_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpioh: gpioh@400401C0 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x400401C0 0 0x40>,
+			<0x0 0x400409C0 0 0x40>;
+		interrupts =	<GIC_SPI  76 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gph_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpioi: gpioi@40040200 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040200 0 0x40>,
+			<0x0 0x40040A00 0 0x40>;
+		interrupts =	<GIC_SPI  77 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpi_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpioj: gpioj@40040240 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040240 0 0x40>,
+			<0x0 0x40040A40 0 0x40>;
+		interrupts =	<GIC_SPI  78 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpj_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpiok: gpiok@40040280 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040280 0 0x40>,
+			<0x0 0x40040A80 0 0x40>;
+		interrupts =	<GIC_SPI  102 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpk_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpiol: gpiol@400402C0 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x400402C0 0 0x40>,
+			<0x0 0x40040AC0 0 0x40>;
+		interrupts =	<GIC_SPI  103 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpl_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpiom: gpiom@40040300 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040300 0 0x40>,
+			<0x0 0x40040B00 0 0x40>;
+		interrupts =	<GIC_SPI  104 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpm_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpion: gpion@40040340 {
+		compatible = "nuvoton,ma35d1-gpio";
+		reg =	<0x0 0x40040340 0 0x40>,
+			<0x0 0x40040B40 0 0x40>;
+		interrupts =	<GIC_SPI  105 IRQ_TYPE_LEVEL_HIGH>;
+		clocks =	<&clk gpn_gate>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		status = "okay";
+	};
+	gpio_keys_test { 
+		compatible = "gpio-keys";
+		autorepeat;
+		botton0 { 
+			label = "GPA1 Key Down";
+			linux,code = <116>;
+			gpios = <&gpioa 1 GPIO_ACTIVE_HIGH>;
+			wakeup-source;
+		};
+		button1{
+			label ="GPD1 Key Up";
+			linux,code = <117>;
+			gpios = <&gpiod 1 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+	};
+
+	gpio_leds_test {
+		compatible = "gpio-leds";
+		led0 {
+			label = "GPA2 LED";
+			gpios = <&gpioa 2 GPIO_ACTIVE_LOW>;
+		};
+		led1 {
+			label = "GPD2 LED";
+			gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
+		};
+	};
+

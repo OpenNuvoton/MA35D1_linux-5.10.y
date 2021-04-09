@@ -1,0 +1,23 @@
+* Nuvoton MA35D1 SoC UART
+
+Required properties:
+- compatible: Should be "nuvoton,ma35d1-uart"
+- reg: Should contain registers location and length
+- interrupts: Interrupt specifier (see interrupt bindings for details)
+- clocks: &clk uart0_gate ~ &clk uart17_gate clocks
+- port-number: Select the port number of uart0~uart17 as 0~17
+- pdma-enable: 0: disable pdma mode; 1: enable pdma mode
+
+Optional properties:
+- ma35d1-console: Select this port as the console
+
+Example:
+
+	uart1: serial@40710000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <00x0 0x40700000 0x0 0x10000>;
+		interrupts = <GIC_SPI 59 IRQ_TYPE_EDGE_RISING>;
+		clocks = <&clk uart0_gate>;
+		port-number = <0>;
+		pdma-enable = <0>;
+	};

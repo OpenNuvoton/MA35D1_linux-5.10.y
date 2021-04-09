@@ -247,6 +247,13 @@ config RESET_ZYNQ
 	help
 	  This enables the reset controller driver for Xilinx Zynq SoCs.
 
+config RESET_MA35D1
+	bool "MA35D1 Reset Driver"
+	default ARCH_MA35D1
+	help
+	  This enables the reset controller driver for MA35D1
+	  Say Y if you want to control reset signals provided by SYS registers.
+
 source "drivers/reset/sti/Kconfig"
 source "drivers/reset/hisilicon/Kconfig"
 source "drivers/reset/tegra/Kconfig"

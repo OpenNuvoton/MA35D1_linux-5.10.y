@@ -1,0 +1,21 @@
+* NUC3500 True Random Number Generator
+
+The true random number generator device is presented on Nuvoton MA35D1 SOC.
+
+Required properties:
+
+- compatible : Should be "nuvoton,ma35d1-trng"
+- reg : address and length of the register for the device.
+- interrupts: should contain Key Store interrupt number
+
+
+Example:
+
+	/* TRNG */
+        trng: trng@40B90000 {
+		compatible = "nuvoton,ma35d1-trng";
+		reg = <0x0 0x40B90000 0x0 0x400>;
+		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>;
+		status = "okay";
+        };
+

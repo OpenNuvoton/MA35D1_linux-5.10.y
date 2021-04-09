@@ -234,6 +234,14 @@ config QCOM_WCNSS_PIL
 	  Say y here to support the Peripheral Image Loader for the Qualcomm
 	  Wireless Connectivity Subsystem.
 
+config MA35D1_RPROC
+	tristate "MA35D1 remoteproc support"
+	depends on ARCH_MA35D1
+	select MAILBOX
+	select MA35D1_WORMHOLE
+	help
+	  Say y here to support MA35D1's remote processors
+
 config ST_REMOTEPROC
 	tristate "ST remoteproc support"
 	depends on ARCH_STI

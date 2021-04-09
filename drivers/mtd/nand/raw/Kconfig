@@ -349,6 +349,12 @@ config MTD_NAND_SOCRATES
 
 source "drivers/mtd/nand/raw/ingenic/Kconfig"
 
+config MTD_NAND_MA35D1
+	tristate "Nuvoton MA35D1 NAND controller"
+	depends on ARCH_MA35D1
+	help
+	  Enables support for NAND Flash chips on the Nuvoton MA35D1
+
 config MTD_NAND_FSMC
 	tristate "ST Micros FSMC NAND controller"
 	depends on OF && HAS_IOMEM

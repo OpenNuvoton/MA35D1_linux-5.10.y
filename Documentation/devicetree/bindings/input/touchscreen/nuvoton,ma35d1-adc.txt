@@ -1,0 +1,26 @@
+* Nuvoton MA35D1 touchscreen(ADC)
+
+Required properties:
+  - compatible: Should be "nuvoton,ma35d1-adc"
+  - reg: Should contain ADC registers location and length
+  - clock-rate: Between <16000000> ~ <1000000>
+  - interrupts: Should contain the IRQ line for the ADC
+
+Optional properties:
+  - enable-iio: Set this to enable IIO function
+  - enable-ts: Set this to enable touch screen function
+  - ts-mode: Set touch screen type. <4> for 4-wire touch panel
+		and <5> for 5-wire touch panel.
+  - enable-wakeup: Set this to enable system wakeup by touch event.
+  - ts-pressure-threshold: A pressure threshold for touchscreen to detect pen up event.
+
+Examples:
+adc: adc@0x40420000 {
+	compatible = "nuvoton,ma35d1-adc";
+	reg = <0x0 0x40420000 0x0 0x10000>;
+	interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
+	clock-rate = <16000000>;
+	enable-iio;
+	enable-ts;
+	ts-type = <4>;
+};

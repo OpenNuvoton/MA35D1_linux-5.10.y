@@ -1,0 +1,19 @@
+Nuvoton MA35D1 Enhanced Analog to Digital Converter (EADC)
+
+The MA35D1 EADC is a 12-bit converter for eight channel inputs.
+
+Required properties:
+- compatible: "nuvoton,ma35d1-eadc" for the MA35D1 EADC.
+- reg: specifies physical base address and size of the registers.
+- clocks: enable EADC clock.
+- eadc-frequency: specifies EADC frequency.
+
+Example:
+
+eadc: eadc@40430000 {
+	compatible = "nuvoton,ma35d1-eadc";
+	reg = <0x0 0x40430000 0x0 0x10000>;
+	clocks = <&clk eadc_gate>;
+	eadc-frequency = <20000000>;
+	status = "okay";
+};

@@ -1,0 +1,19 @@
+MA35D1 MA35D1 Shared Memory Bindings
+----------------------------------------
+
+This binding provides support for shared memory found on
+Nuvoton MA35D1 SoC.
+
+Required properties:
+- compatible		Should be "nuvoton, ma35d1-rpmsg"
+- share-mem-addr    Should be 0x24000000
+- tx-smem-size, rx-smem-size    (tx-smem-size + rx-smem-size) <= 16K bytes
+
+Example:
+   rpmsg {
+		compatible = "nuvoton,ma35d1-rpmsg";
+		share-mem-addr = <0x24000000>;
+		tx-smem-size = <128>;
+		rx-smem-size = <128>;
+	};
+

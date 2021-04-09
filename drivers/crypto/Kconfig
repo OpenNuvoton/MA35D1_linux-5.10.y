@@ -773,6 +773,18 @@ config CRYPTO_DEV_ZYNQMP_AES
 	  accelerator. Select this if you want to use the ZynqMP module
 	  for AES algorithms.
 
+config CRYPTO_DEV_NUVOTON
+	tristate "Nuvoton's MA35D1 Cryptographic Accelerator driver"
+	depends on ARCH_MA35D1
+	select CRYPTO_AES
+	select CRYPTO_AEAD
+	select CRYPTO_BLKCIPHER
+	select CRYPTO_SHA256
+
+	help
+	  This driver supports Nuvoton cryptographic hardware accelerator. It supports AES
+	  ECB/CBC/CTR/CFB/OFB/GCM/CCM mode, SM4, SHA1/SHA256/SHA512, SM3, and MD5.
+
 config CRYPTO_DEV_MEDIATEK
 	tristate "MediaTek's EIP97 Cryptographic Engine driver"
 	depends on (ARM && ARCH_MEDIATEK) || COMPILE_TEST
@@ -783,6 +795,7 @@ config CRYPTO_DEV_MEDIATEK
 	select CRYPTO_SHA256
 	select CRYPTO_SHA512
 	select CRYPTO_HMAC
+
 	help
 	  This driver allows you to utilize the hardware crypto accelerator
 	  EIP97 which can be found on the MT7623 MT2701, MT8521p, etc ....

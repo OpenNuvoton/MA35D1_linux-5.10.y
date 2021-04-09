@@ -1,0 +1,21 @@
+* Nuvoton NUC3500 Cryptographic Accelerator
+
+The cryptographic accelerator presented on Nuvoton MA35D1 SOC supports AES ECB/CBC/OFB/CFB/CTR/GCM/CCM
+encrypt/decrypt, SHA1/SHA2/SHA3/HMAC/SM3/MD5 hash, ECC ecdh, and RSA 1024/2408/3072/4096 bits encrypt/decrypt.
+
+Required properties:
+
+- compatible : Should be "nuvoton,ma35d1-crypto"
+- reg : address and length of the register for the device.
+- interrupts: should contain Key Store interrupt number
+
+
+Example:
+
+        crypto: crpt@40300000 {
+		compatible = "nuvoton,ma35d1-crypto";
+		reg = <0x0 0x40300000 0x0 0x1000>;
+		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
+		status = "okay";
+        };
+

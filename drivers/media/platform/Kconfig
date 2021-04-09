@@ -10,6 +10,15 @@ menuconfig V4L_PLATFORM_DRIVERS
 
 if V4L_PLATFORM_DRIVERS
 
+config VIDEO_MA35D1_CAMERA
+	tristate "MA35D1 camera controller support"
+	depends on MEDIA_CAMERA_SUPPORT
+	depends on VIDEO_DEV && I2C && VIDEO_V4L2 && MEDIA_CONTROLLER
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_FWNODE
+	help
+	  MA35D1 camera0
+
 source "drivers/media/platform/marvell-ccic/Kconfig"
 
 config VIDEO_VIA_CAMERA
@@ -205,6 +214,12 @@ config VIDEO_IMX_PXP
 	help
 	  The i.MX Pixel Pipeline is a memory-to-memory engine for scaling,
 	  color space conversion, and rotation.
+
+config VIDEO_NUVOTON_VC8K_LINK
+	bool "Nuvoton VC8000 link V4L2"
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEOBUF2_VMALLOC
+	select V4L2_MEM2MEM_DEV
 
 config VIDEO_MEDIATEK_JPEG
 	tristate "Mediatek JPEG Codec driver"
@@ -581,3 +596,4 @@ config VIDEO_RCAR_DRIF
 	  will be called rcar_drif.
 
 endif # SDR_PLATFORM_DRIVERS
+

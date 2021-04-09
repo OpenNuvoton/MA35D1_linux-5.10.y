@@ -1,0 +1,565 @@
+/*
+ * Device Tree Source for MA35D1 Evaluation Board (EVB)
+ *
+ * Copyright (C) 2021 Nuvoton Technology Corp.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+
+#include "ma35d1.dtsi"
+
+/ {
+	model = "Nuvoton MA35D1-EVB";
+
+	chosen {
+		bootargs = "root=/dev/mmcblk1p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=256M";
+	};
+
+	gpio_keys_test {
+		compatible = "gpio-keys";
+		status = "okay";
+		autorepeat;
+		botton0 {
+			label = "Key Down";
+			linux,code = <KEY_DOWN>;
+			gpios = <&gpiod 8 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+		button1{
+			label ="Key Up";
+			linux,code = <KEY_UP>;
+			gpios = <&gpiod 9 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+		button2{
+			label ="Key Up";
+			linux,code = <KEY_ENTER>;
+			gpios = <&gpiof 14 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+	};
+
+	gpio_leds_test {
+		compatible = "gpio-leds";
+		status = "okay";
+		led0 {
+			label = "LED0";
+			gpios = <&gpioj 14 GPIO_ACTIVE_LOW>;
+		};
+		led1 {
+			label = "LED2";
+			gpios = <&gpioj 15 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+&gmac0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gmac0>;
+};
+
+&gmac1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gmac1>;
+};
+
+&ehci0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hsusbh>;
+};
+
+&nand {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_nand>;
+};
+
+&sdhci0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sdhci0>;
+};
+
+&sdhci1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sdhci1>;
+};
+
+&adc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc0>;
+};
+
+&eadc0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_eadc0>;
+};
+
+&i2c2 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c2>;
+
+	nau8822: nau8822@1a {
+		compatible = "nuvoton,nau8822";
+		reg = <0x1a> ;
+	};
+};
+
+&i2c5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c5>;
+	status = "okay";
+
+	goodix_ts@5d {
+		compatible = "goodix,gt911";
+		status = "okay";
+		reg = <0x5d>;
+		interrupt-parent = <&gpiod>;
+		interrupts = <12 2>;
+		reset-gpios = <&gpiom 12 0x00>;
+		irq-gpios = <&gpiod 12 0x00>;
+		touchscreen-size-x = <1024>;
+		touchscreen-size-y = <600>;
+		touchscreen-inverted-x = <1>;
+		touchscreen-inverted-y = <1>;
+	};
+};
+
+&i2s0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2s0>;
+};
+
+&i2s_pcm {
+	status = "okay";
+};
+
+&sound {
+	status = "okay";
+};
+
+&qspi0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_qspi0>;
+};
+
+&vc8k {
+	status = "okay";
+};
+
+&gc520l {
+	status = "okay";
+};
+
+&display {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_display0>;
+	status = "okay";
+};
+
+&uart10 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart10>;
+};
+
+&uart12 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart12>;
+};
+
+&uart14 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart14>;
+};
+
+&uart16 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart16>;
+};
+
+&can1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_can1>;
+};
+
+&can3 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_can3>;
+};
+
+&epwm1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_epwm1>;
+};
+
+&ebi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ebi0_16bit>;
+};
+
+&pinctrl {
+	gmac0 {
+		pinctrl_gmac0: gmac0grp{
+			nuvoton,pins =
+				<SYS_GPE_MFPL_PE0MFP_RGMII0_MDC		&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE1MFP_RGMII0_MDIO	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE2MFP_RGMII0_TXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE3MFP_RGMII0_TXD0	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE4MFP_RGMII0_TXD1	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE5MFP_RGMII0_RXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE6MFP_RGMII0_RXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE7MFP_RGMII0_RXD0	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE8MFP_RGMII0_RXD1	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE9MFP_RGMII0_RXD2	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE10MFP_RGMII0_RXD3	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE11MFP_RGMII0_TXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE12MFP_RGMII0_TXD2	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE13MFP_RGMII0_TXD3	&pcfg_emac_1_8V>;
+		};
+	};
+
+	gmac1 {
+		pinctrl_gmac1: gmac1grp{
+			nuvoton,pins =
+				<SYS_GPF_MFPL_PF0MFP_RGMII1_MDC		&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF1MFP_RGMII1_MDIO	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF2MFP_RGMII1_TXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF3MFP_RGMII1_TXD0	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF4MFP_RGMII1_TXD1	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF5MFP_RGMII1_RXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF6MFP_RGMII1_RXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF7MFP_RGMII1_RXD0	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF8MFP_RGMII1_RXD1	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF9MFP_RGMII1_RXD2	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF10MFP_RGMII1_RXD3	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF11MFP_RGMII1_TXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF12MFP_RGMII1_TXD2	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF13MFP_RGMII1_TXD3	&pcfg_emac_1_8V>;
+		};
+	};
+
+	hsusbh {
+		pinctrl_hsusbh: hsusbhgrp{
+			nuvoton,pins =
+				<SYS_GPL_MFPH_PL12MFP_HSUSBH_PWREN	&pcfg_default>,
+				<SYS_GPL_MFPH_PL13MFP_HSUSBH_OVC	&pcfg_default>;
+		};
+	};
+
+	adc0 {
+		pinctrl_adc0: adc0grp {
+			nuvoton,pins =
+				<SYS_GPB_MFPH_PB8MFP_ADC0_CH0	&pcfg_default>;
+		};
+	};
+
+	eadc0 {
+		pinctrl_eadc0: eadc0grp{
+			nuvoton,pins =
+				<SYS_GPB_MFPL_PB0MFP_EADC0_CH0	&pcfg_default>,
+				<SYS_GPB_MFPL_PB1MFP_EADC0_CH1	&pcfg_default>,
+				<SYS_GPB_MFPL_PB2MFP_EADC0_CH2	&pcfg_default>,
+				<SYS_GPB_MFPL_PB3MFP_EADC0_CH3	&pcfg_default>,
+				<SYS_GPB_MFPL_PB4MFP_EADC0_CH4	&pcfg_default>,
+				<SYS_GPB_MFPL_PB5MFP_EADC0_CH5	&pcfg_default>,
+				<SYS_GPB_MFPL_PB6MFP_EADC0_CH6	&pcfg_default>,
+				<SYS_GPB_MFPL_PB7MFP_EADC0_CH7	&pcfg_default>;
+		};
+	};
+
+	i2c2 {
+		pinctrl_i2c2: i2c2grp{
+			nuvoton,pins =
+				<SYS_GPB_MFPH_PB8MFP_I2C2_SDA	&pcfg_default>,
+				<SYS_GPB_MFPH_PB9MFP_I2C2_SCL	&pcfg_default>;
+		};
+	};
+
+	i2c5 {
+		pinctrl_i2c5: i2c5grp{
+			nuvoton,pins =
+				<SYS_GPJ_MFPH_PJ12MFP_I2C5_SDA	&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ13MFP_I2C5_SCL	&pcfg_default>;
+		};
+	};
+
+	i2s0 {
+		pinctrl_i2s0: i2s0grp{
+			nuvoton,pins =
+				<SYS_GPN_MFPH_PN15MFP_I2S0_MCLK	&pcfg_default>,
+				<SYS_GPK_MFPH_PK12MFP_I2S0_LRCK	&pcfg_default>,
+				<SYS_GPK_MFPH_PK13MFP_I2S0_BCLK	&pcfg_default>,
+				<SYS_GPK_MFPH_PK14MFP_I2S0_DI	&pcfg_default>,
+				<SYS_GPK_MFPH_PK15MFP_I2S0_DO	&pcfg_default>;
+		};
+	};
+
+	qspi0 {
+		pinctrl_qspi0: qspi0grp{
+			nuvoton,pins =
+				<SYS_GPD_MFPL_PD0MFP_QSPI0_SS0		&pcfg_default>,
+				<SYS_GPD_MFPL_PD1MFP_QSPI0_CLK		&pcfg_default>,
+				<SYS_GPD_MFPL_PD2MFP_QSPI0_MOSI0	&pcfg_default>,
+				<SYS_GPD_MFPL_PD3MFP_QSPI0_MISO0	&pcfg_default>,
+				<SYS_GPD_MFPL_PD4MFP_QSPI0_MOSI1	&pcfg_default>,
+				<SYS_GPD_MFPL_PD5MFP_QSPI0_MISO1	&pcfg_default>;
+		};
+	};
+
+	nand {
+		pinctrl_nand: nandgrp{
+			nuvoton,pins =
+				<SYS_GPA_MFPL_PA0MFP_NAND_DATA0	&pcfg_default>,
+				<SYS_GPA_MFPL_PA1MFP_NAND_DATA1	&pcfg_default>,
+				<SYS_GPA_MFPL_PA2MFP_NAND_DATA2	&pcfg_default>,
+				<SYS_GPA_MFPL_PA3MFP_NAND_DATA3	&pcfg_default>,
+				<SYS_GPA_MFPL_PA4MFP_NAND_DATA4	&pcfg_default>,
+				<SYS_GPA_MFPL_PA5MFP_NAND_DATA5	&pcfg_default>,
+				<SYS_GPA_MFPL_PA6MFP_NAND_DATA6	&pcfg_default>,
+				<SYS_GPA_MFPL_PA7MFP_NAND_DATA7	&pcfg_default>,
+				<SYS_GPA_MFPH_PA8MFP_NAND_RDY	&pcfg_default>,
+				<SYS_GPA_MFPH_PA9MFP_NAND_nRE	&pcfg_default>,
+				<SYS_GPA_MFPH_PA10MFP_NAND_nWE	&pcfg_default>,
+				<SYS_GPA_MFPH_PA11MFP_NAND_CLE	&pcfg_default>,
+				<SYS_GPA_MFPH_PA12MFP_NAND_ALE	&pcfg_default>,
+				<SYS_GPA_MFPH_PA13MFP_NAND_nCS	&pcfg_default>,
+				<SYS_GPA_MFPH_PA14MFP_NAND_nWP	&pcfg_default>;
+		};
+	};
+
+	sdhci0 {
+		pinctrl_sdhci0: sdhci0grp{
+			nuvoton,pins =
+				<SYS_GPC_MFPL_PC0MFP_eMMC0_CMD	&pcfg_default>,
+				<SYS_GPC_MFPL_PC1MFP_eMMC0_CLK	&pcfg_default>,
+				<SYS_GPC_MFPL_PC2MFP_eMMC0_DAT0	&pcfg_default>,
+				<SYS_GPC_MFPL_PC3MFP_eMMC0_DAT1	&pcfg_default>,
+				<SYS_GPC_MFPL_PC4MFP_eMMC0_DAT2	&pcfg_default>,
+				<SYS_GPC_MFPL_PC5MFP_eMMC0_DAT3	&pcfg_default>,
+				<SYS_GPC_MFPL_PC6MFP_SD0_nCD	&pcfg_default>,
+				<SYS_GPC_MFPL_PC7MFP_SD0_WP	&pcfg_default>;
+		};
+	};
+
+	sdhci1 {
+		pinctrl_sdhci1: sdhci1grp{
+			nuvoton,pins =
+				<SYS_GPJ_MFPL_PJ0MFP_eMMC1_DAT4		&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ1MFP_eMMC1_DAT5		&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ2MFP_eMMC1_DAT6		&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ3MFP_eMMC1_DAT7		&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ4MFP_SD1_WP		&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ5MFP_SD1_nCD		&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ6MFP_eMMC1_CMD		&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ7MFP_eMMC1_CLK		&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ8MFP_eMMC1_DAT0		&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ9MFP_eMMC1_DAT1		&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ10MFP_eMMC1_DAT2	&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ11MFP_eMMC1_DAT3	&pcfg_default>;
+		};
+	};
+
+	ccap0 {
+		pinctrl_ccap0: ccap0grp{
+			nuvoton,pins =
+				<SYS_GPK_MFPH_PK9MFP_VCAP0_SCLK		&pcfg_default>,
+				<SYS_GPK_MFPH_PK10MFP_VCAP0_PIXCLK	&pcfg_default>,
+				<SYS_GPK_MFPH_PK11MFP_VCAP0_HSYNC	&pcfg_default>,
+				<SYS_GPM_MFPL_PM0MFP_VCAP0_VSYNC	&pcfg_default>,
+				<SYS_GPM_MFPL_PM2MFP_VCAP0_DATA0	&pcfg_default>,
+				<SYS_GPM_MFPL_PM3MFP_VCAP0_DATA1	&pcfg_default>,
+				<SYS_GPM_MFPL_PM4MFP_VCAP0_DATA2	&pcfg_default>,
+				<SYS_GPM_MFPL_PM5MFP_VCAP0_DATA3	&pcfg_default>,
+				<SYS_GPM_MFPL_PM6MFP_VCAP0_DATA4	&pcfg_default>,
+				<SYS_GPM_MFPL_PM7MFP_VCAP0_DATA5	&pcfg_default>,
+				<SYS_GPM_MFPH_PM8MFP_VCAP0_DATA6	&pcfg_default>,
+				<SYS_GPM_MFPH_PM9MFP_VCAP0_DATA7	&pcfg_default>;
+		};
+	};
+
+	ccap1 {
+		pinctrl_ccap1: ccap1grp{
+			nuvoton,pins =
+				<SYS_GPN_MFPL_PN0MFP_VCAP1_DATA0	&pcfg_default>,
+				<SYS_GPN_MFPL_PN1MFP_VCAP1_DATA1	&pcfg_default>,
+				<SYS_GPN_MFPL_PN2MFP_VCAP1_DATA2	&pcfg_default>,
+				<SYS_GPN_MFPL_PN3MFP_VCAP1_DATA3	&pcfg_default>,
+				<SYS_GPN_MFPL_PN4MFP_VCAP1_DATA4	&pcfg_default>,
+				<SYS_GPN_MFPL_PN5MFP_VCAP1_DATA5	&pcfg_default>,
+				<SYS_GPN_MFPL_PN6MFP_VCAP1_DATA6	&pcfg_default>,
+				<SYS_GPN_MFPL_PN7MFP_VCAP1_DATA7	&pcfg_default>,
+				<SYS_GPN_MFPH_PN10MFP_VCAP1_SCLK	&pcfg_default>,
+				<SYS_GPN_MFPH_PN11MFP_VCAP1_PIXCLK	&pcfg_default>,
+				<SYS_GPN_MFPH_PN12MFP_VCAP1_HSYNC	&pcfg_default>,
+				<SYS_GPN_MFPH_PN13MFP_VCAP1_VSYNC	&pcfg_default>;
+		};
+	};
+
+	display {
+		pinctrl_display0: display0grp{
+			nuvoton,pins =
+				<SYS_GPG_MFPH_PG8MFP_LCM_VSYNC		&pcfg_default>,
+				<SYS_GPG_MFPH_PG9MFP_LCM_HSYNC		&pcfg_default>,
+				<SYS_GPG_MFPH_PG10MFP_LCM_CLK		&pcfg_default>,
+				<SYS_GPK_MFPL_PK4MFP_LCM_DEN		&pcfg_default>,
+				<SYS_GPI_MFPH_PI8MFP_LCM_DATA0		&pcfg_default>,
+				<SYS_GPI_MFPH_PI9MFP_LCM_DATA1		&pcfg_default>,
+				<SYS_GPI_MFPH_PI10MFP_LCM_DATA2		&pcfg_default>,
+				<SYS_GPI_MFPH_PI11MFP_LCM_DATA3		&pcfg_default>,
+				<SYS_GPI_MFPH_PI12MFP_LCM_DATA4		&pcfg_default>,
+				<SYS_GPI_MFPH_PI13MFP_LCM_DATA5		&pcfg_default>,
+				<SYS_GPI_MFPH_PI14MFP_LCM_DATA6		&pcfg_default>,
+				<SYS_GPI_MFPH_PI15MFP_LCM_DATA7		&pcfg_default>,
+				<SYS_GPH_MFPL_PH0MFP_LCM_DATA8		&pcfg_default>,
+				<SYS_GPH_MFPL_PH1MFP_LCM_DATA9		&pcfg_default>,
+				<SYS_GPH_MFPL_PH2MFP_LCM_DATA10		&pcfg_default>,
+				<SYS_GPH_MFPL_PH3MFP_LCM_DATA11		&pcfg_default>,
+				<SYS_GPH_MFPL_PH4MFP_LCM_DATA12		&pcfg_default>,
+				<SYS_GPH_MFPL_PH5MFP_LCM_DATA13		&pcfg_default>,
+				<SYS_GPH_MFPL_PH6MFP_LCM_DATA14		&pcfg_default>,
+				<SYS_GPH_MFPL_PH7MFP_LCM_DATA15		&pcfg_default>,
+				<SYS_GPC_MFPH_PC12MFP_LCM_DATA16	&pcfg_default>,
+				<SYS_GPC_MFPH_PC13MFP_LCM_DATA17	&pcfg_default>,
+				<SYS_GPC_MFPH_PC14MFP_LCM_DATA18	&pcfg_default>,
+				<SYS_GPC_MFPH_PC15MFP_LCM_DATA19	&pcfg_default>,
+				<SYS_GPH_MFPH_PH12MFP_LCM_DATA20	&pcfg_default>,
+				<SYS_GPH_MFPH_PH13MFP_LCM_DATA21	&pcfg_default>,
+				<SYS_GPH_MFPH_PH14MFP_LCM_DATA22	&pcfg_default>,
+				<SYS_GPH_MFPH_PH15MFP_LCM_DATA23	&pcfg_default>;
+		};
+	};
+
+	uart10 {
+		pinctrl_uart10: uart10grp{
+			nuvoton,pins =
+				<SYS_GPC_MFPH_PC8MFP_UART10_nCTS	&pcfg_default>,
+				<SYS_GPC_MFPH_PC9MFP_UART10_nRTS	&pcfg_default>,
+				<SYS_GPC_MFPH_PC10MFP_UART10_RXD	&pcfg_default>,
+				<SYS_GPC_MFPH_PC11MFP_UART10_TXD	&pcfg_default>;
+		};
+	};
+
+	uart12 {
+		pinctrl_uart12: uart12grp{
+			nuvoton,pins =
+				<SYS_GPI_MFPL_PI1MFP_UART12_nRTS	&pcfg_default>,
+				<SYS_GPI_MFPL_PI2MFP_UART12_RXD		&pcfg_default>,
+				<SYS_GPI_MFPL_PI3MFP_UART12_TXD		&pcfg_default>;
+		};
+	};
+
+	uart14 {
+		pinctrl_uart14: uart14grp{
+			nuvoton,pins =
+				<SYS_GPI_MFPL_PI5MFP_UART14_nRTS	&pcfg_default>,
+				<SYS_GPI_MFPL_PI6MFP_UART14_RXD		&pcfg_default>,
+				<SYS_GPI_MFPL_PI7MFP_UART14_TXD		&pcfg_default>;
+		};
+	};
+
+	uart16 {
+		pinctrl_uart16: uart16grp{
+			nuvoton,pins =
+				<SYS_GPK_MFPL_PK0MFP_UART16_nCTS	&pcfg_default>,
+				<SYS_GPK_MFPL_PK1MFP_UART16_nRTS	&pcfg_default>,
+				<SYS_GPK_MFPL_PK2MFP_UART16_RXD		&pcfg_default>,
+				<SYS_GPK_MFPL_PK3MFP_UART16_TXD		&pcfg_default>;
+		};
+	};
+
+	can1 {
+		pinctrl_can1: can1grp{
+			nuvoton,pins =
+				<SYS_GPL_MFPH_PL14MFP_CAN1_RXD	&pcfg_default>,
+				<SYS_GPL_MFPH_PL15MFP_CAN1_TXD	&pcfg_default>;
+		};
+	};
+
+	can3 {
+		pinctrl_can3: can3grp{
+			nuvoton,pins =
+				<SYS_GPL_MFPH_PL10MFP_CAN3_RXD	&pcfg_default>,
+				<SYS_GPL_MFPH_PL11MFP_CAN3_TXD	&pcfg_default>;
+		};
+	};
+
+	epwm1 {
+		pinctrl_epwm1: epwm1grp{
+			nuvoton,pins =
+				<SYS_GPM_MFPH_PM13MFP_EPWM1_CH5	&pcfg_default>;
+		};
+	};
+
+	ebi0 {
+		pinctrl_ebi0_16bit: ebi0_16bitgrp{
+			nuvoton,pins =
+				<SYS_GPG_MFPH_PG11MFP_EBI_AD0		&pcfg_default>,
+				<SYS_GPG_MFPH_PG12MFP_EBI_AD1		&pcfg_default>,
+				<SYS_GPG_MFPH_PG13MFP_EBI_AD2		&pcfg_default>,
+				<SYS_GPG_MFPH_PG14MFP_EBI_AD3		&pcfg_default>,
+				<SYS_GPG_MFPH_PG15MFP_EBI_AD4		&pcfg_default>,
+				<SYS_GPL_MFPL_PL6MFP_EBI_AD5		&pcfg_default>,
+				<SYS_GPL_MFPL_PL7MFP_EBI_AD6		&pcfg_default>,
+				<SYS_GPL_MFPH_PL8MFP_EBI_AD7		&pcfg_default>,
+				<SYS_GPL_MFPH_PL9MFP_EBI_AD8		&pcfg_default>,
+				<SYS_GPD_MFPH_PD10MFP_EBI_AD9		&pcfg_default>,
+				<SYS_GPD_MFPH_PD11MFP_EBI_AD10	&pcfg_default>,
+				<SYS_GPL_MFPL_PL0MFP_EBI_AD11		&pcfg_default>,
+				<SYS_GPL_MFPL_PL1MFP_EBI_AD12		&pcfg_default>,
+				<SYS_GPL_MFPL_PL2MFP_EBI_AD13		&pcfg_default>,
+				<SYS_GPL_MFPL_PL3MFP_EBI_AD14		&pcfg_default>,
+				<SYS_GPG_MFPL_PG0MFP_EBI_AD15		&pcfg_default>,
+				<SYS_GPI_MFPL_PI0MFP_EBI_ADR0		&pcfg_default>,
+				<SYS_GPI_MFPL_PI1MFP_EBI_ADR1		&pcfg_default>,
+				<SYS_GPI_MFPL_PI2MFP_EBI_ADR2		&pcfg_default>,
+				<SYS_GPI_MFPL_PI3MFP_EBI_ADR3		&pcfg_default>,
+				<SYS_GPI_MFPL_PI4MFP_EBI_ADR4		&pcfg_default>,
+				<SYS_GPI_MFPL_PI5MFP_EBI_ADR5		&pcfg_default>,
+				<SYS_GPI_MFPL_PI6MFP_EBI_ADR6		&pcfg_default>,
+				<SYS_GPI_MFPL_PI7MFP_EBI_ADR7		&pcfg_default>,
+				<SYS_GPK_MFPL_PK0MFP_EBI_ADR8		&pcfg_default>,
+				<SYS_GPK_MFPL_PK1MFP_EBI_ADR9		&pcfg_default>,
+				<SYS_GPK_MFPL_PK2MFP_EBI_ADR10	&pcfg_default>,
+				<SYS_GPK_MFPL_PK3MFP_EBI_ADR11	&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ12MFP_EBI_ADR12	&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ13MFP_EBI_ADR13	&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ14MFP_EBI_ADR14	&pcfg_default>,
+				<SYS_GPJ_MFPH_PJ15MFP_EBI_ADR15	&pcfg_default>,
+				<SYS_GPG_MFPL_PG2MFP_EBI_ADR16	&pcfg_default>,
+				<SYS_GPG_MFPL_PG3MFP_EBI_ADR17	&pcfg_default>,
+				<SYS_GPG_MFPL_PG4MFP_EBI_ADR18	&pcfg_default>,
+				<SYS_GPG_MFPL_PG5MFP_EBI_ADR19	&pcfg_default>,
+				<SYS_GPA_MFPH_PA15MFP_EBI_ALE		&pcfg_default>,
+				<SYS_GPG_MFPL_PG1MFP_EBI_nCS0		&pcfg_default>,
+				<SYS_GPD_MFPH_PD12MFP_EBI_nCS1	&pcfg_default>,
+				<SYS_GPD_MFPH_PD13MFP_EBI_nCS2	&pcfg_default>,
+				<SYS_GPB_MFPH_PB10MFP_EBI_MCLK	&pcfg_default>,
+				<SYS_GPG_MFPL_PG6MFP_EBI_nRD		&pcfg_default>,
+				<SYS_GPG_MFPL_PG7MFP_EBI_nWR		&pcfg_default>,
+				<SYS_GPL_MFPH_PL11MFP_EBI_nWRL	&pcfg_default>,
+				<SYS_GPL_MFPH_PL10MFP_EBI_nWRH	&pcfg_default>;
+		};
+	};
+
+};

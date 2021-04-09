@@ -1,0 +1,27 @@
+Nuvoton Watchdog
+
+The watchdog supports a pre-timeout interrupt that fires 10ms before the
+expiry.
+
+Required properties:
+- compatible      : must be "nuvoton,ma35d1-wdt"
+- reg             : Offset and length of the register set for the device.
+- interrupts      : Contain the timer interrupt with flags for
+                    falling edge.
+
+Required clocking property, have to be one of:
+- clk             : reference to the system clock
+
+Optional properties:
+- timeout-sec : Contains the watchdog timeout in seconds
+
+Example:
+
+	wdt1: wdt@40400000 {
+		compatible = "nuvoton,ma35d1-wdt";
+		reg = <0x0 0x40440000 0x0 0x100>;
+		interrupts = <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>;	/* 75-32 */
+		nuvoton,clk = <&clk>;
+		clock-enable = "wdt1_gate";
+		clock-names = "wdt1_mux";
+	};

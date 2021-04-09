@@ -2,7 +2,7 @@
 #
 # Makefile for the video capture/playback device drivers.
 #
-
+obj-$(CONFIG_VIDEO_MA35D1_CAMERA)	+= ma35d1-ccap.o
 obj-$(CONFIG_VIDEO_ASPEED)		+= aspeed-video.o
 obj-$(CONFIG_VIDEO_CADENCE)		+= cadence/
 obj-$(CONFIG_VIDEO_VIA_CAMERA) += via-camera.o

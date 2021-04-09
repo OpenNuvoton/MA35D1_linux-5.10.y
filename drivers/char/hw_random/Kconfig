@@ -479,6 +479,19 @@ config HW_RANDOM_EXYNOS
 
 	  If unsure, say Y.
 
+config HW_RANDOM_MA35D1
+	tristate "Nuvoton MA35D1 Random Number Generator support"
+	depends on ARCH_MA35D1
+	default HW_RANDOM
+	---help---
+	  This driver provides kernel-side support for the MA35D1 True Random Number
+	  Generator.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called nuvoton-trng.
+
+	  If unsure, say Y.
+
 config HW_RANDOM_OPTEE
 	tristate "OP-TEE based Random Number Generator support"
 	depends on OPTEE

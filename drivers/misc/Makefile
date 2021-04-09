@@ -57,3 +57,7 @@ obj-$(CONFIG_HABANA_AI)		+= habanalabs/
 obj-$(CONFIG_UACCE)		+= uacce/
 obj-$(CONFIG_XILINX_SDFEC)	+= xilinx_sdfec.o
 obj-$(CONFIG_HISI_HIKEY_USB)	+= hisi_hikey_usb.o
+obj-$(CONFIG_MA35D1_KS)        += ma35d1_ks.o
+obj-$(CONFIG_MA35D1_TIMER)     += ma35d1-timer.o
+obj-$(CONFIG_MA35D1_EBI)       += ma35d1-ebi.o
+

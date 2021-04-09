@@ -1,0 +1,40 @@
+* Nuvoton MA35D1 SPI Controller
+
+The Nuvoton MA35D1 has 4 SPI controllers.
+
+Required Properties:
+
+- compatible: should be "nuvoton,nu3500-spi"
+- reg: physical base address of the controller and length of memory mapped
+	region.
+- interrupts: The interrupt number to the cpu. The interrupt specifier format
+	depends on the interrupt controller.
+- clocks: clock-names of QSPI.
+- num_cs: number of chip select.
+- lsb: lsb first.
+- txneg: tx on falling edge.
+- clkpol: clock polarity when idle.
+- rxneg: rx on falling edge.
+- sleep: suspend interval between two successive transmit/receive transaction
+	in a transfer.
+- txbitlen: tx bit length.
+- bus_num: bus number.
+
+
+Example: 
+	spi0: spi0@40600000 {
+		compatible = "nuvoton,nu3500-spi";
+		reg = <0x0 0x40600000 0x0 0x10000>;
+		interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk spi0_gate>;
+		num_cs = <2>;
+		lsb = <0>;
+		txneg = <1>;
+		clkpol = <0>;
+		rxneg = <0>;
+		sleep = <0>;
+		txbitlen = <8>;
+		bus_num = <2>;
+		spi-max-frequency = <10000000>;
+		status = "ok";
+	};

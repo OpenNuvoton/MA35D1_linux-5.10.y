@@ -1,0 +1,29 @@
+* NUC3500 Timer controller
+
+The Timer controller includes 24-bit Timer0 ~ Timer11.
+The Timer controller can perform functions, such as frequency measurement, delay timing, clock generation,
+    and event counting by external input pins, and interval measurement by external capture pins.
+
+    Required Properties of Timer controller:
+
+    - compatible : Should be "nuvoton,ma35d1-timer"
+    - reg : address and length of the register for the device.
+    - interrupts:  Should contain Timer interrupt number
+    - port-number:  Timer port number. Should be 0~11
+    - nuvoton,clk: phandle to the syscon managing the "Clock Controller register".
+    - clock-enable: Enable Timer clock.
+    - clock-names: Control the mux to select Timer clock source.
+
+    Example:
+
+	timer2: timer_pwm2@40510000
+	{
+		compatible = "nuvoton,ma35d1-timer";
+		reg = <0x0 0x40510000 0x0 0x100>;
+		interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
+		port-number = <2>;
+		nuvoton,clk = <&clk>;
+		clock-enable = "tmr2_gate";
+		clock-names = "tmr2_mux";
+		status = "okay";
+	};

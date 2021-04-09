@@ -528,6 +528,20 @@ config SPI_NPCM_PSPI
 	  This driver provides support for Nuvoton NPCM BMC
 	  Peripheral SPI controller in master mode.
 
+config SPI_MA35D1_QSPI
+	tristate "Nuvoton MA35D1 QSPI Controller"
+	depends on ARCH_MA35D1
+	help
+	  This driver provides support for Nuvoton MA35D1
+	  QSPI controller in master mode.
+
+config SPI_MA35D1_SPI
+	tristate "Nuvoton MA35D1 SPI Controller"
+	depends on ARCH_MA35D1
+	help
+	  This driver provides support for Nuvoton MA35D1
+	  SPI controller in master mode.
+
 config SPI_LANTIQ_SSC
 	tristate "Lantiq SSC SPI controller"
 	depends on LANTIQ || X86 || COMPILE_TEST

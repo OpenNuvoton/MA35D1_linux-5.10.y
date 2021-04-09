@@ -55,6 +55,17 @@ config HWSPINLOCK_STM32
 
 	  If unsure, say N.
 
+config HWSEM_MA35D1
+	tristate "MA35D1 Hardware Semaphore support"
+	depends on HWSPINLOCK
+	depends on ARCH_MA35D1
+	help
+	  Say y here to support the MA35D1 Hardware Semaphore, which
+	  provides a synchronisation mechanism for CA35 and CM4 on this
+	  MPU.
+
+	  If unsure, say N.
+
 config HSEM_U8500
 	tristate "STE Hardware Semaphore functionality"
 	depends on ARCH_U8500 || COMPILE_TEST

@@ -61,6 +61,7 @@ static void dwmac1000_core_init(struct mac_device_info *hw,
 		}
 	}
 
+	udelay(100);
 	writel(value, ioaddr + GMAC_CONTROL);
 
 	/* Mask GMAC interrupts */
@@ -87,6 +88,7 @@ static int dwmac1000_rx_ipc_enable(struct mac_device_info *hw)
 	else
 		value &= ~GMAC_CONTROL_IPC;
 
+	udelay(100);
 	writel(value, ioaddr + GMAC_CONTROL);
 
 	value = readl(ioaddr + GMAC_CONTROL);
@@ -507,6 +509,7 @@ static void dwmac1000_set_mac_loopback(void __iomem *ioaddr, bool enable)
 	else
 		value &= ~GMAC_CONTROL_LM;
 
+	udelay(100);
 	writel(value, ioaddr + GMAC_CONTROL);
 }
 

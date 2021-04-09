@@ -1,0 +1,14 @@
+* Device tree bindings for Nuvoton MA35D1 SYSCTL driver
+
+The driver is used for Lock/Unlock protected registers.
+
+Required properties:
+- compatible:		"nuvoton,ma35d1-sysctrl"
+- nuvoton,ma35d1-sys:	phandle referencing a syscon providing reset control register
+
+Example:
+
+	sysctl: sys-controller {
+		compatible = "nuvoton,ma35d1-sysctrl";
+		nuvoton,ma35d1-sys = <&sys>;
+	};

@@ -695,12 +695,12 @@ static int goodix_reset(struct goodix_ts_data *ts)
 		return error;
 
 	usleep_range(6000, 10000);		/* T4: > 5ms */
-
+#if 0	// Keep ouput mode. There's maybe no pull up resistor in demo boards.
 	/* end select I2C slave addr */
 	error = gpiod_direction_input(ts->gpiod_rst);
 	if (error)
 		return error;
-
+#endif
 	error = goodix_int_sync(ts);
 	if (error)
 		return error;
