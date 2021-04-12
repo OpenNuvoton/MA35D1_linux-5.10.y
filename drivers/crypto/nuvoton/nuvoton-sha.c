@@ -41,8 +41,9 @@
 #define	SHA_FLAGS_FINUP		BIT(3)
 #define SHA_FLAGS_ERROR		BIT(4)
 
-#define SHA_OP_UPDATE		1
-#define SHA_OP_FINAL		2
+#define SHA_OP_UPDATE		0x01
+#define SHA_OP_FINAL		0x02
+#define SHA_OP_HMAC_KEY		0x80
 
 struct nu_sha_drv {
 	struct list_head dev_list;
@@ -392,35 +393,46 @@ static int nuvoton_sha_init(struct ahash_request *req)
 		return -EINVAL;
 	}
 
-	/* Adjust HMAC key to be block aligned */
-	if ((tctx->hmac_key_len % ctx->block_size) != 0) {
-		alen = tctx->hmac_key_len + (ctx->block_size -
-			(tctx->hmac_key_len % ctx->block_size));
-		memset(&(tctx->buffer[tctx->hmac_key_len]), 0, (alen -
-			tctx->hmac_key_len));
-		tctx->bufcnt = alen;
+	/*
+	 *  Return here, if it's not HMAC or HMAC key aligned.
+	 */
+	if ((tctx->hmac_key_len % ctx->block_size) == 0)
+		return 0;
 
-		/* Execute HMAC-SHA on the HMAC key block */
-		err = nuvoton_sha_dma_run(ctx->dd, true);
-		if (err != -EINPROGRESS)
-			return err;
+	/*
+	 *  Adjust HMAC key to be block aligned.
+	 */
+	alen = tctx->hmac_key_len + (ctx->block_size -
+		(tctx->hmac_key_len % ctx->block_size));
+	memset(&(tctx->buffer[tctx->hmac_key_len]), 0,
+		(alen -	tctx->hmac_key_len));
+	tctx->bufcnt = alen;
+
+	/* Execute HMAC-SHA on the HMAC key block */
+	ctx->op |= SHA_OP_HMAC_KEY;
+	err = nuvoton_sha_dma_run(ctx->dd, true);
+	if (err != -EINPROGRESS) {
+		ctx->op &= ~SHA_OP_HMAC_KEY;
+		return err;
+	}
 
 #ifdef CONFIG_OPTEE
-		if (dd->use_optee == true)
-			return 0;
+	if (dd->use_optee == true)
+		return 0;
 #endif
-		/*
-		 *  Wait until SHA engine busy cleared or timeout
-		 */
-		while (nu_read_reg(ctx->dd, HMAC_STS) & HMAC_STS_BUSY) {
-			if (time_after(jiffies, jiffies +
-					msecs_to_jiffies(200))) {
-				nu_write_reg(dd, HMAC_CTL_STOP, HMAC_CTL);
-				dev_err(dd->dev, "HAMC key block DMA time-out!\n");
-				return -EBUSY;
-			}
+	/*
+	 *  Wait until SHA engine busy cleared or timeout
+	 */
+	while (nu_read_reg(ctx->dd, HMAC_STS) & HMAC_STS_BUSY) {
+		if (time_after(jiffies, jiffies +
+			msecs_to_jiffies(200))) {
+			nu_write_reg(dd, HMAC_CTL_STOP, HMAC_CTL);
+			ctx->op &= ~SHA_OP_HMAC_KEY;
+			dev_err(dd->dev, "HAMC key block DMA time-out!\n");
+			return -EBUSY;
 		}
 	}
+	ctx->op &= ~SHA_OP_HMAC_KEY;
 	return 0;
 }
 
@@ -481,10 +493,9 @@ static void nuvoton_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
 		/* success and get output digest */
 		nuvoton_sha_get_result(req);
 	}
-
 	req->base.complete(&req->base, err);
 
-	dd->flags &= ~SHA_FLAGS_BUSY;	/* SHA device complete a request. */
+	dd->flags &= ~SHA_FLAGS_BUSY;
 
 	/* Handle new request */
 	tasklet_schedule(&ctx->dd->queue_task);
@@ -540,7 +551,7 @@ static int nuvoton_sha_handle_queue(struct nu_sha_dev *dd,
 	if (req)
 		ret = ahash_enqueue_request(&dd->queue, req);
 
-	if (dd->flags & SHA_FLAGS_BUSY) {
+	if ((dd->flags & SHA_FLAGS_BUSY)) {
 		/* SHA device is busy on a request */
 		spin_unlock_irqrestore(&dd->lock, flags);
 		return ret;
@@ -560,40 +571,27 @@ static int nuvoton_sha_handle_queue(struct nu_sha_dev *dd,
 
 	req = ahash_request_cast(async_req);
 	ctx = ahash_request_ctx(req);
-
 	dd->req = req;
-
-	ret = nuvoton_sha_update_start(dd);
-	if (ret != -EINPROGRESS) {
-		nuvoton_sha_finish_req(ctx, ret);
-		return 0;
-	}
-	return ret;
+	return nuvoton_sha_update_start(dd);
 }
 
 static void nuvoton_sha_dma_complete(struct nu_sha_reqctx *ctx)
 {
 	struct nu_sha_dev	*dd = ctx->dd;
 	struct nu_sha_ctx	*tctx = crypto_tfm_ctx(dd->req->base.tfm);
-	int	err = 0;
 
 	tctx->bufcnt = 0;	/* clear DMA buffer count */
 	ctx->flags &= ~SHA_FLAGS_FIRST;
 
-	if ((tctx->hash_mode & HMAC_CTL_HMACEN) &&
-		(ctx->flags & SHA_FLAGS_FIRST)) {
-		ctx->flags &= ~SHA_FLAGS_FIRST;
+	if (ctx->op & SHA_OP_HMAC_KEY)
 		return;
-	}
+
 	if (ctx->req_len == 0) {
 		/* the current request H/W processing done */
 		nuvoton_sha_finish_req(ctx, 0);
 		return;
 	}
-
-	err = nuvoton_sha_update_start(dd);
-	if (err != -EINPROGRESS)
-		nuvoton_sha_finish_req(ctx, 0);
+	nuvoton_sha_update_start(dd);
 }
 
 static int nuvoton_sha_update(struct ahash_request *req)
@@ -606,11 +604,9 @@ static int nuvoton_sha_update(struct ahash_request *req)
 	ctx->sg_off = 0;
 	ctx->req_len = req->nbytes;
 
-	if ((tctx->bufcnt + ctx->req_len <= ctx->dma_max_size) &&
-	    !(ctx->flags & SHA_FLAGS_FINUP)) {
-		nuvoton_sha_sg_to_dma_buffer(tctx, ctx);
+	nuvoton_sha_sg_to_dma_buffer(tctx, ctx);
+	if (tctx->bufcnt + ctx->req_len <= ctx->dma_max_size)
 		return 0;
-	}
 	return nuvoton_sha_handle_queue(ctx->dd, req);
 }
 
@@ -649,7 +645,7 @@ static int nuvoton_sha_digest(struct ahash_request *req)
 {
 	return nuvoton_sha_init(req) ?: nuvoton_sha_finup(req);
 }
-#if 0
+
 static int nuvoton_sha_setkey(struct crypto_ahash *tfm, const u8 *key,
 			      u32 keylen)
 {
@@ -665,7 +661,7 @@ static int nuvoton_sha_setkey(struct crypto_ahash *tfm, const u8 *key,
 	tctx->hmac_key_len = keylen;
 	return 0;
 }
-#endif
+
 static int nuvoton_sha_export(struct ahash_request *req, void *out)
 {
 	const struct nu_sha_reqctx *ctx = ahash_request_ctx(req);
@@ -901,7 +897,6 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_init		= nuvoton_sha_cra_init,
 	}
 },
-#if 0
 {
 	.init		= nuvoton_sha_init,
 	.update		= nuvoton_sha_update,
@@ -1017,7 +1012,6 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_init		= nuvoton_sha_cra_init,
 	}
 },
-#endif
 {
 	.init		= nuvoton_sha_init,
 	.update		= nuvoton_sha_update,

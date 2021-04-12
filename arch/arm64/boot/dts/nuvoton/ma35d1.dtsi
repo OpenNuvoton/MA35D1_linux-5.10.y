@@ -297,7 +297,7 @@
 		pp_out_width = <1024>;
 		pp_out_height = <600>;
 		pp_out_format = "RGB888";   /* RGB888, RGB565, or YUV420P */
-		status = "disabled";
+		status = "okay";
 	};
 
 	/* Crypto engine */
@@ -306,6 +306,8 @@
 		reg = <0x0 0x40300000 0x0 0x1000>;
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
 		optee_nuvoton = "no";
+		rsa_ioctl = "no";           /* yes: RSA via ioctl, no: RSA via akcipher   */
+		ecc_ioctl = "no";           /* yes: ECC via ioctl, no: ECDH via akcipher */
 		status = "okay";
 	};
 

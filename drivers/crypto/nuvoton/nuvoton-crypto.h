@@ -138,6 +138,7 @@
 #define ECC_CTL_MODOP_MASK		(0x3 << 9)
 #define ECC_CTL_CSEL			(0x1 << 13)
 #define ECC_CTL_SCAP			(0x1 << 14)
+#define ECC_CTL_ASCAP			(0x1 << 15)
 #define ECC_CTL_LDAP1			(0x1 << 16)
 #define ECC_CTL_LDAP2			(0x1 << 17)
 #define ECC_CTL_LDA			(0x1 << 18)
@@ -451,29 +452,65 @@ struct nu_sha_dev {
 /*   ECC                                                                   */
 /*-------------------------------------------------------------------------*/
 
-#define NU_ECC_MAX_LEN		(256/8)
-#define NU_ECC_MAX_DIGITS	(NU_ECC_MAX_LEN/8)
+#define NU_ECC_MAX_LEN		(76)    /* 571/8 + 1 + 4 */
 
-struct ecc_curve {
-	int        optee_curve_id;     /* optee ECC PTA defined curve ID */
-	char	   name[16];
-	u32	   keylen;
-	u8	   g_x[NU_ECC_MAX_LEN];
-	u8	   g_y[NU_ECC_MAX_LEN];
-	u8	   p[NU_ECC_MAX_LEN];
-	u8	   n[NU_ECC_MAX_LEN];
-	u8	   a[NU_ECC_MAX_LEN];
-	u8	   b[NU_ECC_MAX_LEN];
+enum {
+	CURVE_P_192  = 0x01,   /* ECC_CURVE_NIST_P192 is 0x0001 */
+	CURVE_P_256  = 0x02,   /* ECC_CURVE_NIST_P256 is 0x0002 */
+	CURVE_P_224  = 0x03,
+	CURVE_P_384  = 0x04,
+	CURVE_P_521  = 0x05,
+	CURVE_K_163  = 0x11,
+	CURVE_K_233  = 0x12,
+	CURVE_K_283  = 0x13,
+	CURVE_K_409  = 0x14,
+	CURVE_K_571  = 0x15,
+	CURVE_B_163  = 0x21,
+	CURVE_B_233  = 0x22,
+	CURVE_B_283  = 0x23,
+	CURVE_B_409  = 0x24,
+	CURVE_B_571  = 0x25,
+	CURVE_KO_192 = 0x31,
+	CURVE_KO_224 = 0x32,
+	CURVE_KO_256 = 0x33,
+	CURVE_BP_256 = 0x41,
+	CURVE_BP_384 = 0x42,
+	CURVE_BP_512 = 0x43,
+	CURVE_SM2_256 = 0x50,
+	CURVE_25519  = 0x51,
+	CURVE_UNDEF,
 };
 
-struct nu_ecdh_ctx {
+enum {
+	CURVE_GF_P,
+	CURVE_GF_2M,
+};
+
+struct ecc_curve {
+	int        curve_id;
+	int        Echar;
+	u8         Ea[NU_ECC_MAX_LEN];
+	u8         Eb[NU_ECC_MAX_LEN];
+	u8         Px[NU_ECC_MAX_LEN];
+	u8         Py[NU_ECC_MAX_LEN];
+	int        Epl;
+	u8         Pp[NU_ECC_MAX_LEN];
+	int        Eol;
+	u8         Eorder[72];
+	int        key_len;
+	int        irreducible_k1;
+	int        irreducible_k2;
+	int        irreducible_k3;
+	int        GF;
+};
+
+struct nu_ecc_ctx {
 	struct nu_ecc_dev  *dd;
 	int	   curve_id;
 	const struct ecc_curve	*curve;
 	int	   keylen;
 	u8	   private_key[NU_ECC_MAX_LEN];
 };
-
 
 struct nu_ecc_dev {
 	struct list_head	list;
@@ -558,7 +595,26 @@ struct nuvoton_crypto_dev {
 	struct nu_sha_dev       sha_dd;
 	struct nu_ecc_dev       ecc_dd;
 	struct nu_rsa_dev       rsa_dd;
+	bool                    ecc_ioctl;
+	bool                    rsa_ioctl;
 };
+
+/*-------------------------------------------------------------------------*/
+/*   ECC and RSA IOCTL commands                                            */
+/*-------------------------------------------------------------------------*/
+#define CRYPTO_IOC_MAGIC    'C'
+#define RSA_IOC_SET_BITLEN        _IOW(CRYPTO_IOC_MAGIC, 20, unsigned long)
+#define RSA_IOC_SET_N             _IOW(CRYPTO_IOC_MAGIC, 21, u8 *)
+#define RSA_IOC_SET_E             _IOW(CRYPTO_IOC_MAGIC, 22, u8 *)
+#define RSA_IOC_SET_M             _IOW(CRYPTO_IOC_MAGIC, 23, u8 *)
+#define RSA_IOC_SET_P             _IOW(CRYPTO_IOC_MAGIC, 24, u8 *)
+#define RSA_IOC_SET_Q             _IOW(CRYPTO_IOC_MAGIC, 25, u8 *)
+#define RSA_IOC_RUN               _IOW(CRYPTO_IOC_MAGIC, 29, u8 *)
+
+#define ECC_IOC_SET_CURVE         _IOW(CRYPTO_IOC_MAGIC, 50, int)
+#define ECC_IOC_SET_PRIV_KEY      _IOW(CRYPTO_IOC_MAGIC, 51, u8 *)
+#define ECC_IOC_SET_PUB_KEY       _IOW(CRYPTO_IOC_MAGIC, 52, u8 *)
+#define ECC_IOC_POINT_MUL         _IOW(CRYPTO_IOC_MAGIC, 55, u8 *)
 
 /*-------------------------------------------------------------------------*/
 /*   OP-TEE                                                                */
@@ -573,33 +629,6 @@ struct nuvoton_crypto_dev {
 /* Crypto session class */
 #define C_CODE_AES			0x04
 #define C_CODE_SHA			0x05
-
-enum {
-	CURVE_P_192  = 0x01,
-	CURVE_P_224  = 0x02,
-	CURVE_P_256  = 0x03,
-	CURVE_P_384  = 0x04,
-	CURVE_P_521  = 0x05,
-	CURVE_K_163  = 0x11,
-	CURVE_K_233  = 0x12,
-	CURVE_K_283  = 0x13,
-	CURVE_K_409  = 0x14,
-	CURVE_K_571  = 0x15,
-	CURVE_B_163  = 0x21,
-	CURVE_B_233  = 0x22,
-	CURVE_B_283  = 0x23,
-	CURVE_B_409  = 0x24,
-	CURVE_B_571  = 0x25,
-	CURVE_KO_192 = 0x31,
-	CURVE_KO_224 = 0x32,
-	CURVE_KO_256 = 0x33,
-	CURVE_BP_256 = 0x41,
-	CURVE_BP_384 = 0x42,
-	CURVE_BP_512 = 0x43,
-	CURVE_SM2_256 = 0x50,
-	CURVE_25519  = 0x51,
-	CURVE_UNDEF,
-};
 
 /*
  * PTA_CMD_CRYPTO_INIT - Initialize Crypto Engine

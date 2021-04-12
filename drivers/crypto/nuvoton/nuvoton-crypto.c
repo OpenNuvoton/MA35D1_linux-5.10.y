@@ -142,10 +142,8 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct nuvoton_crypto_dev  *nu_cryp_dev;
 	struct resource *res;
-#ifdef CONFIG_OPTEE
-	const char  *optee_sel;
-#endif
 	int   irq;
+	const char  *str;
 	int   err;
 
 	/* MA35D1 crypto engine clock should be enabled by firmware. */
@@ -163,9 +161,8 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 	nu_cryp_dev->use_optee = false;
 
 #ifdef CONFIG_OPTEE
-	if (!of_property_read_string(dev->of_node, "optee_nuvoton",
-	    &optee_sel)) {
-		if (!strcmp("yes", optee_sel))
+	if (!of_property_read_string(dev->of_node, "optee_nuvoton", &str)) {
+		if (!strcmp("yes", str))
 			nu_cryp_dev->use_optee = true;
 	}
 #endif
@@ -229,12 +226,22 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to init SHA!\n");
 
 #ifdef CONFIG_CRYPTO_ECDH
+	nu_cryp_dev->ecc_ioctl = false;
+	if (!of_property_read_string(dev->of_node, "ecc_ioctl", &str)) {
+		if (!strcmp("yes", str))
+			nu_cryp_dev->ecc_ioctl = true;
+	}
 	err = nuvoton_ecc_probe(dev, nu_cryp_dev);
 	if (err)
 		dev_err(dev, "failed to init ECC!\n");
 #endif
 
 #ifdef CONFIG_CRYPTO_RSA
+	nu_cryp_dev->rsa_ioctl = false;
+	if (!of_property_read_string(dev->of_node, "rsa_ioctl", &str)) {
+		if (!strcmp("yes", str))
+			nu_cryp_dev->rsa_ioctl = true;
+	}
 	err = nuvoton_rsa_probe(dev, nu_cryp_dev);
 	if (err)
 		dev_err(dev, "failed to init RSA!\n");

@@ -20,6 +20,10 @@
 #include <linux/cryptohash.h>
 #include <linux/spinlock.h>
 #include <linux/scatterlist.h>
+#include <linux/fs.h>
+#include <linux/miscdevice.h>
+#include <linux/io.h>
+#include <linux/uaccess.h>
 #include <crypto/scatterwalk.h>
 #include <crypto/algapi.h>
 #include <crypto/algapi.h>
@@ -27,8 +31,9 @@
 #include <crypto/internal/rsa.h>
 #include <crypto/internal/akcipher.h>
 
-
 #include "nuvoton-crypto.h"
+
+static struct nu_rsa_dev  *__rsa_dd;
 
 struct nu_rsa_drv {
 	struct list_head dev_list;
@@ -129,7 +134,6 @@ int nu_rsa_hex_to_reg(u8 *input, int keylen, int rsa_bit_len, u32 *reg)
 		*reg++ = (buff[idx - 3] << 24) | (buff[idx - 2] << 16) |
 				(buff[idx - 1] << 8) | buff[idx];
 	}
-
 	return 0;
 }
 
@@ -142,6 +146,8 @@ void nu_rsa_reg_to_hex(u32 *reg, int rsa_bit_len, u8 *key, int *key_sz)
 		for (i = 3; i >= 0; i--) {
 			*key++ = (reg[idx] >> (i*8)) & 0xff;
 			(*key_sz)++;
+			if (*key_sz >= NU_RSA_MAX_BYTE_LEN)
+				return;
 		}
 	}
 }
@@ -183,6 +189,7 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 	u8	m[NU_RSA_MAX_BYTE_LEN];
 	u32	keyleng;
 	int	len, err;
+	unsigned long   timeout;
 #ifdef CONFIG_OPTEE
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
@@ -237,10 +244,14 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 			RSA_CTL_START, RSA_CTL);
 
 	if (dd->use_optee == false) {
-		pr_debug("Wait RSA complete...\n");
-		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY)
+		timeout = jiffies + 2000;
+		while ((nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) &&
+			time_before(jiffies, timeout))
 			;
-		pr_debug("RSA done.\n");
+		if (!time_before(jiffies, timeout)) {
+			pr_err("RSA encrypt time-out!\n");
+			err = -EIO;
+		}
 	} else {
 #ifdef CONFIG_OPTEE
 		/*
@@ -263,7 +274,8 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 
 		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
 		if ((err < 0) || (inv_arg.ret != 0)) {
-			pr_err("PTA_CMD_CRYPTO_RSA_RUN enc err: %x\n", inv_arg.ret);
+			pr_err("PTA_CMD_CRYPTO_RSA_RUN enc err: %x\n",
+				inv_arg.ret);
 			return -EINVAL;
 		}
 #endif
@@ -278,7 +290,7 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 
 	nuvoton_rsa_buffer_to_sg(m, min_t(int, len, (int)req->dst_len),
 			req->dst);
-	return 0;
+	return err;
 }
 
 static int nuvoton_rsa_dec(struct akcipher_request *req)
@@ -289,6 +301,7 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 	u8	m[NU_RSA_MAX_BYTE_LEN];
 	u32	keyleng;
 	int	err, len;
+	unsigned long   timeout;
 #ifdef CONFIG_OPTEE
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
@@ -338,14 +351,18 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 	nu_write_reg(dd, ctx->dma_buff + MADR5_OFF, RSA_MADDR5);
 	nu_write_reg(dd, ctx->dma_buff + MADR6_OFF, RSA_MADDR6);
 
+	nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
+			RSA_CTL_START, RSA_CTL);
+
 	if (dd->use_optee == false) {
-		nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
-				RSA_CTL_START, RSA_CTL);
-		pr_debug("Wait RSA complete... 0x%x\n",
-				nu_read_reg(dd, RSA_CTL));
-		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY)
+		timeout = jiffies + 2000;
+		while ((nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) &&
+			time_before(jiffies, timeout))
 			;
-		pr_debug("RSA done.\n");
+		if (!time_before(jiffies, timeout)) {
+			pr_err("RSA decrypt time-out!\n");
+			err = -EIO;
+		}
 	} else {
 #ifdef CONFIG_OPTEE
 		/*
@@ -368,7 +385,8 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 
 		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
 		if ((err < 0) || (inv_arg.ret != 0)) {
-			pr_err("PTA_CMD_CRYPTO_RSA_RUN dec err: %x\n", inv_arg.ret);
+			pr_err("PTA_CMD_CRYPTO_RSA_RUN dec err: %x\n",
+				inv_arg.ret);
 			return -EINVAL;
 		}
 #endif
@@ -383,7 +401,7 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 
 	nuvoton_rsa_buffer_to_sg(m, min_t(int, len, (int)req->dst_len),
 				req->dst);
-	return 0;
+	return err;
 }
 
 static int nuvoton_rsa_set_pub_key(struct crypto_akcipher *tfm, const void *key,
@@ -560,12 +578,164 @@ static void optee_rsa_close(struct nu_rsa_dev *dd)
 }
 #endif
 
+static int nvt_rsa_ioctl_set_register(struct nu_rsa_ctx *rsa_ctx,
+				      int offs, unsigned long arg)
+{
+	int   sz;
+	u8    kbuf[520];
+
+	memset(kbuf, 0, sizeof(kbuf));
+	if (copy_from_user(kbuf, (u8 *)arg, 514))
+		return -EFAULT;
+
+	sz = (kbuf[0] << 8) | kbuf[1];
+	if (sz > 512)
+		return -EINVAL;
+
+	memset(&rsa_ctx->buffer[offs], 0, NU_RSA_MAX_BYTE_LEN);
+	return nu_rsa_hex_to_reg((u8 *)&kbuf[2], sz,
+				rsa_ctx->rsa_bit_len,
+				(u32 *)&rsa_ctx->buffer[offs]);
+}
+
+static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
+			  unsigned long arg)
+{
+	struct nu_rsa_dev  *dd;
+	int	keyleng, len;
+	u8	m[NU_RSA_MAX_BYTE_LEN];
+	struct nu_rsa_ctx  *rsa_ctx = filp->private_data;
+	unsigned long   timeout;
+	int     ret = 0;
+
+	if (!rsa_ctx)
+		return -EIO;
+	dd = rsa_ctx->dd;
+
+	switch (cmd) {
+	case RSA_IOC_SET_BITLEN:
+		rsa_ctx->rsa_bit_len = arg;
+		return 0;
+
+	case RSA_IOC_SET_N:
+		memset(&rsa_ctx->buffer[N_OFF], 0, NU_RSA_MAX_BYTE_LEN);
+		nvt_rsa_ioctl_set_register(rsa_ctx, N_OFF, arg);
+		break;
+
+	case RSA_IOC_SET_E:
+		memset(&rsa_ctx->buffer[E_OFF], 0, NU_RSA_MAX_BYTE_LEN);
+		nvt_rsa_ioctl_set_register(rsa_ctx, E_OFF, arg);
+		break;
+
+	case RSA_IOC_SET_M:
+		memset(&rsa_ctx->buffer[M_OFF], 0, NU_RSA_MAX_BYTE_LEN);
+		nvt_rsa_ioctl_set_register(rsa_ctx, M_OFF, arg);
+		break;
+
+	case RSA_IOC_SET_P:
+		memset(&rsa_ctx->buffer[P_OFF], 0, NU_RSA_MAX_BYTE_LEN);
+		nvt_rsa_ioctl_set_register(rsa_ctx, P_OFF, arg);
+		break;
+
+	case RSA_IOC_SET_Q:
+		memset(&rsa_ctx->buffer[Q_OFF], 0, NU_RSA_MAX_BYTE_LEN);
+		nvt_rsa_ioctl_set_register(rsa_ctx, Q_OFF, arg);
+		break;
+
+	case RSA_IOC_RUN:
+		memset(&rsa_ctx->buffer[ANS_OFF], 0, NU_RSA_MAX_BYTE_LEN);
+		rsa_ctx->dma_buff = dma_map_single(dd->dev, rsa_ctx->buffer,
+				RSA_BUFF_SIZE, DMA_BIDIRECTIONAL);
+		if (unlikely(dma_mapping_error(dd->dev, rsa_ctx->dma_buff))) {
+			dev_err(dd->dev, "RSA buffer DMA map error\n");
+			return -EINVAL;
+		}
+		nu_write_reg(dd, rsa_ctx->dma_buff + M_OFF,     RSA_SADDR0);
+		nu_write_reg(dd, rsa_ctx->dma_buff + N_OFF,     RSA_SADDR1);
+		nu_write_reg(dd, rsa_ctx->dma_buff + E_OFF,     RSA_SADDR2);
+		nu_write_reg(dd, rsa_ctx->dma_buff + P_OFF,     RSA_SADDR3);
+		nu_write_reg(dd, rsa_ctx->dma_buff + Q_OFF,     RSA_SADDR4);
+		nu_write_reg(dd, rsa_ctx->dma_buff + ANS_OFF,   RSA_DADDR);
+		nu_write_reg(dd, rsa_ctx->dma_buff + MADR0_OFF, RSA_MADDR0);
+		nu_write_reg(dd, rsa_ctx->dma_buff + MADR1_OFF, RSA_MADDR1);
+		nu_write_reg(dd, rsa_ctx->dma_buff + MADR2_OFF, RSA_MADDR2);
+		nu_write_reg(dd, rsa_ctx->dma_buff + MADR3_OFF, RSA_MADDR3);
+		nu_write_reg(dd, rsa_ctx->dma_buff + MADR4_OFF, RSA_MADDR4);
+		nu_write_reg(dd, rsa_ctx->dma_buff + MADR5_OFF, RSA_MADDR5);
+		nu_write_reg(dd, rsa_ctx->dma_buff + MADR6_OFF, RSA_MADDR6);
+
+		keyleng = rsa_ctx->rsa_bit_len/1024 - 1;
+		nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
+				RSA_CTL_START, RSA_CTL);
+
+		timeout = jiffies + 2000;
+		while ((nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) &&
+			time_before(jiffies, timeout))
+			;
+		if (!time_before(jiffies, timeout)) {
+			pr_err("RSA_IOC_RUN time-out!\n");
+			ret = -EIO;
+		}
+
+		dma_unmap_single(dd->dev, rsa_ctx->dma_buff,
+				 RSA_BUFF_SIZE, DMA_BIDIRECTIONAL);
+
+		nu_rsa_reg_to_hex((u32 *)&rsa_ctx->buffer[ANS_OFF],
+				  rsa_ctx->rsa_bit_len, m, &len);
+
+		if (copy_to_user((char *)arg, m, len))
+			return -EFAULT;
+		break;
+
+	default:
+		return -ENOTTY;
+	}
+	return ret;
+}
+
+static int nvt_rsa_open(struct inode *inode, struct file *file)
+{
+	struct nu_rsa_ctx  *rsa_ctx;
+
+	rsa_ctx = kzalloc(sizeof(*rsa_ctx), GFP_KERNEL);
+	if (!rsa_ctx)
+		return -ENOMEM;
+	rsa_ctx->dd = __rsa_dd;
+	file->private_data = rsa_ctx;
+	return 0;
+}
+
+static int nvt_rsa_close(struct inode *inode, struct file *file)
+{
+	struct nu_rsa_ctx  *rsa_ctx;
+
+	rsa_ctx = file->private_data;
+	if (!rsa_ctx)
+		return -EIO;
+	kzfree(rsa_ctx);
+	return 0;
+}
+
+const struct file_operations nvt_rsa_fops = {
+	.owner		= THIS_MODULE,
+	.unlocked_ioctl	= nvt_rsa_ioctl,
+	.open           = nvt_rsa_open,
+	.release        = nvt_rsa_close,
+};
+
+static struct miscdevice nvt_rsa_dev = {
+	.minor		= MISC_DYNAMIC_MINOR,
+	.name		= "nuvoton-rsa",
+	.fops		= &nvt_rsa_fops,
+};
+
 int nuvoton_rsa_probe(struct device *dev,
 		      struct nuvoton_crypto_dev *nu_cryp_dev)
 {
 	struct nu_rsa_dev  *rsa_dd = &nu_cryp_dev->rsa_dd;
 	int   err = 0;
 
+	__rsa_dd = rsa_dd;
 	rsa_dd->dev = dev;
 	rsa_dd->reg_base = nu_cryp_dev->reg_base;
 	rsa_dd->use_optee = false;
@@ -582,11 +752,15 @@ int nuvoton_rsa_probe(struct device *dev,
 	list_add_tail(&rsa_dd->list, &nu_rsa.dev_list);
 	spin_unlock(&nu_rsa.lock);
 
-	err = crypto_register_akcipher(&nuvoton_rsa);
-	if (err) {
-		pr_err("[%s] - failed to register nuvoton_rsa! %d\n",
-			__func__, err);
-		goto err_out;
+	if (nu_cryp_dev->rsa_ioctl == true) {
+		misc_register(&nvt_rsa_dev);
+	} else {
+		err = crypto_register_akcipher(&nuvoton_rsa);
+		if (err) {
+			pr_err("[%s] - failed to register nuvoton_rsa! %d\n",
+				__func__, err);
+			goto err_out;
+		}
 	}
 	pr_info("MA35D1 Crypto RSA engine enabled.\n");
 	return 0;
@@ -595,7 +769,6 @@ err_out:
 	spin_lock(&nu_rsa.lock);
 	list_del(&rsa_dd->list);
 	spin_unlock(&nu_rsa.lock);
-
 	return err;
 }
 
@@ -607,7 +780,10 @@ int nuvoton_rsa_remove(struct device *dev,
 	if (rsa_dd == NULL)
 		return -ENODEV;
 
-	crypto_unregister_akcipher(&nuvoton_rsa);
+	if (nu_cryp_dev->rsa_ioctl == true)
+		misc_deregister(&nvt_rsa_dev);
+	else
+		crypto_unregister_akcipher(&nuvoton_rsa);
 
 	spin_lock(&nu_rsa.lock);
 	list_del(&rsa_dd->list);
