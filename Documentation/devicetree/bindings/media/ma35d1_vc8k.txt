@@ -1,0 +1,33 @@
+* Nuvoton MA35D1 VC8K H264/JPEG decoder
+
+The VC8K H264/JPEG decoder presented on Nuvoton MA35D1 SOC supports H264 baseline, main prfile,
+and high profile bit stream decode. MA35D1 VC8K supports H264 decode up to 1920x1080 resolution,
+and JPEG decode support up to 16000 x 16000.
+
+Required properties:
+
+- compatible : Should be "nuvoton,ma35d1-vc8k"
+- reg : address and length of the register for the device.
+- clocks: VC8K clock source
+- interrupts: should contain VC8K interrupt number
+- nuvoton,sys: phandle referencing a syscon
+- pp_out_enable: enable VC8K execute post-processing on each decode done of H264/JPEG frame
+- pp_out_width: default post-processing output width
+- pp_out_height: default post-processing output height
+- pp_out_format: default post-processing output format. Should be RGB888, RGB565, or YUV420.
+
+Example:
+
+	vc8k:vc8k@40290000 {
+		compatible = "nuvoton,ma35d1-vc8k";
+		reg = <0x0 0x40290000 0x0 0x1000>;
+		clocks = <&clk vc8k_gate>;
+		nuvoton,sys = <&sys>;
+		interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
+		pp_out_enable = "yes";
+		pp_out_width = <1024>;
+		pp_out_height = <600>;
+		pp_out_format = "RGB888";   /* RGB888, RGB565, or YUV420P */
+		status = "okay";
+	};
+

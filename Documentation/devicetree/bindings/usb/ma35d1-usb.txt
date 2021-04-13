@@ -2,7 +2,6 @@
 
 Nuvoton MA35D1 SOC have two independent one-port EHCI host controllers, EHCI0 and EHCI1. 
 Each EHCI controller has a companion OHCI host controller, i.e. OHCI0 and OHCI1. 
-Besides, MA35D1 has a standalone 6-ports OHCI host controller.
 
 
 *******************************************************************************
@@ -11,17 +10,20 @@ EHCI0 Required properties:
 
 - compatible : Should be "nuvoton,ma35d1-ehci0"
 - reg : address and length of the register for the device.
-  the controller.
 - interrupts: should contain EHCI0 interrupt number
+- clocks: EHCI0 clock source
+- nuvoton,sys: phandle referencing a syscon
 
 Example:
 
-        ehci0: ehci@40140000 {
+	ehci0: ehci@40140000 {
 		compatible = "nuvoton,ma35d1-ehci0";
 		reg = <0x0 0x40140000 0x0 0x1000>;
+		clocks = <&clk husbh0_gate>;
+		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>;
 		status = "okay";
-        };
+	};
 
 *******************************************************************************
 
@@ -29,17 +31,20 @@ EHCI1 Required properties:
 
 - compatible : Should be "nuvoton,ma35d1-ehci1"
 - reg : address and length of the register for the device.
-  the controller.
 - interrupts: should contain EHCI1 interrupt number
+- clocks: EHCI1 clock source
+- nuvoton,sys: phandle referencing a syscon
 
 Example:
 
-        ehci1: ehci@401C0000 {
+	ehci1:ehci@401C0000 {
 		compatible = "nuvoton,ma35d1-ehci1";
 		reg = <0x0 0x401C0000 0x0 0x1000>;
+		clocks = <&clk husbh1_gate>;
+		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 		status = "okay";
-        };
+	};
 
 
 *******************************************************************************
@@ -48,17 +53,20 @@ OHCI0 Required properties:
 
 - compatible : Should be "nuvoton,ma35d1-ohci0"
 - reg : address and length of the register for the device.
-  the controller.
 - interrupts: should contain OHCI0 interrupt number
+- clocks: OHCI0 clock source
+- nuvoton,sys: phandle referencing a syscon
 
 Example:
 
-        ohci0: ohci@40150000 {
+	ohci0:ohci@40150000 {
 		compatible = "nuvoton,ma35d1-ohci0";
 		reg = <0x0 0x40150000 0x0 0x1000>;
+		clocks = <&clk husbh0_gate>;
+		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
 		status = "okay";
-        };
+	};
 
 *******************************************************************************
 
@@ -66,36 +74,22 @@ OHCI1 Required properties:
 
 - compatible : Should be "nuvoton,ma35d1-ohci1"
 - reg : address and length of the register for the device.
-  the controller.
 - interrupts: should contain OHCI1 interrupt number
+- clocks: OHCI1 clock source
+- nuvoton,sys: phandle referencing a syscon
 
 Example:
 
-        ohci1: ohci@401D0000 {
+	ohci1:ohci@401D0000 {
 		compatible = "nuvoton,ma35d1-ohci1";
 		reg = <0x0 0x401D0000 0x0 0x1000>;
+		clocks = <&clk husbh1_gate>;
+		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
 		status = "okay";
-        };
+	};
 
 *******************************************************************************
-
-OHCI2 Required properties:
-
-- compatible : Should be "nuvoton,ma35d1-ohci2"
-- reg : address and length of the register for the device.
-  the controller.
-- interrupts: should contain OHCI2 interrupt number
-
-Example:
-
-        ohci2: ohci@40170000 {
-		compatible = "nuvoton,ma35d1-ohci2";
-		reg = <0x0 0x40170000 0x0 0x1000>;
-		interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;
-		status = "disabled";
-        };
-
 
 
 

@@ -1,4 +1,4 @@
-* NUC3500 Key Store management controller
+* Nuvoton MA35D1 Key Store management controller
 
 The Key Store presented on Nuvoton MA35D1 SOC is the key management device and has a 4 Kbytes SRAM
 and 9 OTP entries for key storage.
@@ -8,6 +8,7 @@ Required properties:
 - compatible : Should be "nuvoton,ma35d1-ks"
 - reg : address and length of the register for the device.
 - interrupts: should contain Key Store interrupt number
+- optee_nuvoton: support KeyStore driver link to OP-TEE KS PTA.
 
 
 Example:
@@ -16,6 +17,7 @@ Example:
 		compatible = "nuvoton,ma35d1-ks";
 		reg = <0x0 0x40340800 0x0 0x800>;
 		interrupts = <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>;
+		optee_nuvoton = "no";
 		status = "okay";
         };
 
