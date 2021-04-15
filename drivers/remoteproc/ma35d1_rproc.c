@@ -41,6 +41,8 @@ struct ma35d1_rproc {
 	struct mbox_chan        *channel;
 	struct mbox_client      mbox_client1;
 	struct reset_control    *m4_rst;
+	void   __iomem          *da_to_va_addr;
+	u32    da_to_va_offset;
 };
 
 static void ma35d1_rx_callback(struct mbox_client *cl, void *msg)
@@ -89,6 +91,8 @@ static int ma35d1_rproc_stop(struct rproc *rproc)
 {
 	struct ma35d1_rproc *nproc = rproc->priv;
 
+	nproc->da_to_va_offset = 0;
+
 	reset_control_assert(nproc->m4_rst);
 
 	if(nproc->channel)
@@ -110,19 +114,15 @@ static void ma35d1_rproc_kick(struct rproc *rproc, int vqid)
 
 static void *ma35d1_m4_rproc_da_to_va(struct rproc *rproc, u64 da, int len)
 {
+	struct ma35d1_rproc *nproc = rproc->priv;
 	void *va = NULL;
-	static void __iomem *addr = 0x0;
-	static u32 offset = 0x0;
 
 	if (len <= 0)
 		return NULL;
 
-	if(offset == 0x0)
-		addr = ioremap_nocache(0x24000000, 0x20000);
+	va = (__force void *)(nproc->da_to_va_addr + nproc->da_to_va_offset);
 
-	va = (__force void *)(addr + offset);
-
-	offset = offset + len;
+	nproc->da_to_va_offset = nproc->da_to_va_offset + len;
 
 	return va;
 }
@@ -244,6 +244,9 @@ static int ma35d1_rproc_probe(struct platform_device *pdev)
 	nproc = rproc->priv;
 	nproc->rproc = rproc;
 	nproc->dev = dev;
+
+	nproc->da_to_va_addr = devm_ioremap_nocache(&pdev->dev, 0x24000000, 0x20000);
+	nproc->da_to_va_offset = 0;
 
 	platform_set_drvdata(pdev, rproc);
 
