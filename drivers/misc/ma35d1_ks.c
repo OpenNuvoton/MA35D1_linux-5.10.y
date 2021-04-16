@@ -30,6 +30,8 @@
 
 #define MISCDEV_NAME		"ksdev"
 
+#define KS_BUSY_TIMEOUT		1000
+
 struct ma35d1_ks_dev {
 	struct device *dev;
 	struct miscdevice miscdev;
@@ -658,6 +660,15 @@ static inline void nu_ks_write_reg(struct ma35d1_ks_dev *ks_dev,
 	writel_relaxed(value, ks_dev->reg_base + offset);
 }
 
+static inline int ma35d1_ks_wait_busy_clear(struct ma35d1_ks_dev *ks_dev)
+{
+	while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
+		if (time_after(jiffies, jiffies +
+			msecs_to_jiffies(KS_BUSY_TIMEOUT)))
+			return -EBUSY;
+	}
+	return 0;
+}
 
 static int ma35d1_ks_read(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 {
@@ -671,7 +682,7 @@ static int ma35d1_ks_read(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0) {
 		pr_err("MA35D1 KS is busy!\n");
 		return -EBUSY;
 	}
@@ -697,8 +708,8 @@ static int ma35d1_ks_read(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 				KS_CTL) & KS_CLT_FUNC_MASK));
 
 		/* Waiting for key store processing */
-		while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY)
-			;
+		if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+			return -EBUSY;
 
 		/* Read the key to key buffer */
 		cnt = remain_cnt;
@@ -741,7 +752,7 @@ static int ma35d1_ks_write_sram(struct ma35d1_ks_dev *ks_dev,
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0) {
 		pr_err("MA35D1 KS is busy!\n");
 		return -EBUSY;
 	}
@@ -788,8 +799,8 @@ static int ma35d1_ks_write_sram(struct ma35d1_ks_dev *ks_dev,
 		offset += 8;
 
 		/* Waiting for key store processing */
-		while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY)
-			;
+		if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+			return -EBUSY;
 
 	} while (remain_cnt > 0);
 
@@ -814,7 +825,7 @@ static int ma35d1_ks_write_otp(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0) {
 		pr_err("MA35D1 KS is busy!\n");
 		return -EBUSY;
 	}
@@ -860,8 +871,8 @@ static int ma35d1_ks_write_otp(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		offset += 8;
 
 		/* Waiting for key store processing */
-		while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY)
-			;
+		if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+			return -EBUSY;
 
 	} while (remain_cnt > 0);
 
@@ -883,7 +894,7 @@ static int ma35d1_ks_erase(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0) {
 		pr_err("MA35D1 KS is busy!\n");
 		return -EBUSY;
 	}
@@ -900,8 +911,8 @@ static int ma35d1_ks_erase(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 			(nu_ks_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
 
 	/* Waiting for processing */
-	while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY)
-		;
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+		return -EBUSY;
 
 	/* Check error flag */
 	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
@@ -914,7 +925,7 @@ static int ma35d1_ks_erase(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 static int ma35d1_ks_erase_all(struct ma35d1_ks_dev *ks_dev)
 {
 	/* Just return when key store is in busy */
-	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0) {
 		pr_err("MA35D1 KS is busy!\n");
 		return -EBUSY;
 	}
@@ -928,9 +939,10 @@ static int ma35d1_ks_erase_all(struct ma35d1_ks_dev *ks_dev)
 	/* Erase the key */
 	nu_ks_write_reg(ks_dev, KS_CTL, KS_OP_ERASE_ALL | KS_CTL_START |
 			(nu_ks_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
+
 	/* Waiting for processing */
-	while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY)
-		;
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+		return -EBUSY;
 
 	/* Check error flag */
 	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
@@ -950,7 +962,7 @@ static int ma35d1_ks_revoke(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0) {
 		pr_err("MA35D1 KS is busy!\n");
 		return -EBUSY;
 	}
@@ -967,8 +979,8 @@ static int ma35d1_ks_revoke(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 			(nu_ks_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
 
 	/* Waiting for processing */
-	while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY)
-		;
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+		return -EBUSY;
 
 	/* Check error flag */
 	if (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
@@ -1003,8 +1015,8 @@ static int ks_dev_open(struct inode *iptr, struct file *fptr)
 		;
 
 	/* Waiting for processing */
-	while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY)
-		;
+	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+		return -EBUSY;
 
 	return 0;
 }

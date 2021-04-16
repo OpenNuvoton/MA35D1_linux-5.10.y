@@ -958,9 +958,9 @@ static int nuvoton_ecc_point_mult(struct nu_ecc_ctx *ctx, u8 *private_key,
 			ecc_key_to_str(public_key + ctx->keylen,
 				(char *)&dd->va_shm[0x1240 / 4], ctx->keylen);
 		} else {
-			ecc_key_to_str((u8 *)ctx->curve->g_x,
+			ecc_key_to_str((u8 *)ctx->curve->Px,
 				(char *)&dd->va_shm[0x1000 / 4], ctx->keylen);
-			ecc_key_to_str((u8 *)ctx->curve->g_y,
+			ecc_key_to_str((u8 *)ctx->curve->Py,
 				(char *)&dd->va_shm[0x1240 / 4], ctx->keylen);
 		}
 		ecc_key_to_str(private_key,
