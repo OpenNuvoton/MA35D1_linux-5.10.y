@@ -1011,8 +1011,11 @@ static int ks_dev_open(struct inode *iptr, struct file *fptr)
 	nu_ks_write_reg(ks_dev, KS_CTL, KS_CTL_INIT | KS_CTL_START);
 
 	/* Waiting for initilization */
-	while ((nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_INITDONE) == 0)
-		;
+	while ((nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_INITDONE) == 0) {
+		if (time_after(jiffies, jiffies +
+			msecs_to_jiffies(KS_BUSY_TIMEOUT)))
+			return -EIO;
+	}
 
 	/* Waiting for processing */
 	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
