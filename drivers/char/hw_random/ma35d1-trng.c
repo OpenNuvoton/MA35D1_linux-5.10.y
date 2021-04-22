@@ -418,9 +418,10 @@ static inline u32 nu_read_reg(struct ma35d1_trng *tdev, u32 reg)
 
 static inline int ma35d1_trng_wait_busy_clear(struct ma35d1_trng *tdev)
 {
+	unsigned long  timeout = jiffies + msecs_to_jiffies(TRNG_TIMEOUT);
+
 	while (nu_read_reg(tdev, STAT) & STAT_BUSY) {
-		if (time_after(jiffies, jiffies +
-		    msecs_to_jiffies(TRNG_TIMEOUT)))
+		if (time_after(jiffies, timeout))
 			return -EBUSY;
 	}
 	return 0;
@@ -428,6 +429,7 @@ static inline int ma35d1_trng_wait_busy_clear(struct ma35d1_trng *tdev)
 
 static int ma35d1_trng_issue_command(struct ma35d1_trng *tdev, int cmd)
 {
+	unsigned long  timeout;
 	int	err;
 
 	err = ma35d1_trng_wait_busy_clear(tdev);
@@ -437,9 +439,9 @@ static int ma35d1_trng_issue_command(struct ma35d1_trng *tdev, int cmd)
 	nu_write_reg(tdev, (nu_read_reg(tdev, CTRL) & ~CTRL_CMD_MASK) |
 			(cmd << CTRL_CMD_OFFSET), CTRL);
 
+	timeout = jiffies + msecs_to_jiffies(TRNG_TIMEOUT);
 	while (!(nu_read_reg(tdev, ISTAT) & ISTAT_DONE)) {
-		if (time_after(jiffies, jiffies +
-		    msecs_to_jiffies(TRNG_TIMEOUT))) {
+		if (time_after(jiffies, timeout)) {
 			pr_debug("TRNG command %d timeout! ISTAT = 0x%x, SMODE = 0x%x.\n",
 				 cmd, nu_read_reg(tdev, ISTAT),
 				 nu_read_reg(tdev, SMODE));

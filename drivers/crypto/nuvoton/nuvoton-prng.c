@@ -43,9 +43,10 @@ static inline u32 nu_read_reg(struct nuvoton_prng *prng, u32 reg)
 
 static inline int nuvoton_prng_wait_busy_clear(struct nuvoton_prng *prng)
 {
+	unsigned long   t_out = jiffies + msecs_to_jiffies(PRNG_TIMEOUT);
+
 	while (nu_read_reg(prng, PRNG_CTL) & PRNG_CTL_BUSY) {
-		if (time_after(jiffies, jiffies +
-			msecs_to_jiffies(PRNG_TIMEOUT)))
+		if (time_after(jiffies, t_out))
 			return -EBUSY;
 	}
 	return 0;

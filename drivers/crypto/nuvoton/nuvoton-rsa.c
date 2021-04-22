@@ -244,13 +244,13 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 			RSA_CTL_START, RSA_CTL);
 
 	if (dd->use_optee == false) {
-		timeout = jiffies + 2000;
-		while ((nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) &&
-			time_before(jiffies, timeout))
-			;
-		if (!time_before(jiffies, timeout)) {
-			pr_err("RSA encrypt time-out!\n");
-			err = -EIO;
+		timeout = jiffies + msecs_to_jiffies(2000);
+		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
+			if (time_after(jiffies, timeout)) {
+				pr_err("RSA encrypt time-out!\n");
+				err = -EIO;
+				break;
+			}
 		}
 	} else {
 #ifdef CONFIG_OPTEE
@@ -355,13 +355,13 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 			RSA_CTL_START, RSA_CTL);
 
 	if (dd->use_optee == false) {
-		timeout = jiffies + 2000;
-		while ((nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) &&
-			time_before(jiffies, timeout))
-			;
-		if (!time_before(jiffies, timeout)) {
-			pr_err("RSA decrypt time-out!\n");
-			err = -EIO;
+		timeout = jiffies + msecs_to_jiffies(2000);
+		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
+			if (time_after(jiffies, timeout)) {
+				pr_err("RSA decrypt time-out!\n");
+				err = -EIO;
+				break;
+			}
 		}
 	} else {
 #ifdef CONFIG_OPTEE
@@ -606,7 +606,6 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 	u8	m[NU_RSA_MAX_BYTE_LEN];
 	struct nu_rsa_ctx  *rsa_ctx = filp->private_data;
 	unsigned long   timeout;
-	int     ret = 0;
 
 	if (!rsa_ctx)
 		return -EIO;
@@ -668,13 +667,12 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 		nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
 				RSA_CTL_START, RSA_CTL);
 
-		timeout = jiffies + 2000;
-		while ((nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) &&
-			time_before(jiffies, timeout))
-			;
-		if (!time_before(jiffies, timeout)) {
-			pr_err("RSA_IOC_RUN time-out!\n");
-			ret = -EIO;
+		timeout = jiffies + msecs_to_jiffies(2000);
+		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
+			if (time_after(jiffies, timeout)) {
+				pr_err("RSA_IOC_RUN time-out!\n");
+				return -EIO;
+			}
 		}
 
 		dma_unmap_single(dd->dev, rsa_ctx->dma_buff,
@@ -690,7 +688,7 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 	default:
 		return -ENOTTY;
 	}
-	return ret;
+	return 0;
 }
 
 static int nvt_rsa_open(struct inode *inode, struct file *file)

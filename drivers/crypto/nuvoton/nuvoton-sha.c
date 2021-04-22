@@ -303,6 +303,7 @@ static int nuvoton_sha_init(struct ahash_request *req)
 	struct nu_sha_dev *dd = nuvoton_sha_find_dev(tctx);
 	int	alen;
 	bool	is_sha3 = false;
+	unsigned long  timeout;
 	int	err;
 
 	struct hash_alg_common *halg = crypto_hash_alg_common(tfm);
@@ -423,9 +424,9 @@ static int nuvoton_sha_init(struct ahash_request *req)
 	/*
 	 *  Wait until SHA engine busy cleared or timeout
 	 */
+	timeout = jiffies + msecs_to_jiffies(200);
 	while (nu_read_reg(ctx->dd, HMAC_STS) & HMAC_STS_BUSY) {
-		if (time_after(jiffies, jiffies +
-			msecs_to_jiffies(200))) {
+		if (time_after(jiffies, timeout)) {
 			nu_write_reg(dd, HMAC_CTL_STOP, HMAC_CTL);
 			ctx->op &= ~SHA_OP_HMAC_KEY;
 			dev_err(dd->dev, "HAMC key block DMA time-out!\n");

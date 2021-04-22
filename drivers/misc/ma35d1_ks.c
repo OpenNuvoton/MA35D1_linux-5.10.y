@@ -662,9 +662,10 @@ static inline void nu_ks_write_reg(struct ma35d1_ks_dev *ks_dev,
 
 static inline int ma35d1_ks_wait_busy_clear(struct ma35d1_ks_dev *ks_dev)
 {
+	unsigned long  timeout = jiffies + msecs_to_jiffies(KS_BUSY_TIMEOUT);
+
 	while (nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
-		if (time_after(jiffies, jiffies +
-			msecs_to_jiffies(KS_BUSY_TIMEOUT)))
+		if (time_after(jiffies, timeout))
 			return -EBUSY;
 	}
 	return 0;
@@ -1003,6 +1004,7 @@ static int ma35d1_ks_remain(struct ma35d1_ks_dev *ks_dev)
 static int ks_dev_open(struct inode *iptr, struct file *fptr)
 {
 	struct ma35d1_ks_dev *ks_dev;
+	unsigned long  timeout;
 
 	ks_dev = container_of(fptr->private_data, struct ma35d1_ks_dev,
 			      miscdev);
@@ -1010,10 +1012,10 @@ static int ks_dev_open(struct inode *iptr, struct file *fptr)
 	/* Start Key Store Initial */
 	nu_ks_write_reg(ks_dev, KS_CTL, KS_CTL_INIT | KS_CTL_START);
 
-	/* Waiting for initilization */
+	/* Waiting for KeyStore initilization done */
+	timeout = jiffies + msecs_to_jiffies(KS_BUSY_TIMEOUT);
 	while ((nu_ks_read_reg(ks_dev, KS_STS) & KS_STS_INITDONE) == 0) {
-		if (time_after(jiffies, jiffies +
-			msecs_to_jiffies(KS_BUSY_TIMEOUT)))
+		if (time_after(jiffies, timeout))
 			return -EIO;
 	}
 
