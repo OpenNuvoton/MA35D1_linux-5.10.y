@@ -735,6 +735,7 @@
 			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
 			drive-strength = <1>; /* 0 ~ 7 */
 		};
+
 	};
 
 	sdhci0: sdhci@40180000 {
@@ -795,12 +796,18 @@
 				reg = <0x0000000 0x200000>;
 				read-only;
 			};
-
-			linux@200000 {
-				label = "linux";
-				reg = <0x200000 0xC00000>;
+			uboot-env@200000 {
+				lable = "uboot-env";
+				reg = <0x200000 0xC0000>;
 			};
-
+			linux-device-tree@280000 {
+				lable = "linux-device-tree";
+				reg = <0x2C0000 0x40000>;
+			};
+			linux@300000 {
+				label = "linux";
+				reg = <0x300000 0xB00000>;
+			};
 			rootfs@e00000 {
 				label = "rootfs";
 				reg = <0xE00000 0x6E00000>;
@@ -1149,15 +1156,23 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			partition@0 {
+			uboot@0 {
 				label = "uboot";
 				reg = <0x0 0x200000>;
 			};
-			partition@200000 {
-				label = "linux";
-				reg = <0x200000 0xC00000>;
+			uboot-env@200000 {
+				lable = "uboot-env";
+				reg = <0x200000 0xc0000>;
 			};
-			partition@e00000 {
+			linux-device-tree@280000 {
+				lable = "linux-device-tree";
+				reg = <0x2c0000 0x40000>;
+			};
+			linux@300000 {
+				label = "linux";
+				reg = <0x300000 0xB00000>;
+			};
+			rootfs@e00000 {
 				label = "rootfs";
 				reg = <0xE00000 0x6E00000>;
 			};
