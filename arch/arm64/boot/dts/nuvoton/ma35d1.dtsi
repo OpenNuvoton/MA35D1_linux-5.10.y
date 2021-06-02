@@ -879,6 +879,8 @@
 		status = "disabled";
 	};
 
+#define USING_HM1055
+//#deifne USING_NT99141
 	ccap0: ccap@40240000{
 		compatible = "nuvoton,ma35d1-ccap";
 		reg = <0x0 0x40240000 0x0 0x2000>;
@@ -887,7 +889,11 @@
 		port {
 			/* Parallel bus endpoint */
 			ccap0_1: endpoint {
+#if defined(USING_HM1055)
+				remote-endpoint = <&hm1055_0>;
+#elif defined(USING_NT99141)
 				remote-endpoint = <&nt99141_0>;
+#endif
 				hsync-active = <0>;     /* Active low */
 				vsync-active = <0>;     /* Active low */
 				pclk-sample = <1>;      /* Rising */
@@ -905,6 +911,24 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "disabled";
+
+#ifdef USING_HM1055
+		hm1055@24 {
+			compatible = "himax,hm1055";
+			reg = <0x24>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_ccap0>;
+			clocks = <&clk ccap0_gate>;
+			clock-names = "xclk";
+			reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
+			powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
+			port {
+				hm1055_0: endpoint {
+					remote-endpoint = <&ccap0_1>;
+				};
+			};
+		};
+#elif defined(USING_NT99141)
 		nt99141@2a {
 			compatible = "novatek,nt99141";
 			reg = <0x2a>;
@@ -920,6 +944,7 @@
 				};
 			};
 		};
+#endif
 
 	};
 

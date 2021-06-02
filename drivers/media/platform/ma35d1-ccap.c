@@ -336,6 +336,7 @@ static int ccap_try_fmt(struct ccap_device *ccap, struct v4l2_format *f,
 	pix->height =
 	    clamp(pix->height, CCAP_MIN_IMAGE_HEIGHT, CCAP_MAX_IMAGE_HEIGHT);
 
+	dev_dbg(ccap->dev, "pix->width %d, pix->height %d\n", pix->width, pix->height);
 	/* No crop if JPEG is requested */
 	do_crop = ccap->do_crop && (pix->pixelformat != V4L2_PIX_FMT_JPEG);
 
@@ -747,7 +748,7 @@ static int ccap_try_fmt_vid_cap(struct file *file, void *priv,
 	u32 value;
 
 	ENTRY();
-
+	dev_dbg(ccap_dev->dev, "pix->width %d, pix->height %d \n",pix->width,pix->height);
 	if (vb2_is_streaming(&ccap_dev->queue))
 		return -EBUSY;
 
@@ -1003,21 +1004,6 @@ static int ccap_try_fmt_vid_cap(struct file *file, void *priv,
 	return 0;
 }
 
-static int ccap_s_fmt_vid_cap(struct file *file, void *priv,
-			      struct v4l2_format *fmt)
-{
-	struct ccap_device *ccap_dev = video_drvdata(file);
-	int ret;
-
-	ENTRY();
-	ret = ccap_try_fmt_vid_cap(file, priv, fmt);
-	if (ret < 0)
-		return ret;
-	memcpy(&ccap_dev->pix, &fmt->fmt.pix, sizeof(struct v4l2_pix_format));
-	LEAVE();
-	return 0;
-}
-
 static int ccap_g_fmt_vid_cap(struct file *file, void *priv,
 			      struct v4l2_format *fmt)
 {
@@ -1247,6 +1233,7 @@ static int ccap_set_fmt(struct ccap_device *ccap, struct v4l2_format *f)
 	 * sd_format & sd_framesize will contain what subdev
 	 * can do for this request.
 	 */
+	dev_dbg(ccap->dev, "pix->width %d, pix->height %d\n",pix->width, pix->height);
 	ret = ccap_try_fmt(ccap, f, &sd_format, &sd_framesize);
 	if (ret)
 		return ret;
@@ -1269,6 +1256,24 @@ static int ccap_set_fmt(struct ccap_device *ccap, struct v4l2_format *f)
 	ccap->sd_format = sd_format;
 	ccap->sd_framesize = sd_framesize;
 
+	LEAVE();
+	return 0;
+}
+
+static int ccap_s_fmt_vid_cap(struct file *file, void *priv,
+			      struct v4l2_format *fmt)
+{
+	struct ccap_device *ccap_dev = video_drvdata(file);
+	int ret;
+
+	ENTRY();
+	dev_dbg(ccap_dev->dev,"width %d, heigth %d \n",fmt->fmt.pix.width,fmt->fmt.pix.height);
+	memcpy(&ccap_dev->fmt, fmt, sizeof(struct v4l2_format));
+	ccap_set_fmt(ccap_dev, &ccap_dev->fmt);
+	ret = ccap_try_fmt_vid_cap(file, priv, fmt);
+	if (ret < 0)
+		return ret;
+	memcpy(&ccap_dev->pix, &fmt->fmt.pix, sizeof(struct v4l2_pix_format));
 	LEAVE();
 	return 0;
 }

@@ -731,6 +731,12 @@ config VIDEO_NT99141
 	help
 	   Novatek sensor support
 
+config VIDEO_HM1055
+        tristate "HiMax HM1055 sensor support"
+        depends on VIDEO_V4L2 && I2C
+        help
+           HiMax sensor support
+
 config VIDEO_HI556
 	tristate "Hynix Hi-556 sensor support"
 	depends on I2C && VIDEO_V4L2
