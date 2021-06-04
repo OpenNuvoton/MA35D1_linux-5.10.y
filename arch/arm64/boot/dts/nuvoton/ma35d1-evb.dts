@@ -77,6 +77,11 @@
 	pinctrl-0 = <&pinctrl_hsusbh>;
 };
 
+&usb {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb>;
+};
+
 &nand {
 	status = "okay";
 	pinctrl-names = "default";
@@ -324,6 +329,13 @@
 				<SYS_GPD_MFPL_PD3MFP_QSPI0_MISO0	&pcfg_default>,
 				<SYS_GPD_MFPL_PD4MFP_QSPI0_MOSI1	&pcfg_default>,
 				<SYS_GPD_MFPL_PD5MFP_QSPI0_MISO1	&pcfg_default>;
+		};
+	};
+
+	usb {
+		pinctrl_usb: usbgrp{
+			nuvoton,pins =
+				<SYS_GPF_MFPH_PF15MFP_HSUSB0_VBUSVLD	&pcfg_default>;
 		};
 	};
 
