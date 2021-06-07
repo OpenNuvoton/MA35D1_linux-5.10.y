@@ -1381,16 +1381,21 @@
 
 		//RGB interface
 		bits-per-pixel = <32>;
-		pixel-fmt = <6>; //RGB888
+		pixel-fmt = <6>; //6:RGB888 8:UYVY 17:NV12
 		bus-width = <24>;
 
+		buffer-num = <3>;
+		colorkey-en = <1>;
+
 		//Enable overlay function
-		overlay-en = <0>;
+		overlay-en = <1>;
+		overlay-width = <1024>;
+		overlay-height = <600>;
 
 		display-timings {
 			native-mode = <&timing0>;
 
-			timing0: gt911_1024x600 { //GT911
+			timing0: 1024x600 {
 				clock-frequency = <51000000>;//pixel clock(pixclock)
 				hactive = <1024>;
 				vactive = <600>;
