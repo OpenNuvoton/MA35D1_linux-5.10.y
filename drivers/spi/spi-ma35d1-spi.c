@@ -8,88 +8,81 @@
  *
  */
 
-#include <linux/module.h>
-#include <linux/init.h>
-#include <linux/spinlock.h>
-#include <linux/workqueue.h>
-#include <linux/interrupt.h>
-#include <linux/delay.h>
-#include <linux/errno.h>
-#include <linux/err.h>
 #include <linux/clk.h>
-#include <linux/device.h>
-#include <linux/platform_device.h>
-#include <linux/gpio.h>
 #include <linux/io.h>
-#include <linux/slab.h>
-
+#include <linux/iopoll.h>
+#include <linux/module.h>
+#include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/spi/spi.h>
+#include <linux/spi/spi-mem.h>
 
+#include <linux/interrupt.h>
+#include <linux/of.h>
 #include <asm/irq.h>
-#include <linux/spi/spi_bitbang.h>
-
 #include <linux/platform_data/dma-ma35d1.h>
 
-#define PCLK_FREQ	189000000
-#define SPI0_BASEADDR	0x40680000
-#define SPI1_BASEADDR	0x40690000
+#define PCLK_FREQ       189000000
 
 /* spi registers offset */
-#define REG_CTL		0x00
-#define REG_CLKDIV	0x04
-#define REG_SSCTL	0x08
-#define REG_PDMACTL	0x0C
-#define REG_FIFOCTL	0x10
-#define REG_STATUS	0x14
-#define REG_TX		0x20
-#define REG_RX		0x30
+#define REG_CTL         0x00
+#define REG_CLKDIV      0x04
+#define REG_SSCTL       0x08
+#define REG_PDMACTL     0x0C
+#define REG_FIFOCTL     0x10
+#define REG_STATUS      0x14
+#define REG_TX          0x20
+#define REG_RX          0x30
 
 /* spi register bit */
-#define QUADIOEN	(0x01 << 22)
-#define DATDIR		(0x01 << 20)
-#define UNITIEN		(0x01 << 17)
-#define TXNEG		(0x01 << 2)
-#define RXNEG		(0x01 << 1)
-#define LSB		(0x01 << 13)
-#define SELECTLEV	(0x01 << 2)
-#define SELECTPOL	(0x01 << 3)
-#define SELECTSLAVE0	0x01
-#define SELECTSLAVE1	0x02
-#define SPIEN		0x01
-#define DWIDTH_MASK	0x1F00
-#define DWIDTH_POS	8
-#define BYTE_REORDER	0x80000
-#define TXPDMAEN	0x01
-#define RXPDMAEN	0x02
-#define RXRST		0x01
-#define TXRST		0x02
-#define RXFBCLR		0x100
-#define TXFBCLR		0x200
-#define BUSY		0x01
-#define RXEMPTY		0x100
-#define RXFULL		0x200
-#define SPIENSTS	0x8000
-#define TXEMPTY		0x10000
-#define TXFULL		0x20000
-#define FIFOCLR		0x400000
-#define TXRXRST		0x800000
+#define QUADIOEN        (0x01 << 22)
+#define DATDIR          (0x01 << 20)
+#define UNITIEN         (0x01 << 17)
+#define TXNEG           (0x01 << 2)
+#define RXNEG           (0x01 << 1)
+#define LSB             (0x01 << 13)
+#define SELECTLEV       (0x01 << 2)
+#define SELECTPOL       (0x01 << 3)
+#define SELECTSLAVE0    0x01
+#define SELECTSLAVE1    0x02
+#define SPIEN           0x01
+#define DWIDTH_MASK     0x1F00
+#define DWIDTH_POS      8
+#define BYTE_REORDER    0x80000
+#define TXPDMAEN        0x01
+#define RXPDMAEN        0x02
+#define RXRST           0x01
+#define TXRST           0x02
+#define RXFBCLR         0x100
+#define TXFBCLR         0x200
+#define BUSY            0x01
+#define RXEMPTY         0x100
+#define RXFULL          0x200
+#define SPIENSTS        0x8000
+#define TXEMPTY         0x10000
+#define TXFULL          0x20000
+#define FIFOCLR         0x400000
+#define TXRXRST         0x800000
+
+#define OP_BUSW_1	0
+#define OP_BUSW_2	1
+#define OP_BUSW_4	2
 
 /* define for PDMA */
-
-#define ALIGNMENT_4	4
-#define USE_PDMA_LEN	16
+#define ALIGNMENT_4     4
+#define USE_PDMA_LEN    16
 
 struct ma35d1_ip_dma {
-	struct dma_chan			*chan_rx;
-	struct dma_chan			*chan_tx;
-	struct scatterlist		sgrx;
-	struct scatterlist		sgtx;
-	struct dma_async_tx_descriptor	*rxdesc;
-	struct dma_async_tx_descriptor	*txdesc;
-	struct dma_slave_config		slave_config;
+	struct dma_chan                 *chan_rx;
+	struct dma_chan                 *chan_tx;
+	struct scatterlist              sgrx;
+	struct scatterlist              sgtx;
+	struct dma_async_tx_descriptor  *rxdesc;
+	struct dma_async_tx_descriptor  *txdesc;
+	struct dma_slave_config         slave_config;
 };
 
-struct ma35d1_spi_info {
+struct nuvoton_spi_info {
 	unsigned int num_cs;
 	unsigned int lsb;
 	unsigned int txneg;
@@ -100,41 +93,42 @@ struct ma35d1_spi_info {
 	unsigned int clkpol;
 	int bus_num;
 	unsigned int hz;
+	unsigned int quad;
 	unsigned int use_pdma;
 	unsigned int pdma_reqsel_tx;
 	unsigned int pdma_reqsel_rx;
 };
 
-struct ma35d1_spi {
-	struct spi_bitbang		bitbang;
-	struct completion		done;
-	void __iomem			*regs;
-	int				irq;
-	unsigned int			len;
-	unsigned int			count;
-	const void			*tx;
-	void				*rx;
-	struct clk			*clk;
-	struct spi_master		*master;
-	struct device			*dev;
-	struct ma35d1_spi_info	*pdata;
-	spinlock_t			lock;
-	struct resource			*res;
-	struct ma35d1_dma_done		dma_slave_done;
-	struct ma35d1_ip_dma		dma;
-	volatile int			slave_done_state;
-	struct wait_queue_head		slave_done;
-	unsigned int			phyaddr;
+struct nuvoton_spi {
+	struct completion               done;
+	void __iomem                    *regs;
+	int                             irq;
+	unsigned int                    len;
+	unsigned int                    count;
+	const void                      *tx;
+	void                            *rx;
+	struct clk                      *clk;
+	struct spi_master               *master;
+	struct device                   *dev;
+	struct nuvoton_spi_info	*pdata;
+	spinlock_t                      lock;
+	struct resource                 *res;
+	struct ma35d1_dma_done          dma_slave_done;
+	struct ma35d1_ip_dma            dma;
+	volatile int                    slave_done_state;
+	struct wait_queue_head          slave_done;
+	unsigned int                    phyaddr;
+	unsigned int			cur_speed_hz;
 };
 
-static inline struct ma35d1_spi *to_hw(struct spi_device *sdev)
+static inline struct nuvoton_spi *to_hw(struct spi_device *sdev)
 {
 	return spi_master_get_devdata(sdev->master);
 }
 
 static void ma35d1_slave_dma_callback(void *arg)
 {
-	struct ma35d1_spi *hw = (struct ma35d1_spi *)arg;
+	struct nuvoton_spi *hw = (struct nuvoton_spi *)arg;
 	struct ma35d1_dma_done *done = &hw->dma_slave_done;
 
 	done->done = true;
@@ -144,55 +138,45 @@ static void ma35d1_slave_dma_callback(void *arg)
 	return;
 }
 
-static inline void ma35d1_slave_select(struct spi_device *spi, unsigned int ssr)
+static int nuvoton_spi_clk_enable(struct nuvoton_spi *nuvoton)
 {
-	struct ma35d1_spi *hw = (struct ma35d1_spi *)to_hw(spi);
-	unsigned int val;
-	unsigned int cs = spi->mode & SPI_CS_HIGH ? 1 : 0;
-	unsigned long flags;
+	int ret;
 
-	spin_lock_irqsave(&hw->lock, flags);
+	ret = clk_prepare_enable(nuvoton->clk);
 
-	val = __raw_readl(hw->regs + REG_SSCTL);
-
-	if (!cs)
-		val &= ~SELECTLEV;
-	else
-		val |= SELECTLEV;
-
-	if(spi->chip_select == 0) {
-		if (!ssr)
-			val &= ~SELECTSLAVE0;
-		else
-			val |= SELECTSLAVE0;
-	} else {
-		if (!ssr)
-			val &= ~SELECTSLAVE1;
-		else
-			val |= SELECTSLAVE1;
-	}
-
-	while (__raw_readl(hw->regs + REG_STATUS) & BUSY); //wait busy
-
-	__raw_writel(val, hw->regs + REG_SSCTL);
-
-	spin_unlock_irqrestore(&hw->lock, flags);
+	return ret;
 }
 
-static inline void ma35d1_spi_chipsel(struct spi_device *spi, int value)
+static void nuvoton_spi_clk_disable(struct nuvoton_spi *nuvoton)
 {
-	switch (value) {
-	case BITBANG_CS_INACTIVE:
-		ma35d1_slave_select(spi, 0);
-		break;
-
-	case BITBANG_CS_ACTIVE:
-		ma35d1_slave_select(spi, 1);
-		break;
-	}
+	clk_disable_unprepare(nuvoton->clk);
 }
 
-static inline void ma35d1_setup_txbitlen(struct ma35d1_spi *hw,
+static inline void nuvoton_set_divider(struct nuvoton_spi *hw)
+{
+	__raw_writel(hw->pdata->divider, hw->regs + REG_CLKDIV);
+}
+
+static int nuvoton_spi_clk_setup(struct nuvoton_spi *hw, unsigned long freq)
+{
+	unsigned int clk;
+	unsigned int div;
+
+#if 0 /* TODO: turn on this after design fix */
+	clk = clk_get_rate(hw->clk);
+#else
+	clk = PCLK_FREQ;
+#endif
+	div = DIV_ROUND_UP(clk, freq) - 1;
+	hw->pdata->hz = freq;
+	hw->pdata->divider = div;
+
+	nuvoton_set_divider(hw);
+
+	return 0;
+}
+
+static inline void nuvoton_setup_txbitlen(struct nuvoton_spi *hw,
         unsigned int txbitlen)
 {
 	unsigned int val;
@@ -206,309 +190,7 @@ static inline void ma35d1_setup_txbitlen(struct ma35d1_spi *hw,
 
 }
 
-static inline unsigned int hw_tx(struct ma35d1_spi *hw, unsigned int count)
-{
-	const unsigned char *tx_byte = hw->tx;
-	const unsigned short *tx_short = hw->tx;
-	const unsigned int *tx_int = hw->tx;
-	unsigned int bwp = hw->pdata->txbitlen;
-
-	if(bwp <= 8)
-		return tx_byte ? tx_byte[count] : 0;
-	else if(bwp <= 16)
-		return tx_short ? tx_short[count] : 0;
-	else
-		return tx_int ? tx_int[count] : 0;
-}
-
-static inline void hw_rx(struct ma35d1_spi *hw, unsigned int data, int count)
-{
-	unsigned char *rx_byte = hw->rx;
-	unsigned short *rx_short = hw->rx;
-	unsigned int *rx_int = hw->rx;
-	int bwp = hw->pdata->txbitlen;
-
-	if(bwp <= 8)
-		rx_byte[count] = data;
-	else if(bwp <= 16)
-		rx_short[count] = data;
-	else
-		rx_int[count] = data;
-}
-
-static int ma35d1_spi_txrx(struct spi_device *spi, struct spi_transfer *t)
-{
-	struct ma35d1_spi *hw = (struct ma35d1_spi *)to_hw(spi);
-	unsigned int	i,j;
-	unsigned int	non_align_len = 0;
-
-	struct ma35d1_ip_dma *pdma = &hw->dma;
-	dma_cookie_t	cookie;
-
-	__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXRST | RXRST), hw->regs + REG_FIFOCTL);
-	while (__raw_readl(hw->regs + REG_STATUS) & TXRXRST) {}
-
-	hw->tx = t->tx_buf;
-	hw->rx = t->rx_buf;
-
-	/* Use PDMA or not from device tree */
-	if (hw->pdata->use_pdma) {
-
-		/* short length transfer by CPU */
-		if (t->len < USE_PDMA_LEN) {
-			if (t->rx_nbits & SPI_NBITS_QUAD) {
-				__raw_writel(((__raw_readl(hw->regs + REG_CTL) | QUADIOEN) & ~DATDIR),
-				             hw->regs + REG_CTL); //Enable Quad mode, direction input
-			}
-
-			if (hw->rx) {
-				j = 0;
-
-				for(i = 0; i < t->len; ) {
-					if(((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
-						__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-						i++;
-					}
-					if(((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-						j++;
-					}
-				}
-				while(j < t->len) {
-					if(((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-						j++;
-					}
-				}
-			} else {
-				for(i = 0; i < t->len; i++) {
-					while (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == TXFULL)); //TXFULL
-					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-				}
-			}
-
-			__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~(QUADIOEN | DATDIR)),
-			             hw->regs + REG_CTL); //Restore to single mode, direction input
-
-		} else { //Long length transfer by PDMA
-
-			/* Since MA35D1 PDMA cannot transfer data at non-alignment address */
-			/* Transfer the non-alignment byte by CPU */
-			if ((unsigned long)t->rx_buf & (ALIGNMENT_4 - 1)) {
-				j = 0;
-				non_align_len = (ALIGNMENT_4 - ((unsigned long)t->rx_buf & (ALIGNMENT_4 - 1)));
-
-				for (i = 0; (i < t->len) && (i < non_align_len); ) {
-					if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
-						__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-						i++;
-					}
-					if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-						j++;
-					}
-
-				}
-				while (j < non_align_len) {
-					if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-						j++;
-					}
-				}
-			} else if ((unsigned long)t->tx_buf & (ALIGNMENT_4 - 1)) {
-				non_align_len = (ALIGNMENT_4 - ((unsigned long)t->tx_buf & (ALIGNMENT_4 - 1)));
-				for (i = 0; (i < t->len) && (i < non_align_len); )
-					if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) != TXFULL)) { //TX NOT FULL
-						__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-						i++;
-					}
-			}
-
-			/* Transfer the rest data starting at alignment address by PDMA */
-			if (t->rx_buf) {
-
-				if(t->rx_nbits & SPI_NBITS_QUAD)
-					__raw_writel(((__raw_readl(hw->regs + REG_CTL) | QUADIOEN) & ~(DATDIR)),
-					             hw->regs + REG_CTL); //Enable Quad mode, direction input
-
-
-				/* prepare the RX dma transfer */
-				sg_init_table(&pdma->sgrx, 1);
-				pdma->slave_config.src_addr = (hw->phyaddr + REG_RX);
-				pdma->slave_config.src_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
-				pdma->sgrx.dma_length = (t->len - non_align_len);
-
-				pdma->slave_config.direction = DMA_DEV_TO_MEM;
-				pdma->slave_config.slave_id = hw->pdata->pdma_reqsel_rx;
-				dmaengine_slave_config(pdma->chan_rx, &(pdma->slave_config));
-
-				/* Map t->rx_buf to physical address including non-alignment part */
-				pdma->sgrx.dma_address = dma_map_single(hw->dev,
-				                                        (void *)(t->rx_buf),
-				                                        t->len, DMA_FROM_DEVICE);
-				if (dma_mapping_error(hw->dev, pdma->sgrx.dma_address)) {
-					dev_err(hw->dev, "tx dma map error\n");
-				}
-
-				/* Adjust physical address that skip non-alignment part */
-				pdma->sgrx.dma_address += non_align_len;
-
-				pdma->rxdesc = dmaengine_prep_slave_sg(pdma->chan_rx,
-				                                       &pdma->sgrx,
-				                                       1,
-				                                       DMA_FROM_DEVICE,
-				                                       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
-				if (!pdma->rxdesc) {
-					dev_err(hw->dev, "pdma->rxdesc=NULL\n");
-					BUG();
-				}
-				hw->dma_slave_done.done = false;
-				pdma->rxdesc->callback = ma35d1_slave_dma_callback;
-				pdma->rxdesc->callback_param = hw;
-
-				cookie = pdma->rxdesc->tx_submit(pdma->rxdesc);
-				if (dma_submit_error(cookie)) {
-					dev_err(hw->dev, "rx cookie=%d\n",cookie);
-					BUG();
-				}
-			} /* t->rx_buf */
-
-			if (t->tx_buf) {
-				/* prepare the TX dma transfer */
-				sg_init_table(&pdma->sgtx, 1);
-				pdma->slave_config.dst_addr = (hw->phyaddr + REG_TX);
-				pdma->slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
-				pdma->sgtx.dma_length = t->len - non_align_len;
-
-				pdma->slave_config.direction = DMA_MEM_TO_DEV;
-				pdma->slave_config.slave_id = hw->pdata->pdma_reqsel_tx;
-				dmaengine_slave_config(pdma->chan_tx, &(pdma->slave_config));
-
-				/* Map t->tx_buf to physical address including non-alignment part */
-				pdma->sgtx.dma_address = dma_map_single(hw->dev,
-				                                        (void *)t->tx_buf,
-				                                        t->len, DMA_TO_DEVICE);
-				if (dma_mapping_error(hw->dev, pdma->sgtx.dma_address)) {
-					dev_err(hw->dev, "tx dma map error\n");
-				}
-				/* Adjust physical address that skip non-alignment part */
-				pdma->sgtx.dma_address += non_align_len;
-
-				dma_sync_single_for_device(hw->dev, pdma->sgtx.dma_address - non_align_len, t->len, DMA_TO_DEVICE);
-
-				pdma->txdesc = dmaengine_prep_slave_sg(pdma->chan_tx,
-				                                       &pdma->sgtx,
-				                                       1,
-				                                       DMA_TO_DEVICE,
-				                                       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
-				if (!pdma->txdesc) {
-					dev_err(hw->dev, "pdma->txdex=NULL\n");
-					BUG();
-				}
-
-				pdma->txdesc->callback = ma35d1_slave_dma_callback;
-				pdma->txdesc->callback_param = hw;
-
-
-				cookie = pdma->txdesc->tx_submit(pdma->txdesc);
-				if (dma_submit_error(cookie)) {
-					dev_err(hw->dev, "tx cookie=%d\n",cookie);
-					BUG();
-				}
-			} /* t->tx_buf */
-
-			/* TODO: TC5814 limitation, reset SPI TXFIFO write pointer and
-			 * RXFIFO read pointer before enabling TX/RX PDMA */
-			if (non_align_len) {
-				__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
-				while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {}
-			}
-
-			/* Trigger PDMA */
-			if (t->rx_buf)
-				__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) | (RXPDMAEN),
-				             hw->regs + REG_PDMACTL); //Enable SPIx RX PDMA
-			else
-				__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) | (TXPDMAEN),
-				             hw->regs + REG_PDMACTL); //Enable SPIx TX PDMA
-
-			wait_event_interruptible(hw->slave_done, (hw->slave_done_state != 0));
-
-			hw->slave_done_state=0;
-
-			while (__raw_readl(hw->regs + REG_STATUS) & BUSY); //wait busy
-
-			__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~SPIEN), hw->regs + REG_CTL); //Disable SPIEN
-			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) & ~(TXPDMAEN | RXPDMAEN),
-			             hw->regs + REG_PDMACTL); //Disable SPIx TX/RX PDMA
-			__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK | BYTE_REORDER))
-			              | (8 << DWIDTH_POS)), hw->regs + REG_CTL); //8 bits, no byte reorder
-			__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~(QUADIOEN | DATDIR)),
-			             hw->regs + REG_CTL); //Disable Quad mode, direction input
-			__raw_writel((__raw_readl(hw->regs + REG_CTL) | SPIEN), hw->regs + REG_CTL); //Enable SPIEN
-
-
-			/* unmap buffers if mapped above, restore map address that includes non-alignment part */
-			if (t->rx_buf)
-				dma_unmap_single(hw->dev, pdma->sgrx.dma_address - non_align_len, t->len,
-				                 DMA_FROM_DEVICE);
-			if (t->tx_buf)
-				dma_unmap_single(hw->dev, pdma->sgtx.dma_address - non_align_len, t->len,
-				                 DMA_TO_DEVICE);
-		}
-
-	} else { /* hw->pdata->use_pdma = 0 */
-
-		if(t->rx_nbits & SPI_NBITS_QUAD) {
-			__raw_writel(((__raw_readl(hw->regs + REG_CTL) | QUADIOEN) & ~DATDIR),
-			             hw->regs + REG_CTL);//Enable Quad mode, direction input
-		}
-
-		if (hw->rx) {
-			j = 0;
-
-			for(i = 0; i < t->len; ) {
-				if(((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
-					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-					i++;
-				} else {
-					cond_resched();
-				}
-				if(((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-					hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-					j++;
-				} else {
-					cond_resched();
-				}
-			}
-			while(j < t->len) {
-				if(((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-					hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-					j++;
-				} else {
-					cond_resched();
-				}
-			}
-		} else {
-			for(i = 0; i < t->len; ) {
-				if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
-					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-					i++;
-				} else {
-					cond_resched();
-				}
-			}
-		}
-
-		__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~(QUADIOEN | DATDIR)),
-		             hw->regs + REG_CTL); //Restore to single mode, direction input
-
-	}
-	return t->len;
-}
-
-
-static inline void ma35d1_set_clock_polarity(struct ma35d1_spi *hw, unsigned int polarity)
+static inline void nuvoton_set_clock_polarity(struct nuvoton_spi *hw, unsigned int polarity)
 {
 	unsigned int val;
 
@@ -521,7 +203,23 @@ static inline void ma35d1_set_clock_polarity(struct ma35d1_spi *hw, unsigned int
 	__raw_writel(val, hw->regs + REG_CTL);
 }
 
-static inline void ma35d1_tx_rx_edge(struct ma35d1_spi *hw, unsigned int tx_edge, unsigned int rx_edge)
+static int nuvoton_spi_set_freq(struct nuvoton_spi *nuvoton, unsigned long freq)
+{
+	int ret;
+
+	if (nuvoton->cur_speed_hz == freq)
+		return 0;
+
+	ret = nuvoton_spi_clk_setup(nuvoton, freq);
+	if (ret)
+		return ret;
+
+	nuvoton->cur_speed_hz = freq;
+
+	return 0;
+}
+
+static inline void nuvoton_tx_rx_edge(struct nuvoton_spi *hw, unsigned int tx_edge, unsigned int rx_edge)
 {
 	unsigned int val;
 
@@ -541,7 +239,7 @@ static inline void ma35d1_tx_rx_edge(struct ma35d1_spi *hw, unsigned int tx_edge
 
 }
 
-static inline void ma35d1_send_first(struct ma35d1_spi *hw, unsigned int lsb)
+static inline void nuvoton_send_first(struct nuvoton_spi *hw, unsigned int lsb)
 {
 	unsigned int val;
 
@@ -554,7 +252,7 @@ static inline void ma35d1_send_first(struct ma35d1_spi *hw, unsigned int lsb)
 	__raw_writel(val, hw->regs + REG_CTL);
 }
 
-static inline void ma35d1_set_sleep(struct ma35d1_spi *hw, unsigned int sleep)
+static inline void nuvoton_set_sleep(struct nuvoton_spi *hw, unsigned int sleep)
 {
 	unsigned int val;
 
@@ -568,38 +266,10 @@ static inline void ma35d1_set_sleep(struct ma35d1_spi *hw, unsigned int sleep)
 	__raw_writel(val, hw->regs + REG_CTL);
 }
 
-
-static inline void ma35d1_set_divider(struct ma35d1_spi *hw)
+static int nuvoton_spi_update_state(struct spi_device *spi)
 {
-	__raw_writel(hw->pdata->divider, hw->regs + REG_CLKDIV);
-}
-
-static int ma35d1_spi_update_state(struct spi_device *spi,
-                                    struct spi_transfer *t)
-{
-	struct ma35d1_spi *hw = (struct ma35d1_spi *)to_hw(spi);
-	unsigned int clk;
-	unsigned int div;
-	unsigned int bpw;
-	unsigned int hz;
+	struct nuvoton_spi *hw = (struct nuvoton_spi *)to_hw(spi);
 	unsigned char spimode;
-
-	bpw = t ? t->bits_per_word : spi->bits_per_word;
-	hz  = t ? t->speed_hz : spi->max_speed_hz;
-
-	if(hw->pdata->txbitlen != bpw)
-		hw->pdata->txbitlen = bpw;
-
-	if(hw->pdata->hz != hz) {
-#if 0 /* TODO: turn on this after design fix */
-		clk = clk_get_rate(hw->clk);
-#else
-		clk = PCLK_FREQ;
-#endif
-		div = DIV_ROUND_UP(clk, hz) - 1;
-		hw->pdata->hz = hz;
-		hw->pdata->divider = div;
-	}
 
 	//Mode 0: CPOL=0, CPHA=0; active high
 	//Mode 1: CPOL=0, CPHA=1; active low
@@ -628,50 +298,30 @@ static int ma35d1_spi_update_state(struct spi_device *spi,
 	return 0;
 }
 
-static int ma35d1_spi_setupxfer(struct spi_device *spi,
-                                 struct spi_transfer *t)
+static int nuvoton_spi_setupxfer(struct spi_device *spi)
 {
-	struct ma35d1_spi *hw = (struct ma35d1_spi *)to_hw(spi);
+	struct nuvoton_spi *hw = (struct nuvoton_spi *)to_hw(spi);
 	unsigned long flags;
 	int ret;
 
-	ret = ma35d1_spi_update_state(spi, t);
+	ret = nuvoton_spi_update_state(spi);
 	if (ret)
 		return ret;
 
 	spin_lock_irqsave(&hw->lock, flags);
 
-	ma35d1_setup_txbitlen(hw, hw->pdata->txbitlen);
-	ma35d1_tx_rx_edge(hw, hw->pdata->txneg, hw->pdata->rxneg);
-	ma35d1_set_clock_polarity(hw, hw->pdata->clkpol);
-	ma35d1_send_first(hw, hw->pdata->lsb);
-	ma35d1_set_divider(hw);
+	nuvoton_setup_txbitlen(hw, hw->pdata->txbitlen);
+	nuvoton_tx_rx_edge(hw, hw->pdata->txneg, hw->pdata->rxneg);
+	nuvoton_set_clock_polarity(hw, hw->pdata->clkpol);
+	nuvoton_send_first(hw, hw->pdata->lsb);
+	nuvoton_set_divider(hw);
 
 	spin_unlock_irqrestore(&hw->lock, flags);
 
 	return 0;
 }
 
-static int ma35d1_spi_setup(struct spi_device *spi)
-{
-	struct ma35d1_spi *hw = (struct ma35d1_spi *)to_hw(spi);
-	int ret;
-
-	ret = ma35d1_spi_update_state(spi, NULL);
-	if (ret)
-		return ret;
-
-	mutex_lock(&hw->bitbang.lock);
-	if (!hw->bitbang.busy) {
-		ma35d1_set_divider(hw);
-		ma35d1_slave_select(spi, 0);
-	}
-	mutex_unlock(&hw->bitbang.lock);
-
-	return 0;
-}
-
-static void ma35d1_init_spi(struct ma35d1_spi *hw)
+static void nuvoton_spi_hw_init(struct nuvoton_spi *hw)
 {
 	unsigned long flags;
 
@@ -679,18 +329,356 @@ static void ma35d1_init_spi(struct ma35d1_spi *hw)
 
 	spin_lock_irqsave(&hw->lock, flags);
 
-	ma35d1_tx_rx_edge(hw, hw->pdata->txneg, hw->pdata->rxneg);
-	ma35d1_send_first(hw, hw->pdata->lsb);
-	ma35d1_set_sleep(hw, hw->pdata->sleep);
-	ma35d1_setup_txbitlen(hw, hw->pdata->txbitlen);
-	ma35d1_set_clock_polarity(hw, hw->pdata->clkpol);
+	nuvoton_tx_rx_edge(hw, hw->pdata->txneg, hw->pdata->rxneg);
+	nuvoton_send_first(hw, hw->pdata->lsb);
+	nuvoton_set_sleep(hw, hw->pdata->sleep);
+	nuvoton_setup_txbitlen(hw, hw->pdata->txbitlen);
+	nuvoton_set_clock_polarity(hw, hw->pdata->clkpol);
+
+	__raw_writel(__raw_readl(hw->regs + REG_CTL) | SPIEN, hw->regs + REG_CTL); /* enable SPI */
+	while ((__raw_readl(hw->regs + REG_STATUS) & (1<<15)) == 0); //SPIENSTS
+
+	__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXRST | RXRST), hw->regs + REG_FIFOCTL);
+	while (__raw_readl(hw->regs + REG_STATUS) & TXRXRST) {}
 
 	spin_unlock_irqrestore(&hw->lock, flags);
 }
 
-static struct ma35d1_spi_info *ma35d1_spi_parse_dt(struct device *dev)
+static inline unsigned int hw_tx(struct nuvoton_spi *hw, unsigned int count)
 {
-	struct ma35d1_spi_info *sci;
+	const unsigned char *tx_byte = hw->tx;
+	const unsigned short *tx_short = hw->tx;
+	const unsigned int *tx_int = hw->tx;
+	unsigned int bwp = hw->pdata->txbitlen;
+
+	if(bwp <= 8)
+		return tx_byte ? tx_byte[count] : 0;
+	else if(bwp <= 16)
+		return tx_short ? tx_short[count] : 0;
+	else
+		return tx_int ? tx_int[count] : 0;
+}
+
+static inline void hw_rx(struct nuvoton_spi *hw, unsigned int data, int count)
+{
+	unsigned char *rx_byte = hw->rx;
+	unsigned short *rx_short = hw->rx;
+	unsigned int *rx_int = hw->rx;
+	int bwp = hw->pdata->txbitlen;
+
+	if(bwp <= 8)
+		rx_byte[count] = data;
+	else if(bwp <= 16)
+		rx_short[count] = data;
+	else
+		rx_int[count] = data;
+}
+
+static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
+                                 void *rxbuf, unsigned int len)
+{
+	unsigned int    i,j;
+	unsigned int    non_align_len = 0;
+
+	struct ma35d1_ip_dma *pdma = &hw->dma;
+	dma_cookie_t    cookie;
+
+	__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
+	while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {}
+
+	hw->tx = txbuf;
+	hw->rx = rxbuf;
+
+	/* Use PDMA or not from device tree */
+	if (hw->pdata->use_pdma) {
+
+		/* short length transfer by CPU */
+		if ( len < USE_PDMA_LEN) {
+			if (hw->rx) {
+				j = 0;
+
+				for(i = 0; i < len; ) {
+					if(((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
+						__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
+						i++;
+					}
+					if(((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
+						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
+						j++;
+					}
+				}
+				while(j < len) {
+					if(((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
+						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
+						j++;
+					}
+				}
+			} else {
+				for(i = 0; i < len; i++) {
+					while (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == TXFULL)); //TXFULL
+					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
+				}
+			}
+
+			while (__raw_readl(hw->regs + REG_STATUS) & BUSY); //wait busy
+
+		} else { //Long length transfer by PDMA
+
+			/* Since MA35D1 PDMA cannot transfer data at non-alignment address */
+			/* Transfer the non-alignment byte by CPU */
+			if ((unsigned long)rxbuf & (ALIGNMENT_4 - 1)) {
+				j = 0;
+				non_align_len = (ALIGNMENT_4 - ((unsigned long)rxbuf & (ALIGNMENT_4 - 1)));
+
+				for (i = 0; (i < len) && (i < non_align_len); ) {
+					if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
+						__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
+						i++;
+					}
+					if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
+						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
+						j++;
+					}
+
+				}
+				while (j < non_align_len) {
+					if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
+						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
+						j++;
+					}
+				}
+			} else if ((unsigned long)txbuf & (ALIGNMENT_4 - 1)) {
+				non_align_len = (ALIGNMENT_4 - ((unsigned long)txbuf & (ALIGNMENT_4 - 1)));
+				for (i = 0; (i < len) && (i < non_align_len); )
+					if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) != TXFULL)) { //TX NOT FULL
+						__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
+						i++;
+					}
+			}
+
+			while (__raw_readl(hw->regs + REG_STATUS) & BUSY); //wait busy
+
+			/* Transfer the rest data starting at alignment address by PDMA */
+			if (rxbuf) {
+
+				/* prepare the RX dma transfer */
+				sg_init_table(&pdma->sgrx, 1);
+				pdma->slave_config.src_addr = (hw->phyaddr + REG_RX);
+				pdma->slave_config.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+				pdma->sgrx.dma_length = (len - non_align_len) >> 2; /* divide 4 */
+
+				pdma->slave_config.direction = DMA_DEV_TO_MEM;
+				pdma->slave_config.slave_id = hw->pdata->pdma_reqsel_rx;
+				dmaengine_slave_config(pdma->chan_rx, &(pdma->slave_config));
+
+
+				/* Map rxbuf to physical address including non-alignment part */
+				pdma->sgrx.dma_address = dma_map_single(hw->dev,
+				                                        (void *)(rxbuf),
+				                                        len, DMA_FROM_DEVICE);
+				if (dma_mapping_error(hw->dev, pdma->sgrx.dma_address)) {
+					dev_err(hw->dev, "tx dma map error\n");
+				}
+
+				/* Adjust physical address that skip non-alignment part */
+				pdma->sgrx.dma_address += non_align_len;
+
+				pdma->rxdesc = dmaengine_prep_slave_sg(pdma->chan_rx,
+				                                       &pdma->sgrx,
+				                                       1,
+				                                       DMA_FROM_DEVICE,
+				                                       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+				if (!pdma->rxdesc) {
+					dev_err(hw->dev, "pdma->rxdesc=NULL\n");
+					BUG();
+				}
+				hw->dma_slave_done.done = false;
+				pdma->rxdesc->callback = ma35d1_slave_dma_callback;
+				pdma->rxdesc->callback_param = hw;
+
+				cookie = pdma->rxdesc->tx_submit(pdma->rxdesc);
+				if (dma_submit_error(cookie)) {
+					dev_err(hw->dev, "rx cookie=%d\n",cookie);
+					BUG();
+				}
+			} /* rxbuf */
+
+			if (txbuf) {
+				/* prepare the TX dma transfer */
+				sg_init_table(&pdma->sgtx, 1);
+				pdma->slave_config.dst_addr = (hw->phyaddr + REG_TX);
+				pdma->slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
+				pdma->sgtx.dma_length = len - non_align_len;
+
+				pdma->slave_config.direction = DMA_MEM_TO_DEV;
+				pdma->slave_config.slave_id = hw->pdata->pdma_reqsel_tx;
+				dmaengine_slave_config(pdma->chan_tx, &(pdma->slave_config));
+
+				/* Map t->tx_buf to physical address including non-alignment part */
+				pdma->sgtx.dma_address = dma_map_single(hw->dev,
+				                                        (void *)txbuf,
+				                                        len, DMA_TO_DEVICE);
+				if (dma_mapping_error(hw->dev, pdma->sgtx.dma_address)) {
+					dev_err(hw->dev, "tx dma map error\n");
+				}
+				/* Adjust physical address that skip non-alignment part */
+				pdma->sgtx.dma_address += non_align_len;
+				dma_sync_single_for_device(hw->dev, pdma->sgtx.dma_address - non_align_len, len, DMA_TO_DEVICE);
+
+				pdma->txdesc = dmaengine_prep_slave_sg(pdma->chan_tx,
+				                                       &pdma->sgtx,
+				                                       1,
+				                                       DMA_TO_DEVICE,
+				                                       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+				if (!pdma->txdesc) {
+					dev_err(hw->dev, "pdma->txdex=NULL\n");
+					BUG();
+				}
+
+				pdma->txdesc->callback = ma35d1_slave_dma_callback;
+				pdma->txdesc->callback_param = hw;
+
+
+				cookie = pdma->txdesc->tx_submit(pdma->txdesc);
+				if (dma_submit_error(cookie)) {
+					dev_err(hw->dev, "tx cookie=%d\n",cookie);
+					BUG();
+				}
+			} /* txbuf */
+
+			/* MA35D1 QSPI/SPI limitation, reset SPI TXFIFO write pointer and
+			 * RXFIFO read pointer before enabling TX/RX PDMA */
+			if (non_align_len) {
+				__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
+				while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {}
+			}
+
+			/* Trigger PDMA */
+			if (rxbuf) {
+				__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK))
+				              | BYTE_REORDER), hw->regs + REG_CTL); //32 bits, byte reorder
+				__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) | (RXPDMAEN),
+				             hw->regs + REG_PDMACTL); //Enable SPIx RX PDMA
+			} else
+				__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) | (TXPDMAEN),
+				             hw->regs + REG_PDMACTL); //Enable SPIx TX PDMA
+
+			wait_event_interruptible(hw->slave_done, (hw->slave_done_state != 0));
+
+			hw->slave_done_state=0;
+
+			while (__raw_readl(hw->regs + REG_STATUS) & BUSY); //wait busy
+
+			__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~SPIEN), hw->regs + REG_CTL); //Disable SPIEN
+			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) & ~(TXPDMAEN | RXPDMAEN),
+			             hw->regs + REG_PDMACTL); //Disable SPIx TX/RX PDMA
+			__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK | BYTE_REORDER))
+			              | (8 << DWIDTH_POS)), hw->regs + REG_CTL); //8 bits, no byte reorder
+			__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~(QUADIOEN | DATDIR)),
+			             hw->regs + REG_CTL); //Disable Quad mode, direction input
+			__raw_writel((__raw_readl(hw->regs + REG_CTL) | SPIEN), hw->regs + REG_CTL); //Enable SPIEN
+
+
+			/* unmap buffers if mapped above, restore map address that includes non-alignment part */
+			if (rxbuf)
+				dma_unmap_single(hw->dev, pdma->sgrx.dma_address - non_align_len, len,
+				                 DMA_FROM_DEVICE);
+			if (txbuf)
+				dma_unmap_single(hw->dev, pdma->sgtx.dma_address - non_align_len, len,
+				                 DMA_TO_DEVICE);
+		}
+
+
+	} else { /* hw->pdata->use_pdma = 0 */
+
+		if (hw->rx) {
+			j = 0;
+
+			for (i = 0; i < len; ) {
+				if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
+					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
+					i++;
+				} else {
+					cond_resched();
+				}
+				if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
+					hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
+					j++;
+				} else {
+					cond_resched();
+				}
+			}
+			while (j < i) {
+				if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
+					hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
+					j++;
+				} else {
+					cond_resched();
+				}
+			}
+
+		} else { /* hw->tx */
+			for (i = 0; i < len; ) {
+				if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
+					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
+					i++;
+				} else {
+					cond_resched();
+				}
+			}
+		}
+
+		while (__raw_readl(hw->regs + REG_STATUS) & BUSY); //wait busy
+	}
+
+	return 0;
+}
+
+static bool nuvoton_spi_mem_supports_op(struct spi_mem *mem,
+                                        const struct spi_mem_op *op)
+{
+	/* MA35D1 SPI doesn't support QUAD, hence filter QUAD mode command */
+	if (op->data.buswidth > 1 || op->addr.buswidth > 1 ||
+	    op->dummy.buswidth > 1 || op->cmd.buswidth > 1)
+		return false;
+
+	if (op->data.nbytes && op->dummy.nbytes &&
+	    op->data.buswidth != op->dummy.buswidth)
+		return false;
+
+	if (op->addr.nbytes > 7)
+		return false;
+
+	return true;
+}
+
+static void nuvoton_spi_set_cs(struct spi_device *spi, bool lvl)
+{
+	struct nuvoton_spi *nuvoton = spi_master_get_devdata(spi->master);
+	unsigned int val;
+
+	val = __raw_readl(nuvoton->regs + REG_SSCTL);
+
+	if(spi->chip_select == 0) {
+		if (!lvl)
+			val |= SELECTSLAVE0;
+		else
+			val &= ~SELECTSLAVE0;
+	} else {
+		if (!lvl)
+			val |= SELECTSLAVE1;
+		else
+			val &= ~SELECTSLAVE1;
+	}
+
+	while (__raw_readl(nuvoton->regs + REG_STATUS) & BUSY); //wait busy
+
+	__raw_writel(val, nuvoton->regs + REG_SSCTL);
+}
+
+static struct nuvoton_spi_info *nuvoton_spi_parse_dt(struct device *dev)
+{
+	struct nuvoton_spi_info *sci;
 	u32 temp;
 
 	sci = devm_kzalloc(dev, sizeof(*sci), GFP_KERNEL);
@@ -734,6 +722,13 @@ static struct ma35d1_spi_info *ma35d1_spi_parse_dt(struct device *dev)
 		sci->bus_num = temp;
 	}
 
+	if (of_property_read_u32(dev->of_node, "quad", &temp)) {
+		dev_warn(dev, "can't get quad from dt\n");
+		sci->quad = 0;
+	} else {
+		sci->quad = temp;
+	}
+
 	if (of_property_read_u32(dev->of_node, "use_pdma", &temp)) {
 		dev_warn(dev, "can't get use_pdma from dt\n");
 		sci->use_pdma = 0;
@@ -758,35 +753,143 @@ static struct ma35d1_spi_info *ma35d1_spi_parse_dt(struct device *dev)
 	return sci;
 }
 
-static int ma35d1_spi_probe(struct platform_device *pdev)
+
+
+static int nuvoton_spi_mem_exec_op(struct spi_mem *mem,
+                                   const struct spi_mem_op *op)
 {
+	struct nuvoton_spi *nuvoton = spi_master_get_devdata(mem->spi->master);
+	int i, ret;
+	u8 addr[8];
+
+	ret = nuvoton_spi_set_freq(nuvoton, mem->spi->max_speed_hz);
+	if (ret)
+		return ret;
+
+	nuvoton_spi_setupxfer(mem->spi);
+
+	nuvoton_spi_set_cs(mem->spi, 0); //Activate CS
+
+	ret = nuvoton_spi_data_xfer(nuvoton, &op->cmd.opcode, NULL, 1);
+	if (ret)
+		goto out;
+
+	for (i = 0; i < op->addr.nbytes; i++)
+		addr[i] = op->addr.val >> (8 * (op->addr.nbytes - i - 1));
+
+	ret = nuvoton_spi_data_xfer(nuvoton, addr, NULL, op->addr.nbytes);
+	if (ret)
+		goto out;
+
+	ret = nuvoton_spi_data_xfer(nuvoton, NULL, NULL, op->dummy.nbytes);
+	if (ret)
+		goto out;
+
+	ret = nuvoton_spi_data_xfer(nuvoton,
+	                            op->data.dir == SPI_MEM_DATA_OUT ?
+	                            op->data.buf.out : NULL,
+	                            op->data.dir == SPI_MEM_DATA_IN ?
+	                            op->data.buf.in : NULL,
+	                            op->data.nbytes);
+
+out:
+	nuvoton_spi_set_cs(mem->spi, 1); //Deactivate CS
+
+	return ret;
+}
+
+static const struct spi_controller_mem_ops nuvoton_spi_mem_ops = {
+	.supports_op = nuvoton_spi_mem_supports_op,
+	.exec_op = nuvoton_spi_mem_exec_op,
+};
+
+static int nuvoton_spi_transfer_one(struct spi_master *master,
+                                    struct spi_device *spi,
+                                    struct spi_transfer *t)
+{
+	struct nuvoton_spi *nuvoton = spi_master_get_devdata(master);
+	int ret;
+
+	if (t->rx_buf && t->tx_buf) {
+		if (((spi->mode & SPI_TX_QUAD) &&
+		     !(spi->mode & SPI_RX_QUAD)) ||
+		    ((spi->mode & SPI_TX_DUAL) &&
+		     !(spi->mode & SPI_RX_DUAL)))
+			return -ENOTSUPP;
+	}
+
+	ret = nuvoton_spi_set_freq(nuvoton, t->speed_hz);
+	if (ret)
+		return ret;
+
+	ret = nuvoton_spi_data_xfer(nuvoton, t->tx_buf, t->rx_buf, t->len);
+	if (ret)
+		return ret;
+
+	spi_finalize_current_transfer(master);
+
+	return 0;
+}
+
+static int __maybe_unused nuvoton_spi_runtime_suspend(struct device *dev)
+{
+	struct spi_master *master = dev_get_drvdata(dev);
+	struct nuvoton_spi *nuvoton = spi_master_get_devdata(master);
+
+	nuvoton_spi_clk_disable(nuvoton);
+	clk_disable_unprepare(nuvoton->clk);
+
+	return 0;
+}
+
+static int __maybe_unused nuvoton_spi_runtime_resume(struct device *dev)
+{
+	struct spi_master *master = dev_get_drvdata(dev);
+	struct nuvoton_spi *nuvoton = spi_master_get_devdata(master);
+	int ret;
+
+	ret = clk_prepare_enable(nuvoton->clk);
+	if (ret) {
+		dev_err(dev, "Cannot enable ps_clock.\n");
+		return ret;
+	}
+
+	return nuvoton_spi_clk_enable(nuvoton);
+}
+
+static const struct dev_pm_ops nuvoton_spi_dev_pm_ops = {
+	SET_RUNTIME_PM_OPS(nuvoton_spi_runtime_suspend,
+	                   nuvoton_spi_runtime_resume, NULL)
+};
+
+static int nuvoton_spi_probe(struct platform_device *pdev)
+{
+	struct spi_master *master;
+	struct nuvoton_spi *nuvoton;
+	int ret;
 	struct ma35d1_ip_dma *pdma;
 	dma_cap_mask_t mask;
-	struct ma35d1_spi *hw;
-	struct spi_master *master;
 	u32   val32[4];
 	int err = 0;
 	int status = 0;
 
-	master = spi_alloc_master(&pdev->dev, sizeof(struct ma35d1_spi));
-	if (master == NULL) {
-		dev_err(&pdev->dev, "No memory for spi_master\n");
-		err = -ENOMEM;
-		goto err_nomem;
-	}
+	master = devm_spi_alloc_master(&pdev->dev, sizeof(struct nuvoton_spi));
+	if (!master)
+		return -ENOMEM;
 
-	hw = spi_master_get_devdata(master);
-	hw->master = spi_master_get(master);
-	hw->pdata = ma35d1_spi_parse_dt(&pdev->dev);
-	hw->dev = &pdev->dev;
+	nuvoton = spi_master_get_devdata(master);
+	nuvoton->master = spi_master_get(master);
+	nuvoton->pdata = nuvoton_spi_parse_dt(&pdev->dev);
+	nuvoton->dev = &pdev->dev;
 
-	if (hw->pdata == NULL) {
+	if (nuvoton->pdata == NULL) {
 		dev_err(&pdev->dev, "No platform data supplied\n");
 		err = -ENOENT;
 		goto err_pdata;
 	}
 
-	if (hw->pdata->use_pdma) {
+	printk("nuvoton->pdata->use_pdma = %d\n",nuvoton->pdata->use_pdma);
+	if (nuvoton->pdata->use_pdma) {
 		/* Zero out the capability mask then initialize it for a slave channel that is
 		 * private.
 		 */
@@ -795,14 +898,14 @@ static int ma35d1_spi_probe(struct platform_device *pdev)
 		dma_cap_set(DMA_PRIVATE, mask);
 
 		/* Initailize wiat queue head as  __WAIT_QUEUE_HEAD_INITIALIZER() */
-		hw->slave_done.lock           = __SPIN_LOCK_UNLOCKED(hw->slave_done.lock);
-		hw->slave_done.head.next       = &(hw->slave_done).head;
-		hw->slave_done.head.prev       = &(hw->slave_done).head;
+		nuvoton->slave_done.lock           = __SPIN_LOCK_UNLOCKED(nuvoton->slave_done.lock);
+		nuvoton->slave_done.head.next       = &(nuvoton->slave_done).head;
+		nuvoton->slave_done.head.prev       = &(nuvoton->slave_done).head;
 
 		/* Request the DMA channel from the DMA engine and then use the device from
 		 * the channel for the proxy channel also.
 		 */
-		pdma = &hw->dma;
+		pdma = &nuvoton->dma;
 		pdma->chan_rx = dma_request_channel(mask, NULL, NULL);
 		if (!pdma->chan_rx) {
 			dev_err(&pdev->dev, "RX DMA channel request error\n");
@@ -820,144 +923,98 @@ static int ma35d1_spi_probe(struct platform_device *pdev)
 		pr_debug("TX %s: %s module removed\n",__func__, dma_chan_name(pdma->chan_tx));
 	}
 
-	platform_set_drvdata(pdev, hw);
-	init_completion(&hw->done);
-	master->mode_bits	= (SPI_MODE_0 | SPI_TX_DUAL | SPI_RX_DUAL | SPI_CS_HIGH
-	                       | SPI_LSB_FIRST | SPI_CPHA | SPI_CPOL);
+	platform_set_drvdata(pdev, nuvoton);
+	init_completion(&nuvoton->done);
 
-	master->dev.of_node        = pdev->dev.of_node;
-	master->num_chipselect     = hw->pdata->num_cs;
-	master->bus_num            = hw->pdata->bus_num;
-	hw->bitbang.master         = hw->master;
-	hw->bitbang.setup_transfer = ma35d1_spi_setupxfer;
-	hw->bitbang.chipselect     = ma35d1_spi_chipsel;
-	hw->bitbang.txrx_bufs      = ma35d1_spi_txrx;
-	hw->bitbang.master->setup  = ma35d1_spi_setup;
+
+	master->dev.of_node = pdev->dev.of_node;
+
+	nuvoton->clk = of_clk_get(pdev->dev.of_node, 0);
+	if (IS_ERR(nuvoton->clk)) {
+		dev_err(&pdev->dev, "unable to get SYS clock, err=%d\n",
+		        status);
+		goto err_clk;
+	}
+	clk_prepare_enable(nuvoton->clk);
 
 	if (of_property_read_u32_array(pdev->dev.of_node, "reg", val32, 4) != 0) {
 		dev_err(&pdev->dev, "can not get bank!\n");
 		return -EINVAL;
 	}
 
-	hw->phyaddr = val32[1];
-	pr_debug("hw->phyaddr = 0x%lx\n",(ulong)hw->phyaddr);
+	nuvoton->phyaddr = val32[1];
+	pr_debug("nuvoton->phyaddr = 0x%lx\n",(ulong)nuvoton->phyaddr);
 
-	hw->res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (hw->res == NULL) {
+	nuvoton->res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (nuvoton->res == NULL) {
 		dev_err(&pdev->dev, "Cannot get IORESOURCE_MEM\n");
 		err = -ENOENT;
 		goto err_pdata;
 	}
 
-	hw->regs = devm_ioremap_resource(&pdev->dev, hw->res);
-	hw->irq = platform_get_irq(pdev, 0);
-	if (hw->irq < 0) {
+	nuvoton->regs = devm_ioremap_resource(&pdev->dev, nuvoton->res);
+	nuvoton->irq = platform_get_irq(pdev, 0);
+	if (nuvoton->irq < 0) {
 		dev_err(&pdev->dev, "No IRQ specified\n");
 		err = -ENOENT;
 		goto err_pdata;
 	}
 
-	hw->clk = of_clk_get(pdev->dev.of_node, 0);
-	if (IS_ERR(hw->clk)) {
-		dev_err(&pdev->dev, "unable to get SYS clock, err=%d\n",
-		        status);
-		goto err_clk;
-	}
-	clk_prepare_enable(hw->clk);
+	master->num_chipselect = 2;
+	master->mem_ops = &nuvoton_spi_mem_ops;
 
-	ma35d1_init_spi(hw);
+	master->set_cs = nuvoton_spi_set_cs;
+	master->transfer_one = nuvoton_spi_transfer_one;
+	master->bits_per_word_mask = SPI_BPW_MASK(8);
+	master->mode_bits = SPI_CPOL | SPI_CPHA |
+	                    SPI_RX_DUAL | SPI_TX_DUAL;
 
-	__raw_writel(__raw_readl(hw->regs + REG_CTL) | SPIEN, hw->regs + REG_CTL); /* enable SPI */
-	while ((__raw_readl(hw->regs + REG_STATUS) & (1<<15)) == 0); //SPIENSTS
+	nuvoton_spi_hw_init(nuvoton);
 
-	err = spi_bitbang_start(&hw->bitbang);
-	if (err) {
-		dev_err(&pdev->dev, "Failed to register SPI master\n");
-		goto err_register;
+	ret = spi_register_master(master);
+	if (ret) {
+		dev_err(&pdev->dev, "spi_register_master failed\n");
+		pm_runtime_disable(&pdev->dev);
 	}
 
-	return 0;
+	return ret;
 
-err_register:
-	clk_disable(hw->clk);
-	clk_put(hw->clk);
 err_clk:
-	free_irq(hw->irq, hw);
+	spi_master_put(nuvoton->master);
 err_pdata:
-	spi_master_put(hw->master);
+	clk_disable(nuvoton->clk);
+	clk_put(nuvoton->clk);
 
-err_nomem:
 	return err;
 }
 
-static int ma35d1_spi_remove(struct platform_device *dev)
+static int nuvoton_spi_remove(struct platform_device *pdev)
 {
-	struct ma35d1_spi *hw = platform_get_drvdata(dev);
+	struct spi_master *master = platform_get_drvdata(pdev);
 
-	free_irq(hw->irq, hw);
-	platform_set_drvdata(dev, NULL);
-	spi_bitbang_stop(&hw->bitbang);
-
-	clk_disable(hw->clk);
-	clk_put(hw->clk);
-
-	spi_master_put(hw->master);
-	return 0;
-}
-
-#ifdef CONFIG_PM
-static int ma35d1_spi_suspend(struct device *dev)
-{
-	struct ma35d1_spi *hw = dev_get_drvdata(dev);
-
-	while (__raw_readl(hw->regs + REG_STATUS) & 1) //wait busy
-		msleep(1);
-
-	// disable interrupt
-	__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~0x20000), hw->regs + REG_CTL);
+	pm_runtime_disable(&pdev->dev);
+	spi_unregister_master(master);
 
 	return 0;
 }
 
-static int ma35d1_spi_resume(struct device *dev)
-{
-	struct ma35d1_spi *hw = dev_get_drvdata(dev);
-
-	// enable interrupt
-	__raw_writel((__raw_readl(hw->regs + REG_CTL) | 0x20000), hw->regs + REG_CTL);
-
-	return 0;
-}
-
-static const struct dev_pm_ops ma35d1_spi_pmops = {
-	.suspend    = ma35d1_spi_suspend,
-	.resume     = ma35d1_spi_resume,
+static const struct of_device_id nuvoton_spi_of_match[] = {
+	{ .compatible = "nuvoton,ma35d1-spi", },
+	{ /* sentinel */ }
 };
+MODULE_DEVICE_TABLE(of, nuvoton_spi_of_match);
 
-#define MA35D1_SPI_PMOPS (&ma35d1_spi_pmops)
-
-#else
-#define MA35D1_SPI_PMOPS NULL
-#endif
-
-static const struct of_device_id ma35d1_spi_of_match[] = {
-	{   .compatible = "nuvoton,ma35d1-spi" },
-	{	},
-};
-MODULE_DEVICE_TABLE(of, ma35d1_spi_of_match);
-
-static struct platform_driver ma35d1_spi_driver = {
-	.probe      = ma35d1_spi_probe,
-	.remove     = ma35d1_spi_remove,
-	.driver     = {
-		.name   = "ma35d1-spi",
-		.owner  = THIS_MODULE,
-		.pm	= MA35D1_SPI_PMOPS,
-		.of_match_table = of_match_ptr(ma35d1_spi_of_match),
+static struct platform_driver nuvoton_spi_driver = {
+	.probe = nuvoton_spi_probe,
+	.remove = nuvoton_spi_remove,
+	.driver = {
+		.name = "ma35d1-spi",
+		.of_match_table = nuvoton_spi_of_match,
+		.pm = &nuvoton_spi_dev_pm_ops,
 	},
 };
-module_platform_driver(ma35d1_spi_driver);
+module_platform_driver(nuvoton_spi_driver);
 
-MODULE_DESCRIPTION("ma35d1 spi driver!");
+MODULE_DESCRIPTION("nuvoton spi driver!");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:ma35d1-spi");
+MODULE_ALIAS("platform:nuvoton-spi");
