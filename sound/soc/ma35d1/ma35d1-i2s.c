@@ -37,7 +37,6 @@ static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 {
 	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(dai->dev);
 	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
-	unsigned long ctl1;
 
 	switch (params_width(params)) {
 	case 8:
@@ -48,9 +47,9 @@ static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 	case 16:
 		val = (val & ~DATWIDTH) | DATWIDTH_16;
 		val = (val & ~CHWIDTH) | CHWIDTH_16;
-		ctl1 = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL1);
-		ctl1 = ctl1 | PBWIDTH_16;	//set Peripheral Bus Data Width to 16 bit
-		AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL1, ctl1);
+		//ctl1 = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL1);
+		//ctl1 = ctl1 | PBWIDTH_16;	//set Peripheral Bus Data Width to 16 bit
+		//AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL1, ctl1);
 		break;
 
 	case 24:
@@ -169,20 +168,20 @@ static int ma35d1_i2s_probe(struct snd_soc_dai *dai)
 
 	/* Init DMA data */
 	ma35d1_audio->dma_params_rx.addr = ma35d1_audio->phyaddr + I2S_RXFIFO;
-	ma35d1_audio->dma_params_rx.addr_width = DMA_SLAVE_BUSWIDTH_2_BYTES;
+	ma35d1_audio->dma_params_rx.addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 	ma35d1_audio->dma_params_rx.slave_id = ma35d1_audio->pdma_reqsel_rx;
 	ma35d1_audio->dma_params_tx.addr = ma35d1_audio->phyaddr + I2S_TXFIFO;
-	ma35d1_audio->dma_params_tx.addr_width = DMA_SLAVE_BUSWIDTH_2_BYTES;
+	ma35d1_audio->dma_params_tx.addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 	ma35d1_audio->dma_params_tx.slave_id = ma35d1_audio->pdma_reqsel_tx;
 
 	snd_soc_dai_init_dma_data(dai, &ma35d1_audio->dma_params_tx,
-				&ma35d1_audio->dma_params_rx);
+	                          &ma35d1_audio->dma_params_rx);
 
 	snd_soc_dai_set_drvdata(dai, ma35d1_audio);
 
 	/* Set Audio_JKEN pin */
 	ma35d1_audio->pwdn_gpio = devm_gpiod_get_optional(dai->dev, "powerdown",
-							GPIOD_OUT_HIGH);
+	                          GPIOD_OUT_HIGH);
 	if (IS_ERR(ma35d1_audio->pwdn_gpio))
 		return PTR_ERR(ma35d1_audio->pwdn_gpio);
 

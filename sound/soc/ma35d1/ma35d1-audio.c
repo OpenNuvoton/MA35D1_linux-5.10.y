@@ -23,11 +23,15 @@
 #include "ma35d1-audio.h"
 #include "../codecs/nau8822.h"
 
+extern struct ma35d1_audio *ma35d1_i2s_data;
+
 static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	struct ma35d1_audio *ma35d1_audio = ma35d1_i2s_data;
+	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
 	int ret;
 
 	unsigned int clk = 0;
@@ -62,6 +66,12 @@ static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct sn
 	ret = snd_soc_dai_set_sysclk(cpu_dai, MA35D1_AUDIO_SAMPLECLK, sample_rate, SND_SOC_CLOCK_OUT);
 	if (ret < 0)
 		return ret;
+
+	/* set MONO if channel number is 1 */
+	if (cpu_dai->channels == 1) {
+		val |= MONO;
+		AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
+	}
 
 	return 0;
 }
