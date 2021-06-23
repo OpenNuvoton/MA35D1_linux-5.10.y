@@ -11,8 +11,18 @@ Required properties:
 - resets : Display controller reset source.
 			Should be "reset MA35D1_RESET_DISP"
 - bits-per-pixel : Bits per Input pixel(16 or 32)
-- pixel-fmt : Input Formats (4:RGB565 or 6:ARGB8)
+- pixel-fmt : Input Formats (4:RGB565, 6:ARGB8, 8:UYVY, 17:NV12)
 - bus-width : Output width. Should be "24"
+
+- buffer-num : The amount of framebuffer for reserved memory. 
+- colorkey-en : Enable colorkey function.
+
+- overlay-en : Enable Overlay layer.
+- overlay-pixel-fmt : Overlay Input Format. Should be "6"(ARGB8)
+- overlay-width : Overlay width.
+- overlay-height : Overlay height.
+- overlay-rect-tlx : Left boundary of overlay window.
+- overlay-rect-tly : Top boundary of overlay window.
 
 Required subnodes:
 - "display-timing" containing video timings
@@ -32,10 +42,20 @@ Example:
 		pixel-fmt = <6>;
 		bus-width = <24>;
 
+		buffer-num = <3>;
+		colorkey-en = <1>;
+
+		overlay-en = <1>;
+		overlay-pixel-fmt = <6>;
+		overlay-width = <512>;
+		overlay-height = <300>;
+		overlay-rect-tlx = <0>;
+		overlay-rect-tly = <300>;
+
 		display-timings {
 			native-mode = <&timing0>;
 
-			timing0: timing0 {
+			timing0: 1024x600 {
 				clock-frequency = <51000000>;
 				hactive = <1024>;
 				vactive = <600>;
