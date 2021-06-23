@@ -1389,8 +1389,11 @@
 
 		//Enable overlay function
 		overlay-en = <1>;
-		overlay-width = <1024>;
-		overlay-height = <600>;
+		overlay-pixel-fmt = <6>;
+		overlay-width = <512>;
+		overlay-height = <300>;
+		overlay-rect-tlx = <0>;
+		overlay-rect-tly = <300>;
 
 		display-timings {
 			native-mode = <&timing0>;
