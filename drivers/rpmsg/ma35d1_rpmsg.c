@@ -48,6 +48,7 @@ struct ma35d1_rpmsg_priv {
 	struct mbox_chan *mbox_chan;
 	wait_queue_head_t tx_ack_event;
 	u32 tx_ack_flag;
+	u32 rx_ack_flag;
 	unsigned char __iomem *tx_smem_start_addr;
 	unsigned char __iomem *rx_smem_start_addr;
 	u32 tx_smem_size;
@@ -78,13 +79,23 @@ static void ma35d1_rpmsg_recv_from_remote(struct mbox_client *cl, void *msg)
 	struct rpmsg_endpoint *ept = &priv->ma35d1_ept->ept;
 	struct device *dev = priv->dev.parent;
 	int ret;
+	int command[4];
+
 	u32 *data = (u32 *)msg;
 
-	switch (*data) {
+	switch (data[0]) {
 		case COMMAND_RECEIVE_MSG:
-			ret = ept->cb(ept->rpdev, priv->rx_smem_start_addr, priv->rx_smem_size, ept->priv, RPMSG_ADDR_ANY);
+			ret = ept->cb(ept->rpdev, priv->rx_smem_start_addr, data[1], ept->priv, RPMSG_ADDR_ANY);
 			if (ret < 0)
 				dev_err(&priv->dev, "failed to get share memery data \n");
+
+			command[0] = COMMAND_RECEIVE_ACK;
+			ret = mbox_send_message(priv->mbox_chan, (void *)&command[0]);
+			if (ret < 0)
+				dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
+
+			priv->rx_ack_flag = 1;
+			wake_up_interruptible_all(&priv->tx_ack_event);
 		break;
 		
 		case COMMAND_SEND_ACK:
@@ -113,9 +124,12 @@ static int ma35d1_rpmsg_send(struct rpmsg_endpoint *ept, void *data, int len)
 	struct ma35d1_rpmsg_endpoint *nept = to_ma35d1_rpmsg_endpoint(ept);
 	struct ma35d1_rpmsg_priv *priv = nept->ma35d1_priv;
 	int ret = 0;
-	int command = COMMAND_SEND_MSG;
+	int command[4];
 
 	memcpy(priv->tx_smem_start_addr, data, len);
+
+	command[0] = COMMAND_SEND_MSG;
+	command[1] = len;
 
 	priv->tx_ack_flag = 0;
 	ret = mbox_send_message(priv->mbox_chan, (void *)&command);
@@ -130,9 +144,12 @@ static int ma35d1_rpmsg_trysend(struct rpmsg_endpoint *ept, void *data, int len)
 	struct ma35d1_rpmsg_endpoint *nept = to_ma35d1_rpmsg_endpoint(ept);
 	struct ma35d1_rpmsg_priv *priv = nept->ma35d1_priv;
 	int ret = 0;
-	int command = COMMAND_SEND_MSG;
+	int command[4];
 
 	memcpy(priv->tx_smem_start_addr, data, len);
+
+	command[0] = COMMAND_SEND_MSG;
+	command[1] = len;
 
 	priv->tx_ack_flag = 0;
 	ret = mbox_send_message(priv->mbox_chan, (void *)&command);
@@ -153,6 +170,11 @@ static __poll_t ma35d1_rpmsg_poll(struct rpmsg_endpoint *ept, struct file *filp,
 	if(priv->tx_ack_flag == 1){
 		mask |= EPOLLOUT;
 		priv->tx_ack_flag = 0;
+	}
+
+	if(priv->rx_ack_flag == 1){
+		mask |= EPOLLIN;
+		priv->rx_ack_flag = 0;
 	}
 
 	return mask;
@@ -266,6 +288,7 @@ struct ma35d1_rpmsg_priv *ma35d1_rpmsg_register(struct device *parent, struct de
 	priv->tx_smem_size = rx_share_size;
 
 	priv->tx_ack_flag = 0;
+	priv->rx_ack_flag = 0;
 	priv->dev.parent = parent;
 	priv->dev.release = ma35d1_rpmsg_release;
 	priv->dev.of_node = node;
