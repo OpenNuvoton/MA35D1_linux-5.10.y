@@ -26,97 +26,59 @@
 #include <linux/mfd/ma35d1-sys.h>
 
 /* NFI Registers */
-#define REG_NAND_FB0		(0x000)	/* DMAC Control and Status Register */
-#define REG_NAND_DMACCSR	(0x400)	/* DMAC Control and Status Register */
-#define REG_NAND_DMACSAR	(0x408)	/* DMAC Transfer Starting Address Register */
-#define REG_NAND_DMACBCR	(0x40C)	/* DMAC Transfer Byte Count Register */
-#define REG_NAND_DMACIER	(0x410)	/* DMAC Interrupt Enable Register */
-#define REG_NAND_DMACISR	(0x414)	/* DMAC Interrupt Status Register */
+#define REG_NFI_BUFFER0		(0x000)	/* NFI Embedded Buffer Word 0 */
+#define REG_NFI_DMACTL		(0x400)	/* NFI DMA Control and Status Register */
+#define REG_NFI_DMASA		(0x408)	/* NFI DMA Transfer Starting Address Register */
+#define REG_NFI_DMABCNT		(0x40C)	/* NFI DMA Transfer Byte Count Register */
+#define REG_NFI_DMAINTEN	(0x410)	/* NFI DMA Interrupt Enable Control Register */
+#define REG_NFI_DMAINTSTS	(0x414)	/* NFI DMA Interrupt Status Register */
 
-#define REG_NAND_FMICSR		(0x800)	/* Global Control and Status Register */
-#define REG_NAND_FMIIER		(0x804)	/* Global Interrupt Control Register */
-#define REG_NAND_FMIISR		(0x808)	/* Global Interrupt Status Register */
+#define REG_NFI_GCTL		(0x800)	/* NFI Global Control and Status Register */
+#define REG_NFI_GINTEN		(0x804)	/* NFI Global Interrupt Control Register */
+#define REG_NFI_GINTSTS		(0x808)	/* NFI Global Interrupt Status Register */
 
 /* NAND-type Flash Registers */
-#define REG_SMCSR		(0x8A0)	/* NAND Flash Control and Status Register */
-#define REG_SMTCR		(0x8A4)	/* NAND Flash Timing Control Register */
-#define REG_SMIER		(0x8A8)	/* NAND Flash Interrupt Control Register */
-#define REG_SMISR		(0x8AC)	/* NAND Flash Interrupt Status Register */
-#define REG_SMCMD		(0x8B0)	/* NAND Flash Command Port Register */
-#define REG_SMADDR		(0x8B4)	/* NAND Flash Address Port Register */
-#define REG_SMDATA		(0x8B8)	/* NAND Flash Data Port Register */
-#define REG_SMREACTL		(0x8BC)	/* NAND Flash Smart-Media Redundant Area Control Register */
-#define REG_NFECR		(0x8C0)	/* NAND Flash Extend Control Regsiter */
-#define REG_SMECC_ST0		(0x8D0)	/* Smart-Media ECC Error Status 0 */
-#define REG_SMECC_ST1		(0x8D4)	/* Smart-Media ECC Error Status 1 */
-#define REG_SMECC_ST2		(0x8D8)	/* Smart-Media ECC Error Status 2 */
-#define REG_SMECC_ST3		(0x8DC)	/* Smart-Media ECC Error Status 3 */
+#define REG_NFI_NANDCTL		(0x8A0)	/* NAND Flash Control Register */
+#define NFI_NANDTMCTL		(0x8A4)	/* NAND Flash Timing Control Register */
+#define REG_NFI_NANDINTEN	(0x8A8)	/* NAND Flash Interrupt Enable Register */
+#define REG_NFI_NANDINTSTS	(0x8AC)	/* NAND Flash Interrupt Status Register */
+#define REG_NFI_NANDCMD		(0x8B0)	/* NAND Flash Command Port Register */
+#define REG_NFI_NANDADDR	(0x8B4)	/* NAND Flash Address Port Register */
+#define REG_NFI_NANDDATA	(0x8B8)	/* NAND Flash Data Port Register */
+#define REG_NFI_NANDRACTL	(0x8BC)	/* NAND Flash Redundant Area Control Register */
+#define REG_NFI_NANDECTL	(0x8C0)	/* NAND Flash Extend Control Regsiter */
+#define REG_NFI_NANDECCES0	(0x8D0)	/* NAND Flash ECC Error Status 0 Register */
+#define REG_NFI_NANDECCES1	(0x8D4)	/* NAND Flash ECC Error Status 1 Register */
+#define REG_NFI_NANDECCES2	(0x8D8)	/* NAND Flash ECC Error Status 2 Register */
+#define REG_NFI_NANDECCES3	(0x8DC)	/* NAND Flash ECC Error Status 3 Register */
 
 /* NAND-type Flash BCH Error Address Registers */
-#define REG_BCH_ECC_ADDR0	(0x900)	/* BCH error byte address 0 */
-#define REG_BCH_ECC_ADDR1	(0x904)	/* BCH error byte address 1 */
-#define REG_BCH_ECC_ADDR2	(0x908)	/* BCH error byte address 2 */
-#define REG_BCH_ECC_ADDR3	(0x90C)	/* BCH error byte address 3 */
-#define REG_BCH_ECC_ADDR4	(0x910)	/* BCH error byte address 4 */
-#define REG_BCH_ECC_ADDR5	(0x914)	/* BCH error byte address 5 */
-#define REG_BCH_ECC_ADDR6	(0x918)	/* BCH error byte address 6 */
-#define REG_BCH_ECC_ADDR7	(0x91C)	/* BCH error byte address 7 */
-#define REG_BCH_ECC_ADDR8	(0x920)	/* BCH error byte address 8 */
-#define REG_BCH_ECC_ADDR9	(0x924)	/* BCH error byte address 9 */
-#define REG_BCH_ECC_ADDR10	(0x928)	/* BCH error byte address 10 */
-#define REG_BCH_ECC_ADDR11	(0x92C)	/* BCH error byte address 11 */
+#define REG_NFI_NANDECCEA0	(0x900)	/* NAND Flash ECC Error Byte Address 0 Register */
+#define REG_NFI_NANDECCEA1	(0x904)	/* NAND Flash ECC Error Byte Address 1 Register */
+#define REG_NFI_NANDECCEA2	(0x908)	/* NAND Flash ECC Error Byte Address 2 Register */
+#define REG_NFI_NANDECCEA3	(0x90C)	/* NAND Flash ECC Error Byte Address 3 Register */
+#define REG_NFI_NANDECCEA4	(0x910)	/* NAND Flash ECC Error Byte Address 4 Register */
+#define REG_NFI_NANDECCEA5	(0x914)	/* NAND Flash ECC Error Byte Address 5 Register */
+#define REG_NFI_NANDECCEA6	(0x918)	/* NAND Flash ECC Error Byte Address 6 Register */
+#define REG_NFI_NANDECCEA7	(0x91C)	/* NAND Flash ECC Error Byte Address 7 Register */
+#define REG_NFI_NANDECCEA8	(0x920)	/* NAND Flash ECC Error Byte Address 8 Register */
+#define REG_NFI_NANDECCEA9	(0x924)	/* NAND Flash ECC Error Byte Address 9 Register */
+#define REG_NFI_NANDECCEA10	(0x928)	/* NAND Flash ECC Error Byte Address 10 Register */
+#define REG_NFI_NANDECCEA11	(0x92C)	/* NAND Flash ECC Error Byte Address 11 Register */
 
 /* NAND-type Flash BCH Error Data Registers */
-#define REG_BCH_ECC_DATA0	(0x960)	/* BCH error byte data 0 */
-#define REG_BCH_ECC_DATA1	(0x964)	/* BCH error byte data 1 */
-#define REG_BCH_ECC_DATA2	(0x968)	/* BCH error byte data 2 */
-#define REG_BCH_ECC_DATA3	(0x96C)	/* BCH error byte data 3 */
-#define REG_BCH_ECC_DATA4	(0x970)	/* BCH error byte data 4 */
-#define REG_BCH_ECC_DATA5	(0x974)	/* BCH error byte data 5 */
+#define REG_NFI_NANDECCED0	(0x960)	/* NAND Flash ECC Error Data Register 0 */
+#define REG_NFI_NANDECCED1	(0x964)	/* NAND Flash ECC Error Data Register 1 */
+#define REG_NFI_NANDECCED2	(0x968)	/* NAND Flash ECC Error Data Register 2 */
+#define REG_NFI_NANDECCED3	(0x96C)	/* NAND Flash ECC Error Data Register 3 */
+#define REG_NFI_NANDECCED4	(0x970)	/* NAND Flash ECC Error Data Register 4 */
+#define REG_NFI_NANDECCED5	(0x974)	/* NAND Flash ECC Error Data Register 5 */
 
 /* NAND-type Flash Redundant Area Registers */
-#define REG_SMRA0		(0xA00)	/* Smart-Media Redundant Area Register */
-#define REG_SMRA1		(0xA04)	/* Smart-Media Redundant Area Register */
-
-/* FMI Global Control and Status Register(FMICSR) */
-#define FMICSR_SWRST		(1)
-#define FMICSR_NANDEN		(1<<3)
-
-/* NAND-type Flash Interrupt Control Register(SMIER) */
-#define FMIIER_DTAIE		(1)
-
-/* NAND-type Flash Interrupt Status Register (SMISR) */
-#define FMIISR_DTAIF		(1)
-#define SMISR_RB0IF		(1<<10)
-
-/* DMAC Control and Status Register (DMACCSR) */
-#define DMACCSR_DMAC_EN		(1)
-#define DMACCSR_SWRST		(1<<1)
-#define DMACCSR_SGEN		(1<<3)
-#define DMACCSR_FMIBUSY		(1<<9)
-
-/* DMAC Interrupt Enable Register (DMACIER) */
-#define DMACIER_TABORTIE	(1)
-#define DMACIER_WEOTIE		(1<<1)
-
-/* DMAC Interrupt Status Register (DMACISR) */
-#define DMACISR_TABORTIF	(1)
-#define DMACISR_WEOTIF		(1<<1)
+#define REG_NFI_NANDRA0		(0xA00)	/* NAND Flash Redundant Area Word 0 */
+#define REG_NFI_NANDRA1		(0xA04)	/* NAND Flash Redundant Area Word 1 */
 
 /************************************************/
-#define NAND_RB_TIMEOUT	1000
-
-#define RESET_FMI   0x01
-#define NAND_EN     0x08
-#define READYBUSY   0x400
-
-#define SWRST       0x01
-#define PSIZE       (0x01 << 3)
-#define DMARWEN     (0x03 << 1)
-#define BUSWID      (0x01 << 4)
-#define ECC4EN      (0x01 << 5)
-#define WP          (0x01 << 24)
-#define NANDCS      (0x01 << 25)
 #define ENDADDR     (0x01 << 31)
 
 #define BCH_T8      0x00100000
@@ -142,6 +104,8 @@ struct ma35d1_nand_info {
 
 	int                     eBCHAlgo;
 	int                     m_i32SMRASize;
+	int			irq;
+	struct completion       complete;
 
 	unsigned char           *dma_buf;
 
@@ -205,41 +169,35 @@ static const int g_i32ParityNum[3][eBCH_CNT] = {
  */
 static void ma35d1_nand_hwecc_init(struct ma35d1_nand_info *nand)
 {
-	writel ( readl(nand->base+REG_SMCSR)|0x1, nand->base+REG_SMCSR);    // reset SM controller
+	writel ( readl(nand->base+REG_NFI_NANDCTL)|0x1, nand->base+REG_NFI_NANDCTL);    // reset SM controller
 
 	// Redundant area size
-	writel( nand->m_i32SMRASize , nand->base+REG_SMREACTL );
+	writel( nand->m_i32SMRASize , nand->base+REG_NFI_NANDRACTL );
 
 	// Protect redundant 3 bytes
 	// because we need to implement write_oob function to partial data to oob available area.
 	// Please note we skip 4 bytes
-	writel( readl(nand->base+REG_SMCSR) | 0x100, nand->base+REG_SMCSR);
+	writel( readl(nand->base+REG_NFI_NANDCTL) | 0x100, nand->base+REG_NFI_NANDCTL);
 
 	// To read/write the ECC parity codes automatically from/to NAND Flash after data area field written.
-	writel( readl(nand->base+REG_SMCSR) | 0x10, nand->base+REG_SMCSR);
+	writel( readl(nand->base+REG_NFI_NANDCTL) | 0x10, nand->base+REG_NFI_NANDCTL);
 
 	if ( nand->eBCHAlgo == eBCH_NONE ) {
 		// Disable H/W ECC / ECC parity check enable bit during read page
-		writel( readl(nand->base+REG_SMCSR) & (~0x00800000), nand->base+REG_SMCSR);
+		writel( readl(nand->base+REG_NFI_NANDCTL) & (~0x00800000), nand->base+REG_NFI_NANDCTL);
 	} else  {
 		// Set BCH algorithm
-		writel( (readl(nand->base+REG_SMCSR) & (~0x007C0000)) | g_i32BCHAlgoIdx[nand->eBCHAlgo], nand->base+REG_SMCSR);
+		writel( (readl(nand->base+REG_NFI_NANDCTL) & (~0x007C0000)) | g_i32BCHAlgoIdx[nand->eBCHAlgo], nand->base+REG_NFI_NANDCTL);
 
 		// Enable H/W ECC, ECC parity check enable bit during read page
-		writel( readl(nand->base+REG_SMCSR) | 0x00800000, nand->base+REG_SMCSR);
+		writel( readl(nand->base+REG_NFI_NANDCTL) | 0x00800000, nand->base+REG_NFI_NANDCTL);
 	}
 }
 
 static void ma35d1_nand_initialize (struct ma35d1_nand_info *nand)
 {
 	// Enable SM_EN
-	writel(FMICSR_NANDEN, nand->base+REG_NAND_FMICSR);
-
-	// Enable SM_CS0
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
-
-	// NAND Reset
-	writel(readl(nand->base+REG_SMCSR) | 0x1, nand->base+REG_SMCSR);    // software reset
+	writel(0x8, nand->base+REG_NFI_GCTL);
 }
 
 /*-----------------------------------------------------------------------------
@@ -269,7 +227,7 @@ void fmiSM_CorrectData_BCH(struct ma35d1_nand_info *nand, u8 ucFieidIndex, u8 uc
 	u8  *smra_index;
 
 	//--- assign some parameters for different BCH and page size
-	switch (readl(nand->base+REG_SMCSR) & 0x007C0000)
+	switch (readl(nand->base+REG_NFI_NANDCTL) & 0x007C0000)
 	{
 		case BCH_T24:
 			field_len   = 1024;
@@ -287,11 +245,11 @@ void fmiSM_CorrectData_BCH(struct ma35d1_nand_info *nand, u8 ucFieidIndex, u8 uc
 			parity_len  = BCH_PARITY_LEN_T8;
 			break;
 		default:
-			pr_warn("NAND ERROR: %s(): invalid SMCR_BCH_TSEL = 0x%08X\n", __FUNCTION__, (u32)(readl(nand->base+REG_SMCSR) & 0x7C0000));
+			pr_warn("NAND ERROR: %s(): invalid SMCR_BCH_TSEL = 0x%08X\n", __FUNCTION__, (u32)(readl(nand->base+REG_NFI_NANDCTL) & 0x7C0000));
 			return;
 	}
 
-	uPageSize = readl(nand->base+REG_SMCSR) & 0x00030000;
+	uPageSize = readl(nand->base+REG_NFI_NANDCTL) & 0x00030000;
 	switch (uPageSize)
 	{
 		case 0x30000:  total_field_num = 8192 / field_len; break;
@@ -311,7 +269,7 @@ void fmiSM_CorrectData_BCH(struct ma35d1_nand_info *nand, u8 ucFieidIndex, u8 uc
 
 	for(ii=0; ii<jj; ii++)
 	{
-		uaErrorData[ii] = readl(nand->base+REG_BCH_ECC_DATA0 + ii*4);
+		uaErrorData[ii] = readl(nand->base+REG_NFI_NANDECCED0 + ii*4);
 	}
 
 	for(ii=0; ii<jj; ii++)
@@ -331,8 +289,8 @@ void fmiSM_CorrectData_BCH(struct ma35d1_nand_info *nand, u8 ucFieidIndex, u8 uc
 
 	for(ii=0; ii<jj; ii++)
 	{
-		uaAddr[ii*2+0] = readl(nand->base+REG_BCH_ECC_ADDR0 + ii*4) & 0x07ff;   // 11 bits for error address
-		uaAddr[ii*2+1] = (readl(nand->base+REG_BCH_ECC_ADDR0 + ii*4)>>16) & 0x07ff;
+		uaAddr[ii*2+0] = readl(nand->base+REG_NFI_NANDECCEA0 + ii*4) & 0x07ff;   // 11 bits for error address
+		uaAddr[ii*2+1] = (readl(nand->base+REG_NFI_NANDECCEA0 + ii*4)>>16) & 0x07ff;
 	}
 
 	//--- pointer to begin address of field that with data error
@@ -362,12 +320,12 @@ void fmiSM_CorrectData_BCH(struct ma35d1_nand_info *nand, u8 ucFieidIndex, u8 uc
 
 #ifdef NVT_NAND_DEBUG
 			printk("BCH error corrected for 3 bytes: address 0x%08X, data [0x%02X] --> ",
-				(unsigned int)((u8 *)nand->base+REG_SMRA0 + uaAddr[ii]), (unsigned int)(*((u8 *)nand->base+REG_SMRA0 + uaAddr[ii])));
+				(unsigned int)((u8 *)nand->base+REG_NFI_NANDRA0 + uaAddr[ii]), (unsigned int)(*((u8 *)nand->base+REG_NFI_NANDRA0 + uaAddr[ii])));
 #endif
-			*((u8 *)nand->base+REG_SMRA0 + uaAddr[ii]) ^= uaData[ii];
+			*((u8 *)nand->base+REG_NFI_NANDRA0 + uaAddr[ii]) ^= uaData[ii];
 
 #ifdef NVT_NAND_DEBUG
-			printk("[0x%02X]\n", *((u8 *)nand->base+REG_SMRA0+uaAddr[ii]));
+			printk("[0x%02X]\n", *((u8 *)nand->base+REG_NFI_NANDRA0+uaAddr[ii]));
 #endif
 		}
 		// for wrong parity code in redundancy area
@@ -383,7 +341,7 @@ void fmiSM_CorrectData_BCH(struct ma35d1_nand_info *nand, u8 ucFieidIndex, u8 uc
 
 			// smra_index point to the first parity code of first field in register SMRA0~n
 			smra_index = (u8 *)
-						 (nand->base+REG_SMRA0 + (readl(nand->base+REG_SMREACTL) & 0x1ff) - // bottom of all parity code -
+						 (nand->base+REG_NFI_NANDRA0 + (readl(nand->base+REG_NFI_NANDRACTL) & 0x1ff) - // bottom of all parity code -
 						  (parity_len * total_field_num)                             // byte count of all parity code
 						 );
 
@@ -406,7 +364,7 @@ void fmiSM_CorrectData_BCH(struct ma35d1_nand_info *nand, u8 ucFieidIndex, u8 uc
 	}   // end of for (ii<ucErrorCnt)
 }
 
-int fmiSMCorrectData (struct nand_chip *chip, unsigned long uDAddr )
+int fmiSMCorrectData(struct nand_chip *chip, unsigned long uDAddr )
 {
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 	struct mtd_info *mtd = nand_to_mtd(chip);
@@ -414,48 +372,46 @@ int fmiSMCorrectData (struct nand_chip *chip, unsigned long uDAddr )
 	volatile int uErrorCnt = 0;
 	volatile int uReportErrCnt = 0;
 
-	if ( readl ( nand->base+REG_SMISR ) & 0x4 )
+	if ( ( readl(nand->base+REG_NFI_NANDCTL) & 0x7C0000) == BCH_T24 )
+		i32FieldNum = mtd->writesize / 1024;
+	else
+		i32FieldNum = mtd->writesize / 512;
+
+	if ( i32FieldNum < 4 )
+		i32FieldNum  = 1;
+	else
+		i32FieldNum /= 4;
+
+	for ( jj=0; jj<i32FieldNum; jj++ )
 	{
-		if ( ( readl(nand->base+REG_SMCSR) & 0x7C0000) == BCH_T24 )
-			i32FieldNum = mtd->writesize / 1024;    // Block=1024 for BCH
-		else
-			i32FieldNum = mtd->writesize / 512;
+		uStatus = readl ( nand->base+REG_NFI_NANDECCES0+jj*4 );
+		if ( !uStatus )
+			continue;
 
-		if ( i32FieldNum < 4 )
-			i32FieldNum  = 1;
-		else
-			i32FieldNum /= 4;
-
-		for ( jj=0; jj<i32FieldNum; jj++ )
+		for ( ii=1; ii<5; ii++ )
 		{
-			uStatus = readl ( nand->base+REG_SMECC_ST0+jj*4 );
-			if ( !uStatus )
+			if ( !(uStatus & 0x03) ) { // No error
+				uStatus >>= 8;
 				continue;
 
-			for ( ii=1; ii<5; ii++ )
+			} else if ( (uStatus & 0x03)==0x01 ) { // Correctable error
+				uErrorCnt = (uStatus >> 2) & 0x1F;
+#ifdef NVT_NAND_DEBUG
+				printk("Field (%d, %d) have %d error!!\n", jj, ii, uErrorCnt);
+#endif
+				fmiSM_CorrectData_BCH(nand, jj*4+ii, uErrorCnt, (char*)uDAddr);
+				uReportErrCnt += uErrorCnt;
+
+			} else // uncorrectable error or ECC error
 			{
-				if ( !(uStatus & 0x03) ) { // No error
-					uStatus >>= 8;
-					continue;
-				} else if ( (uStatus & 0x03)==0x01 ) { // Correctable error
-					uErrorCnt = (uStatus >> 2) & 0x1F;
 #ifdef NVT_NAND_DEBUG
-					printk("Field (%d, %d) have %d error!!\n", jj, ii, uErrorCnt);
+				printk("SM uncorrectable error is encountered, 0x%4x !!\n", uStatus);
 #endif
-					fmiSM_CorrectData_BCH(nand, jj*4+ii, uErrorCnt, (char*)uDAddr);
-					uReportErrCnt += uErrorCnt;
-					break;
-				} else // uncorrectable error or ECC error
-				{
-#ifdef NVT_NAND_DEBUG
-					printk("SM uncorrectable error is encountered, 0x%4x !!\n", uStatus);
-#endif
-					return -1;
-				}
-				uStatus >>= 8;
+				return -1;
 			}
-		} //jj
-	}
+			uStatus >>= 8;
+		}
+	} //jj
 	return uReportErrCnt;
 }
 
@@ -476,23 +432,15 @@ void ma35d1_nand_enable_hwecc(struct nand_chip *chip, int mode)
 static void ma35d1_nand_dmac_init( struct ma35d1_nand_info *nand )
 {
 	// DMAC enable
-	writel( readl(nand->base+REG_NAND_DMACCSR) | 0x3, nand->base+REG_NAND_DMACCSR);
-	writel( readl(nand->base+REG_NAND_DMACCSR) & (~0x2), nand->base+REG_NAND_DMACCSR);
+	writel( readl(nand->base+REG_NFI_DMACTL) | 0x3, nand->base+REG_NFI_DMACTL);
+	writel( readl(nand->base+REG_NFI_DMACTL) & (~0x2), nand->base+REG_NFI_DMACTL);
 
 	// Clear DMA finished flag
-	writel( readl(nand->base+REG_SMISR) | 0x1, nand->base+REG_SMISR);
+	writel( readl(nand->base+REG_NFI_NANDINTSTS) | 0x5, nand->base+REG_NFI_NANDINTSTS);
 
-	// Disable Interrupt
-	writel(readl(nand->base+REG_SMIER) & ~(0x1), nand->base+REG_SMIER);
-}
-
-/*
- * ma35d1_nand_dmac_fini - Finalize dma controller
- */
-static void ma35d1_nand_dmac_fini(struct ma35d1_nand_info *nand)
-{
-	// Clear DMA finished flag
-	writel(readl(nand->base+REG_SMISR) | 0x1, nand->base+REG_SMISR);
+	init_completion(&nand->complete);
+	/* enable ecc and dma */
+	writel(0x5, nand->base+REG_NFI_NANDINTEN);
 }
 
 /*
@@ -503,9 +451,9 @@ static unsigned char ma35d1_nand_read_byte(struct nand_chip *chip)
 	unsigned char ret;
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
-	ret = (unsigned char)readl(nand->base+REG_SMDATA);
-	writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
+	writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
+	ret = (unsigned char)readl(nand->base+REG_NFI_NANDDATA);
+	writel(readl(nand->base+REG_NFI_NANDCTL)|0x02000000, nand->base+REG_NFI_NANDCTL);
 
 	return ret;
 }
@@ -519,10 +467,10 @@ static void ma35d1_nand_read_buf(struct nand_chip *chip, unsigned char *buf, int
 	int i;
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
+	writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
 	for (i = 0; i < len; i++)
-		buf[i] = (unsigned char)readl(nand->base+REG_SMDATA);
-	writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
+		buf[i] = (unsigned char)readl(nand->base+REG_NFI_NANDDATA);
+	writel(readl(nand->base+REG_NFI_NANDCTL)|0x02000000, nand->base+REG_NFI_NANDCTL);
 }
 /*
  * ma35d1_nand_write_buf - write data from buffer into NAND controller
@@ -533,10 +481,10 @@ static void ma35d1_nand_write_buf(struct nand_chip *chip, const unsigned char *b
 	int i;
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
+	writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
 	for (i = 0; i < len; i++)
-		writel(buf[i], nand->base+REG_SMDATA);
-	writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
+		writel(buf[i], nand->base+REG_NFI_NANDDATA);
+	writel(readl(nand->base+REG_NFI_NANDCTL)|0x02000000, nand->base+REG_NFI_NANDCTL);
 }
 
 /*
@@ -545,103 +493,58 @@ static void ma35d1_nand_write_buf(struct nand_chip *chip, const unsigned char *b
 static inline int ma35d1_nand_dma_transfer(struct nand_chip *chip, const u_char *addr, unsigned int len, int is_write)
 {
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
-	struct mtd_info *mtd = nand_to_mtd(chip);
 	dma_addr_t dma_addr;
 	int ret;
 
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
+	writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
 	// For save, wait DMAC to ready
-	while ( readl(nand->base+REG_NAND_DMACCSR) & 0x200 );
+	while ( readl(nand->base+REG_NFI_DMACTL) & 0x200 );
 
 	// Reinitial dmac
 	ma35d1_nand_dmac_init(nand);
 
-	// Enable target abort interrupt generation during DMA transfer.
-	writel( 0x1, nand->base+REG_NAND_DMACIER);
+	writel( nand->m_i32SMRASize , nand->base+REG_NFI_NANDRACTL );
 
-	// Clear Ready/Busy 0 Rising edge detect flag
-	writel(0x400, nand->base+REG_SMISR);
-
-	writel( nand->m_i32SMRASize , nand->base+REG_SMREACTL );
-
-	writel( readl(nand->base+REG_SMIER) & (~0x4), nand->base+REG_SMIER );
-	writel ( 0x4, nand->base+REG_SMISR );
-
-	// Enable SM_CS0
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
 	/* setup and start DMA using dma_addr */
-
 	if ( is_write ) {
-		register char * ptr=nand->base+REG_SMRA0;
+		register char * ptr=nand->base+REG_NFI_NANDRA0;
 		// To mark this page as dirty.
 		if ( ptr[3] == 0xFF )
 			ptr[3] = 0;
 		if ( ptr[2] == 0xFF )
 			ptr[2] = 0;
 
-		if ( addr )
-			memcpy( (void*)nand->dma_buf, (void*)addr, len);
-
 		// Fill dma_addr
-		dma_addr = dma_map_single(nand->dev, (void *)nand->dma_buf, len, DMA_TO_DEVICE);
+		dma_addr = dma_map_single(nand->dev, (void *)addr, len, DMA_TO_DEVICE);
 		ret = dma_mapping_error(nand->dev, dma_addr);
 		if (ret) {
 			dev_err(nand->dev, "dma mapping error\n");
 			return -EINVAL;
 		}
 
-		writel((unsigned long)dma_addr, nand->base+REG_NAND_DMACSAR);
-		//dma_sync_single_for_device(nand->dev, dma_addr, len, DMA_TO_DEVICE);
+		writel((unsigned long)dma_addr, nand->base+REG_NFI_DMASA);
+		writel ( readl(nand->base+REG_NFI_NANDCTL) | 0x4, nand->base+REG_NFI_NANDCTL );
+		wait_for_completion_timeout(&nand->complete, msecs_to_jiffies(1000));
 
-		writel ( readl(nand->base+REG_SMCSR) | 0x4, nand->base+REG_SMCSR );
-		while ( !(readl(nand->base+REG_SMISR) & 0x1) );
-
+		dma_unmap_single(nand->dev, dma_addr, len, DMA_TO_DEVICE);
 	} else {
-		// Blocking for reading
-		// Enable DMA Read
-
 		// Fill dma_addr
-		dma_addr = dma_map_single(nand->dev, (void *)nand->dma_buf, len, DMA_FROM_DEVICE);
+		dma_addr = dma_map_single(nand->dev, (void *)addr, len, DMA_FROM_DEVICE);
 		ret = dma_mapping_error(nand->dev, dma_addr);
 		if (ret) {
 			dev_err(nand->dev, "dma mapping error\n");
 			return -EINVAL;
 		}
+		nand->dma_buf = (unsigned char *) dma_addr;
 
-		writel((unsigned long)dma_addr, nand->base+REG_NAND_DMACSAR);
+		writel((unsigned long)dma_addr, nand->base+REG_NFI_DMASA);
+		writel ( readl(nand->base+REG_NFI_NANDCTL) | 0x2, nand->base+REG_NFI_NANDCTL);
+		wait_for_completion_timeout(&nand->complete, msecs_to_jiffies(1000));
 
-		writel ( readl(nand->base+REG_SMCSR) | 0x2, nand->base+REG_SMCSR);
-		if ( readl(nand->base+REG_SMCSR) & 0x80 ) {
-			do {
-				int stat=0;
-				if ( (stat=fmiSMCorrectData (chip,  (unsigned long)nand->dma_buf)) < 0 )
-				{
-					mtd->ecc_stats.failed++;
-					writel ( 0x4, nand->base+REG_SMISR );
-					writel ( 0x3, nand->base+REG_NAND_DMACCSR);          // reset DMAC
-					writel ( readl(nand->base+REG_SMCSR)|0x1, nand->base+REG_SMCSR);    // reset SM controller
-					break;
-				}
-				else if ( stat > 0 ) {
-					mtd->ecc_stats.corrected += stat;   // Add corrected bit count
-					writel ( 0x4, nand->base+REG_SMISR );
-				}
-
-			} while ( !(readl(nand->base+REG_SMISR) & 0x1) || (readl(nand->base+REG_SMISR) & 0x4) );
-		} else
-			while ( !(readl(nand->base+REG_SMISR) & 0x1) );
-
-		//dma_sync_single_for_cpu(nand->dev, dma_addr, len, DMA_FROM_DEVICE);
-		if ( addr )
-			memcpy( (void*)addr, (void*)nand->dma_buf,  len );
+		dma_unmap_single(nand->dev, dma_addr, len, DMA_FROM_DEVICE);
 	}
 
-	writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
-	ma35d1_nand_dmac_fini(nand);
-	if ( is_write )
-		dma_unmap_single(nand->dev, dma_addr, len, DMA_TO_DEVICE);
-	else
-		dma_unmap_single(nand->dev, dma_addr, len, DMA_FROM_DEVICE);
+	writel(readl(nand->base+REG_NFI_NANDCTL)|0x02000000, nand->base+REG_NFI_NANDCTL);
 
 	return 0;
 }
@@ -692,25 +595,39 @@ static void ma35d1_write_buf_dma(struct nand_chip *chip, const u_char *buf, int 
 }
 
 
-static int ma35d1_check_rb(struct ma35d1_nand_info *nand)
+static int ma35d1_nand_devready(struct nand_chip *chip)
 {
+	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 	unsigned int volatile val;
 
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
-	val = (readl(nand->base+REG_SMISR) & SMISR_RB0IF) ? 1 : 0;
-	writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
+	writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
+	val = (readl(nand->base+REG_NFI_NANDINTSTS) & 0x40000) ? 1 : 0;
+	writel(readl(nand->base+REG_NFI_NANDCTL)|0x02000000, nand->base+REG_NFI_NANDCTL);
 
 	return val;
 }
 
-static int ma35d1_nand_devready(struct nand_chip *chip)
+static int ma35d1_waitfunc(struct nand_chip *chip)
 {
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
-	int ready;
+	unsigned long timeo = jiffies;
+	int volatile status = -1;
 
-	ready = (ma35d1_check_rb(nand)) ? 1 : 0;
+	timeo += msecs_to_jiffies(400);
 
-	return ready;
+	writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
+	while (time_before(jiffies, timeo)) {
+		status = readl(nand->base+REG_NFI_NANDINTSTS);
+		if (status & 0x400)	/* check r/b# flag */
+		{
+			writel(0x400, nand->base+REG_NFI_NANDINTSTS);
+			status = 0;
+			break;
+		}
+		cond_resched();
+	}
+	writel(readl(nand->base+REG_NFI_NANDCTL)|0x02000000, nand->base+REG_NFI_NANDCTL);
+	return status;
 }
 
 static void ma35d1_nand_command(struct nand_chip *chip, unsigned int command, int column, int page_addr)
@@ -718,113 +635,94 @@ static void ma35d1_nand_command(struct nand_chip *chip, unsigned int command, in
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 	struct mtd_info *mtd = nand_to_mtd(chip);
 
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
-	writel(0x400, nand->base+REG_SMISR);
-
-	if ((command == NAND_CMD_STATUS) || (command == NAND_CMD_ERASE1) || (command == NAND_CMD_SEQIN)) {
-		writel(0x1, nand->base+REG_NFECR); /* un-lock write protect */
-	}
+	writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
+	writel(0x400, nand->base+REG_NFI_NANDINTSTS);
 
 	if (command == NAND_CMD_READOOB) {
-		column += mtd->writesize;
 		command = NAND_CMD_READ0;
-	}
-
-	writel(command & 0xff, nand->base+REG_SMCMD);
-
-	if (command == NAND_CMD_READID) {
-		writel(ENDADDR|column, nand->base+REG_SMADDR);
-		return;
-
-	} else if (command == NAND_CMD_PARAM){
-		writel(ENDADDR|column, nand->base+REG_SMADDR);
-
-	} else {
-		if (column != -1 || page_addr != -1) {
-			if (column != -1) {
-				writel(column&0xFF, nand->base+REG_SMADDR);
-				if ( page_addr != -1 )
-					writel(column >> 8, nand->base+REG_SMADDR);
-				else
-					writel((column >> 8) | ENDADDR, nand->base+REG_SMADDR);
-
-			}
-
-			if (page_addr != -1) {
-				writel(page_addr&0xFF, nand->base+REG_SMADDR);
-
-				if ( chip->options & NAND_ROW_ADDR_3) {
-					writel((page_addr >> 8)&0xFF, nand->base+REG_SMADDR);
-					writel(((page_addr >> 16)&0xFF)|ENDADDR, nand->base+REG_SMADDR);
-				} else {
-					writel(((page_addr >> 8)&0xFF)|ENDADDR, nand->base+REG_SMADDR);
-				}
-			}
-		}
+		column += mtd->writesize;
 	}
 
 	switch (command) {
-	case NAND_CMD_ERASE1:
-	case NAND_CMD_SEQIN:
-	case NAND_CMD_STATUS:
-		writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
-		return;
-
-	case NAND_CMD_PAGEPROG:
-	case NAND_CMD_ERASE2:
-		writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
-		break;
 
 	case NAND_CMD_RESET:
-		if ( chip->legacy.chip_delay )
-			udelay(chip->legacy.chip_delay);
-
-		writel(0x0, nand->base+REG_NFECR); /* lock write protect */
-		writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
+		writel(command, nand->base+REG_NFI_NANDCMD);
 		break;
 
-	case NAND_CMD_RNDOUT:
-		writel(NAND_CMD_RNDOUTSTART, nand->base+REG_SMCMD);
-		writel(0x0, nand->base+REG_NFECR); /* lock write protect */
-		writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
-		return;
+	case NAND_CMD_READID:
+	case NAND_CMD_PARAM:
+		writel(command, nand->base+REG_NFI_NANDCMD);
+		writel(ENDADDR|column, nand->base+REG_NFI_NANDADDR);
+		break;
 
 	case NAND_CMD_READ0:
-		writel(NAND_CMD_READSTART, nand->base+REG_SMCMD);
-		writel(0x0, nand->base+REG_NFECR); /* lock write protect */
+		writel(0x0, nand->base+REG_NFI_NANDECTL); /* lock write protect */
+		writel(command, nand->base+REG_NFI_NANDCMD);
+		if (column != -1) {
+			writel(column & 0xff, nand->base+REG_NFI_NANDADDR);
+			writel((column >> 8) & 0xff, nand->base+REG_NFI_NANDADDR);
+		}
+		if (page_addr != -1) {
+			writel(page_addr & 0xff, nand->base+REG_NFI_NANDADDR);
+			if ( chip->options & NAND_ROW_ADDR_3) {
+				writel((page_addr >> 8) & 0xff, nand->base+REG_NFI_NANDADDR);
+				writel(((page_addr >> 16) & 0xff)|ENDADDR, nand->base+REG_NFI_NANDADDR);
+			} else {
+				writel(((page_addr >> 8) & 0xff)|ENDADDR, nand->base+REG_NFI_NANDADDR);
+			}
+		}
+		writel(NAND_CMD_READSTART, nand->base+REG_NFI_NANDCMD);
+		ma35d1_waitfunc(chip);
 		break;
+
+
+	case NAND_CMD_ERASE1:
+		writel(0x1, nand->base+REG_NFI_NANDECTL); /* un-lock write protect */
+		writel(command, nand->base+REG_NFI_NANDCMD);
+		writel(page_addr & 0xff, nand->base+REG_NFI_NANDADDR);
+		if ( chip->options & NAND_ROW_ADDR_3) {
+			writel((page_addr >> 8) & 0xff, nand->base+REG_NFI_NANDADDR);
+			writel(((page_addr >> 16) & 0xff)|ENDADDR, nand->base+REG_NFI_NANDADDR);
+		} else {
+			writel(((page_addr >> 8) & 0xff)|ENDADDR, nand->base+REG_NFI_NANDADDR);
+		}
+		break;
+
+
+	case NAND_CMD_SEQIN:
+		writel(0x1, nand->base+REG_NFI_NANDECTL); /* un-lock write protect */
+		writel(command, nand->base+REG_NFI_NANDCMD);
+		writel(column & 0xff, nand->base+REG_NFI_NANDADDR);
+		writel(column >> 8, nand->base+REG_NFI_NANDADDR);
+		writel(page_addr & 0xff, nand->base+REG_NFI_NANDADDR);
+		if ( chip->options & NAND_ROW_ADDR_3) {
+			writel((page_addr >> 8) & 0xff, nand->base+REG_NFI_NANDADDR);
+			writel(((page_addr >> 16) & 0xff)|ENDADDR, nand->base+REG_NFI_NANDADDR);
+		} else {
+			writel(((page_addr >> 8) & 0xff)|ENDADDR, nand->base+REG_NFI_NANDADDR);
+		}
+		break;
+
+	case NAND_CMD_STATUS:
+		writel(0x1, nand->base+REG_NFI_NANDECTL); /* un-lock write protect */
+		writel(command, nand->base+REG_NFI_NANDCMD);
+		break;
+
 	default:
-		writel(0x0, nand->base+REG_NFECR); /* lock write protect */
-		if (!chip->legacy.dev_ready) {
-			if ( chip->legacy.chip_delay )
-				udelay(chip->legacy.chip_delay);
-			return;
-		}
+		writel(command, nand->base+REG_NFI_NANDCMD);
 	}
-
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
-	while (1)
-	{
-		if (ma35d1_check_rb(nand) == 1)
-			break;
-		if (time_after(jiffies, jiffies + msecs_to_jiffies(NAND_RB_TIMEOUT))) {
-			pr_err("NAND is busy. Timeout! 0x%x\n", readl(nand->base+REG_SMISR));
-			break;
-		}
-	}
-	writel(readl(nand->base+REG_SMCSR)|0x02000000, nand->base+REG_SMCSR);
-
-	if ((command == NAND_CMD_STATUS) || (command == NAND_CMD_ERASE1) || (command == NAND_CMD_SEQIN)) {
-		writel(0x0, nand->base+REG_NFECR); /* lock write protect */
-	}
+	writel(readl(nand->base+REG_NFI_NANDCTL)|0x02000000, nand->base+REG_NFI_NANDCTL);
 }
 
 /* select chip */
 static void ma35d1_nand_select_chip(struct nand_chip *chip, int cs)
 {
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
-	writel(readl(nand->base+REG_SMCSR) & (~0x02000000), nand->base+REG_SMCSR);
-	return;
+
+	if (cs == 0)
+		writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
+	else
+		writel(readl(nand->base+REG_NFI_NANDCTL) | 0x02000000, nand->base+REG_NFI_NANDCTL);
 }
 
 /*
@@ -841,7 +739,7 @@ static int ma35d1_nand_write_page_hwecc(struct nand_chip *chip, const uint8_t *b
 	struct mtd_info *mtd = nand_to_mtd(chip);
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 	uint8_t *ecc_calc = chip->ecc.calc_buf;
-	register char * ptr = nand->base+REG_SMRA0;
+	register char * ptr = nand->base+REG_NFI_NANDRA0;
 
 	memset ( (void*)ptr, 0xFF, mtd->oobsize );
 	memcpy ( (void*)ptr, (void*)chip->oob_poi,  mtd->oobsize - chip->ecc.total );
@@ -849,9 +747,10 @@ static int ma35d1_nand_write_page_hwecc(struct nand_chip *chip, const uint8_t *b
 	ma35d1_nand_command(chip, NAND_CMD_SEQIN, 0, page);
 	ma35d1_nand_dma_transfer(chip, buf, mtd->writesize , 0x1);
 	ma35d1_nand_command(chip, NAND_CMD_PAGEPROG, -1, -1);
+	ma35d1_waitfunc(chip);
 
 	// Copy parity code in SMRA to calc
-	memcpy ( (void*)ecc_calc,  (void*)( nand->base+REG_SMRA0 + ( mtd->oobsize - chip->ecc.total ) ), chip->ecc.total );
+	memcpy ( (void*)ecc_calc,  (void*)( nand->base+REG_NFI_NANDRA0 + ( mtd->oobsize - chip->ecc.total ) ), chip->ecc.total );
 
 	// Copy parity code in calc to oob_poi
 	memcpy ( (void*)(chip->oob_poi+(mtd->oobsize-chip->ecc.total)), (void*)ecc_calc, chip->ecc.total);
@@ -864,7 +763,7 @@ static int ma35d1_nand_read_page_hwecc_oob_first(struct nand_chip *chip, uint8_t
 	struct mtd_info *mtd = nand_to_mtd(chip);
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 	uint8_t *p = buf;
-	char * ptr=nand->base+REG_SMRA0;
+	char * ptr=nand->base+REG_NFI_NANDRA0;
 
 	/* At first, read the OOB area  */
 	ma35d1_nand_command(chip, NAND_CMD_READOOB, 0, page);
@@ -905,7 +804,7 @@ static int ma35d1_nand_read_oob_hwecc(struct nand_chip *chip, int page)
 {
 	struct mtd_info *mtd = nand_to_mtd(chip);
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
-	char * ptr=nand->base+REG_SMRA0;
+	char * ptr=nand->base+REG_NFI_NANDRA0;
 
 	ma35d1_nand_command(chip, NAND_CMD_READOOB, 0, page);
 
@@ -922,17 +821,47 @@ static int ma35d1_nand_read_oob_hwecc(struct nand_chip *chip, int page)
 	return 0;
 }
 
+static irqreturn_t ma35d1_nand_irq(int irq, struct ma35d1_nand_info *nand)
+{
+	struct mtd_info *mtd = nand_to_mtd(&nand->chip);
+	unsigned int isr;
+
+	/* Clear interrupt flag */
+	// SM interrupt status
+	isr = readl(nand->base+REG_NFI_NANDINTSTS);
+	if (isr & 0x01)
+	{
+		writel(0x1, nand->base+REG_NFI_NANDINTSTS);
+		complete(&nand->complete);
+	}
+	if (isr & 0x04)
+	{
+		int stat=0;
+		if ( (stat=fmiSMCorrectData(&nand->chip,  (unsigned long)nand->dma_buf)) < 0 )
+		{
+			mtd->ecc_stats.failed++;
+			writel ( 0x3, nand->base+REG_NFI_DMACTL);          // reset DMAC
+			writel ( readl(nand->base+REG_NFI_NANDCTL)|0x1, nand->base+REG_NFI_NANDCTL);    // reset SM controller
+		}
+		else if ( stat > 0 ) {
+			mtd->ecc_stats.corrected += stat;   // Add corrected bit count
+		}
+		writel(0x4, nand->base+REG_NFI_NANDINTSTS);
+	}
+
+	return IRQ_HANDLED;
+}
+
 
 static int ma35d1_nand_attach_chip(struct nand_chip *chip)
 {
 	struct mtd_info *mtd = nand_to_mtd(chip);
 	struct ma35d1_nand_info *host = nand_get_controller_data(chip);
-	struct device *dev = &host->pdev->dev;
 	unsigned int reg;
 
 	//Set PSize bits of SMCSR register to select NAND card page size
-	reg = readl(host->base+REG_SMCSR) & (~0x30000);
-	writel(reg | (mtd->writesize << 5), host->base+REG_SMCSR);
+	reg = readl(host->base+REG_NFI_NANDCTL) & (~0x30000);
+	writel(reg | (mtd->writesize << 5), host->base+REG_NFI_NANDCTL);
 
 	if (chip->ecc.strength == 0) {
 		host->eBCHAlgo = eBCH_NONE; /* No ECC */
@@ -967,11 +896,7 @@ static int ma35d1_nand_attach_chip(struct nand_chip *chip)
 
 	ma35d1_nand_hwecc_init(host);
 
-	writel(0x0, host->base+REG_NFECR); /* lock write protect */
-
-	host->dma_buf = devm_kzalloc(dev, mtd->writesize, GFP_KERNEL);
-	if (!host->dma_buf)
-		return -ENOMEM;
+	writel(0x0, host->base+REG_NFI_NANDECTL); /* lock write protect */
 
 	return 0;
 }
@@ -1027,6 +952,7 @@ static int ma35d1_nand_probe(struct platform_device *pdev)
 	ma35d1_nand->chip.controller = &ma35d1_nand->controller;
 
 	chip->legacy.cmdfunc     = ma35d1_nand_command;
+	chip->legacy.waitfunc    = ma35d1_waitfunc;
 	chip->legacy.read_byte   = ma35d1_nand_read_byte;
 	chip->legacy.select_chip = ma35d1_nand_select_chip;
 	chip->legacy.read_buf    = ma35d1_read_buf_dma;
@@ -1049,7 +975,21 @@ static int ma35d1_nand_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, ma35d1_nand);
 
 	ma35d1_nand->controller.ops = &ma35d1_nand_controller_ops;
-	/* second phase scan */
+
+	ma35d1_nand->irq = platform_get_irq(pdev, 0);
+	if (ma35d1_nand->irq < 0) {
+		dev_err(&pdev->dev, "failed to get platform irq\n");
+		retval = -EINVAL;
+		goto fail;
+	}
+
+	if (request_irq(ma35d1_nand->irq, (irq_handler_t)&ma35d1_nand_irq,
+			IRQF_TRIGGER_HIGH, "ma35d1-nand", ma35d1_nand)) {
+		dev_err(&pdev->dev, "Error requesting NAND IRQ\n");
+		retval = -ENXIO;
+		goto fail;
+	}
+
 	if (nand_scan(chip, 1))
 		goto fail;
 
@@ -1086,7 +1026,7 @@ static int ma35d1_nand_suspend(struct platform_device *pdev, pm_message_t pm)
 	struct ma35d1_nand_info *ma35d1_nand = platform_get_drvdata(pdev);
 
 	// For save, wait DMAC to ready
-	while ( readl(ma35d1_nand->base+REG_NAND_DMACCSR) & 0x200 );
+	while ( readl(ma35d1_nand->base+REG_NFI_DMACTL) & 0x200 );
 	clk_disable(ma35d1_nand->clk);
 
 	return 0;
