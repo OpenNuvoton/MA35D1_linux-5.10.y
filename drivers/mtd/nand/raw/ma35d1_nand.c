@@ -650,9 +650,14 @@ static void ma35d1_nand_command(struct nand_chip *chip, unsigned int command, in
 		break;
 
 	case NAND_CMD_READID:
+		writel(command, nand->base+REG_NFI_NANDCMD);
+		writel(ENDADDR|column, nand->base+REG_NFI_NANDADDR);
+		break;
+
 	case NAND_CMD_PARAM:
 		writel(command, nand->base+REG_NFI_NANDCMD);
 		writel(ENDADDR|column, nand->base+REG_NFI_NANDADDR);
+		ma35d1_waitfunc(chip);
 		break;
 
 	case NAND_CMD_READ0:
