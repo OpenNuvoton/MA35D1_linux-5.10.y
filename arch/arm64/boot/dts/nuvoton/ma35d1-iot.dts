@@ -68,6 +68,18 @@
 			gpios = <&gpion 10 GPIO_ACTIVE_LOW>;
 		};
 	};
+
+	volt0_sdhci1: regulator-volt0_sdhci1 {
+		compatible = "regulator-gpio";
+		regulator-name = "volt1_sdhci1";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+		gpios = <&gpion 11 GPIO_ACTIVE_HIGH>; /* PN11 */
+		gpios-states = <0>;
+		states = <1800000 0x1 3300000 0x0>;
+		enable-active-high;
+		regulator-boot-on;
+	};
 };
 
 &gmac0 {
@@ -102,8 +114,10 @@
 &sdhci1 {
 	status = "okay";
 	disable-wp;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_sdhci1>;
+	pinctrl-names = "sdhci_3V3","sdhci_1V8";
+	pinctrl-0 = <&pinctrl_sdhci1_3_3V>;
+	pinctrl-1 = <&pinctrl_sdhci1_1_8V>;
+	vqmmc-supply = <&volt0_sdhci1>;
 };
 
 &epwm0 {
@@ -422,15 +436,26 @@
 	};
 
 	sdhci1 {
-		pinctrl_sdhci1: sdhci1grp{
+		pinctrl_sdhci1_3_3V: sdhci1_3_3Vgrp{
 			nuvoton,pins =
 				<SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>,
-				<SYS_GPJ_MFPL_PJ6MFP_SD1_CMD	&pcfg_default>,
-				<SYS_GPJ_MFPL_PJ7MFP_SD1_CLK	&pcfg_default>,
-				<SYS_GPJ_MFPH_PJ8MFP_SD1_DAT0	&pcfg_default>,
-				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_default>,
-				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_default>,
-				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_default>;
+				<SYS_GPJ_MFPL_PJ6MFP_SD1_CMD	&pcfg_sdhci_drive7_3_3V>,
+				<SYS_GPJ_MFPL_PJ7MFP_SD1_CLK	&pcfg_sdhci_drive7_3_3V>,
+				<SYS_GPJ_MFPH_PJ8MFP_SD1_DAT0	&pcfg_sdhci_drive1_3_3V>,
+				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_sdhci_drive1_3_3V>,
+				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_sdhci_drive1_3_3V>,
+				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_sdhci_drive1_3_3V>;
+		};
+
+		pinctrl_sdhci1_1_8V: sdhci1_1_8Vgrp{
+			nuvoton,pins =
+				<SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ6MFP_SD1_CMD	&pcfg_sdhci_drive7_1_8V>,
+				<SYS_GPJ_MFPL_PJ7MFP_SD1_CLK	&pcfg_sdhci_drive7_1_8V>,
+				<SYS_GPJ_MFPH_PJ8MFP_SD1_DAT0	&pcfg_sdhci_drive7_1_8V>,
+				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_sdhci_drive7_1_8V>,
+				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_sdhci_drive7_1_8V>,
+				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_sdhci_drive7_1_8V>;
 		};
 	};
 

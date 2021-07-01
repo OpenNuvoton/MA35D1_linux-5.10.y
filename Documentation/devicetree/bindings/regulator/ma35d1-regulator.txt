@@ -1,0 +1,17 @@
+TWL family of regulators
+
+Required properties:
+For ma35d1 regulators/SDIO
+- compatible:
+  - "nuvoton,ma35d1-volt" for SDIO
+
+
+Example:
+
+	volt0_sdhci1: regulator-volt0_sdhci1 {
+		compatible = "nuvoton,ma35d1-volt";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-name = "volt0_sdhci1";
+		regulator-always-on;
+        };

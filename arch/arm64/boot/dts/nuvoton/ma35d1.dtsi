@@ -736,16 +736,48 @@
 			drive-strength = <1>; /* 0 ~ 7 */
 		};
 
+		pcfg_sdhci_drive1_3_3V: pcfg-pcfg_sdhci_drive1_3_3V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <3300>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <1>; /* 0 ~ 7 */
+		};
+
+		pcfg_sdhci_drive7_3_3V: pcfg-pcfg_sdhci_drive7_3_3V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <3300>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <7>; /* 0 ~ 7 */
+		};
+
+		pcfg_sdhci_drive1_1_8V: pcfg-pcfg_sdhci_drive1_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <1>; /* 0 ~ 7 */
+		};
+
+		pcfg_sdhci_drive7_1_8V: pcfg-pcfg_sdhci_drive7_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <7>; /* 0 ~ 7 */
+		};
 	};
 
 	sdhci0: sdhci@40180000 {
-		compatible = "snps,dwcmshc-sdhci";
+		compatible = "nuvoton,ma35d1-sdhci";
 		reg = <0x0 0x40180000 0x0 0x2000>;
 		interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk sdh0_gate>;
 		clock-names = "core";
 		bus-width = <4>;
-		max-frequency = <180000000>;
+		max-frequency = <100000000>;
+		dhci-caps-mask = <0x4 0x0>;  /* No support DDR50 mode */
 		no-1-8-v;
 		cd-gpios = <&gpioc 6 GPIO_ACTIVE_LOW>;
 		wp-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
@@ -755,19 +787,21 @@
 	};
 
 	sdhci1:sdhci@40190000 {
-		compatible = "snps,dwcmshc-sdhci";
+		compatible = "nuvoton,ma35d1-sdhci";
+		nuvoton,ma35d1-sys = <&sys>;
 		reg = <0x0 0x40190000 0x0 0x2000>;
 		interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
+		resets = <&reset MA35D1_RESET_SDH1>;
 		clocks = <&clk sdh1_gate>;
 		clock-names = "core";
 		bus-width = <8>;
-		max-frequency = <180000000>;
+		max-frequency = <200000000>;
+		sdhci-caps-mask = <0x4 0x0>;  /* No support DDR50 mode */
 		status = "disabled";
 		cd-gpios = <&gpioj 5 GPIO_ACTIVE_LOW>;
 		wp-gpios = <&gpioj 4 GPIO_ACTIVE_LOW>;
-		no-1-8-v;
 		assigned-clocks = <&clk sdh1_mux>;
-                assigned-clock-parents = <&clk syspll>;
+		assigned-clock-parents = <&clk apll>;
 	};
 
 	nand:nand@401A0000 {
@@ -879,8 +913,6 @@
 		status = "disabled";
 	};
 
-#define USING_HM1055
-//#deifne USING_NT99141
 	ccap0: ccap@40240000{
 		compatible = "nuvoton,ma35d1-ccap";
 		reg = <0x0 0x40240000 0x0 0x2000>;
@@ -889,11 +921,7 @@
 		port {
 			/* Parallel bus endpoint */
 			ccap0_1: endpoint {
-#if defined(USING_HM1055)
 				remote-endpoint = <&hm1055_0>;
-#elif defined(USING_NT99141)
-				remote-endpoint = <&nt99141_0>;
-#endif
 				hsync-active = <0>;     /* Active low */
 				vsync-active = <0>;     /* Active low */
 				pclk-sample = <1>;      /* Rising */
@@ -911,8 +939,6 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "disabled";
-
-#ifdef USING_HM1055
 		hm1055@24 {
 			compatible = "himax,hm1055";
 			reg = <0x24>;
@@ -928,24 +954,6 @@
 				};
 			};
 		};
-#elif defined(USING_NT99141)
-		nt99141@2a {
-			compatible = "novatek,nt99141";
-			reg = <0x2a>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_ccap0>;
-			clocks = <&clk ccap0_gate>;
-			clock-names = "xclk";
-			reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
-			powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
-			port {
-				nt99141_0: endpoint {
-					remote-endpoint = <&ccap0_1>;
-				};
-			};
-		};
-#endif
-
 	};
 
 	ccap1: ccap@40250000{
