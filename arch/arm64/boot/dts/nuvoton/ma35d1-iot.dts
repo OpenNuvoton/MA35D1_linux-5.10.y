@@ -137,6 +137,8 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c1>;
 
+	#address-cells = <1>;
+	#size-cells = <0>;
 	nau8822: nau8822@1a {
 		compatible = "nuvoton,nau8822";
 		reg = <0x1a> ;

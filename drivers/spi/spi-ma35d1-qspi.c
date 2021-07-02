@@ -72,7 +72,7 @@
 
 /* define for PDMA */
 #define ALIGNMENT_4     4
-#define USE_PDMA_LEN    16
+#define USE_PDMA_LEN    100
 
 struct ma35d1_ip_dma {
 	struct dma_chan                 *chan_rx;
@@ -931,7 +931,6 @@ static int nuvoton_spi_probe(struct platform_device *pdev)
 		goto err_pdata;
 	}
 
-	printk("nuvoton->pdata->use_pdma = %d\n",nuvoton->pdata->use_pdma);
 	if (nuvoton->pdata->use_pdma) {
 		/* Zero out the capability mask then initialize it for a slave channel that is
 		 * private.
