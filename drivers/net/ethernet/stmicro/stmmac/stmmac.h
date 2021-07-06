@@ -201,6 +201,7 @@ struct stmmac_priv {
 	int wol_irq;
 	int clk_csr;
 	struct timer_list eee_ctrl_timer;
+	struct timer_list config_timer;
 	int lpi_irq;
 	int eee_enabled;
 	int eee_active;
