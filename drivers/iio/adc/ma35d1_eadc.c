@@ -71,6 +71,12 @@
 #define ADCIEN0		4
 #define CHSELMSK	0xF
 #define DATMSK		0xFFF
+#define TRGSELMSK	0x3F0000
+#define TRGDLYMSK	0xFF00
+#define ADINT0TRG	0x20000
+#define TRGSELPOS	16
+
+#define EADC_MAX_SP	16
 
 #define MA35D1_ADC_TIMEOUT	(msecs_to_jiffies(1000))
 
@@ -98,6 +104,9 @@ struct ma35d1_adc_device {
 	void __iomem	*regs;
 	struct completion	completion;
 	struct iio_trigger	*trig;
+	u16		buffer[EADC_MAX_SP];
+	unsigned int	bufi;
+	unsigned int	num_conv;
 };
 
 static const struct iio_chan_spec ma35d1_adc_iio_channels[] = {
@@ -117,26 +126,26 @@ static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
 	struct iio_poll_func *pf = p;
 	struct iio_dev *indio_dev = pf->indio_dev;
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
-	int val;
 	int channel;
-	unsigned long timeout;
+	int ret_push;
 
 	channel = find_first_bit(indio_dev->active_scan_mask,
 				indio_dev->masklength);
 
-	// enable channel
-	writel((readl(info->regs + SCTL0) & ~CHSELMSK) | channel, info->regs + SCTL0);
 
-	// software trigger sample module 0
-	writel(1, info->regs + SWTRG);
+	/* reset buffer index */
+	info->bufi = 0;
+	ret_push = iio_push_to_buffers_with_timestamp(indio_dev, info->buffer,
+		pf->timestamp);
+	if (ret_push) {
+		// Set trigger source to software trigger (clear ADINT0 trigger)
+		writel((readl(info->regs + SCTL0) & ~TRGSELMSK), info->regs + SCTL0);
+	}
 
-	timeout = wait_for_completion_interruptible_timeout
-			(&info->completion, MA35D1_ADC_TIMEOUT);
-
-	val = readl(info->regs + DAT0);
-
-	iio_push_to_buffers(indio_dev, (void *)&val);
 	iio_trigger_notify_done(indio_dev->trig);
+
+	/* re-enable eoc irq */
+	writel(readl(info->regs + CTL) | ADCIEN0, info->regs + CTL);
 
 	return IRQ_HANDLED;
 }
@@ -144,10 +153,27 @@ static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
 static irqreturn_t ma35d1_adc_isr(int irq, void *dev_id)
 {
 	struct ma35d1_adc_device *info = (struct ma35d1_adc_device *)dev_id;
+	struct iio_dev *indio_dev = iio_priv_to_dev(info);
 
 	if (readl(info->regs + STATUS2) & 1) {  //check ADIF0
 		writel(1, info->regs + STATUS2); //clear ADIF0
-		complete(&info->completion);
+
+		/* Reading DR also clears EOC status flag */
+		info->buffer[info->bufi] = readl(info->regs + DAT0) & DATMSK;
+		/* Check if IIO buffer enabled */
+		if (iio_buffer_enabled(indio_dev)) {
+			info->bufi++;
+			if (info->bufi >= info->num_conv) {
+				// disable ADCIEN0
+				writel(readl(info->regs + CTL) & ~ADCIEN0, info->regs + CTL);
+
+				iio_trigger_poll(indio_dev->trig);
+			}
+		} else {
+			complete(&info->completion);
+		}
+		return IRQ_HANDLED;
+
 	}
 
 	return IRQ_HANDLED;
@@ -185,7 +211,8 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 	timeout = wait_for_completion_interruptible_timeout
 			(&info->completion, MA35D1_ADC_TIMEOUT);
 
-	*val = readl(info->regs + DAT0) & DATMSK;
+	//*val = readl(info->regs + DAT0) & DATMSK;
+	*val = info->buffer[0];
 
 	mutex_unlock(&indio_dev->mlock);
 
@@ -195,19 +222,91 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 	return IIO_VAL_INT;
 }
 
-static int ma35d1_ring_preenable(struct iio_dev *indio_dev)
+static int ma35d1_adc_update_scan_mode(struct iio_dev *indio_dev,
+						const unsigned long *scan_mask)
 {
+	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+
+	info->num_conv = bitmap_weight(scan_mask, indio_dev->masklength);
+
 	return 0;
 }
 
+static int __ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
+{
+	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+
+	/* Reset adc buffer index */
+	info->bufi = 0;
+
+	// clear ADIF0
+	writel(1, info->regs + STATUS2);
+	// enable ADCIEN0
+	writel(readl(info->regs + CTL) | ADCIEN0, info->regs + CTL);
+	// enable ADINT0 for sample module 0
+	writel(readl(info->regs + INTSRC0) | 1, info->regs + INTSRC0);
+	// set reference voltage from external Vref pin
+	writel(readl(info->regs + REFADJCTL) | 1, info->regs + REFADJCTL);
+	// set sampling time
+	writel(readl(info->regs + SELSMP0) | 3, info->regs + SELSMP0);
+	// set trigger delay count
+	writel(readl(info->regs + SCTL0) | TRGDLYMSK, info->regs + SCTL0);
+	// Set trigger source to ADINT0
+	writel((readl(info->regs + SCTL0) & ~TRGSELMSK)
+		| ADINT0TRG, info->regs + SCTL0);
+
+	// software trigger sample module 0
+	writel(1, info->regs + SWTRG);
+
+	return 0;
+}
+
+static int ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
+{
+	int ret;
+
+	ret = iio_triggered_buffer_postenable(indio_dev);
+	if (ret < 0)
+		return ret;
+
+	ret = __ma35d1_adc_buffer_postenable(indio_dev);
+	if (ret < 0)
+		iio_triggered_buffer_predisable(indio_dev);
+
+	return ret;
+}
+
+static void __ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
+{
+	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+
+	// disable ADCIEN0
+	writel(readl(info->regs + CTL) & ~ADCIEN0, info->regs + CTL);
+	// Clear trigger source to software trigger, not ADINT0 trigger
+	writel((readl(info->regs + SCTL0) & ~TRGSELMSK), info->regs + SCTL0);
+}
+
+static int ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
+{
+	int ret;
+
+	__ma35d1_adc_buffer_predisable(indio_dev);
+
+	ret = iio_triggered_buffer_predisable(indio_dev);
+	if (ret < 0)
+		dev_err(&indio_dev->dev, "predisable failed\n");
+
+	return ret;
+}
+
 static const struct iio_buffer_setup_ops ma35d1_ring_setup_ops = {
-	.preenable = &ma35d1_ring_preenable,
-	.postenable = &iio_triggered_buffer_postenable,
-	.predisable = &iio_triggered_buffer_predisable,
+	.postenable = &ma35d1_adc_buffer_postenable,
+	.predisable = &ma35d1_adc_buffer_predisable,
 };
 
 static const struct iio_info ma35d1_adc_info = {
 	.read_raw = &ma35d1_adc_read_raw,
+	.update_scan_mode = &ma35d1_adc_update_scan_mode,
 };
 
 static int ma35d1_adc_probe(struct platform_device *pdev)
