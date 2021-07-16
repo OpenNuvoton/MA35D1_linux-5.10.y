@@ -7,6 +7,8 @@ Required properties:
 - reg: specifies physical base address and size of the registers.
 - clocks: enable EADC clock.
 - eadc-frequency: specifies EADC frequency.
+- eadc-channels: specifies EADC single-ended channels.
+- eadc-diff-channels: specifies EADC differential mode channels.
 
 Example:
 
@@ -15,5 +17,7 @@ eadc: eadc@40430000 {
 	reg = <0x0 0x40430000 0x0 0x10000>;
 	clocks = <&clk eadc_gate>;
 	eadc-frequency = <20000000>;
+	eadc-channels = <0>;
+	eadc-diff-channels = <3 7>;
 	status = "okay";
 };

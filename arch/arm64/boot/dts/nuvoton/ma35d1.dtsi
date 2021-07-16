@@ -1353,6 +1353,7 @@
 		interrupts = <GIC_SPI 65 IRQ_TYPE_LEVEL_HIGH>;
 		clock-enable = "eadc_gate";
 		eadc-frequency = <10000000>;
+		eadc-channels = <0>;
 		status = "disabled";
 	};
 

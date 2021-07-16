@@ -67,6 +67,7 @@
 #define REFADJCTL	0x150
 
 #define ADCEN		1
+#define DIFFEN		0x100
 #define PWRUPRDY	1
 #define ADCIEN0		4
 #define CHSELMSK	0xF
@@ -76,6 +77,8 @@
 #define ADINT0TRG	0x20000
 #define TRGSELPOS	16
 
+#define EADC_CH_MAX	9	/* max number of channels */
+#define EADC_CH_SZ	10	/* max channel name size */
 #define EADC_MAX_SP	16
 
 #define MA35D1_ADC_TIMEOUT	(msecs_to_jiffies(1000))
@@ -97,6 +100,11 @@
 	},						\
 }
 
+struct ma35d1_adc_diff_channel {
+	u32 vinp;
+	u32 vinn;
+};
+
 struct ma35d1_adc_device {
 	struct clk	*clk;
 	struct clk	*eclk;
@@ -107,6 +115,7 @@ struct ma35d1_adc_device {
 	u16		buffer[EADC_MAX_SP];
 	unsigned int	bufi;
 	unsigned int	num_conv;
+	char		chan_name[EADC_CH_MAX][EADC_CH_SZ];
 };
 
 static const struct iio_chan_spec ma35d1_adc_iio_channels[] = {
@@ -131,7 +140,6 @@ static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
 
 	channel = find_first_bit(indio_dev->active_scan_mask,
 				indio_dev->masklength);
-
 
 	/* reset buffer index */
 	info->bufi = 0;
@@ -189,6 +197,115 @@ static void ma35d1_adc_buffer_remove(struct iio_dev *idev)
 	iio_triggered_buffer_cleanup(idev);
 }
 
+static void nuvoton_adc_chan_init_one(struct iio_dev *indio_dev,
+					struct iio_chan_spec *chan, u32 vinp,
+					u32 vinn, int scan_index, bool differential)
+{
+	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+	char *name = info->chan_name[vinp];
+
+	chan->type = IIO_VOLTAGE;
+	chan->channel = vinp;
+	if (differential) {
+		chan->differential = 1;
+		chan->channel2 = vinn;
+		snprintf(name, EADC_CH_SZ, "in%d-in%d", vinp, vinn);
+	} else {
+		snprintf(name, EADC_CH_SZ, "in%d", vinp);
+	}
+	chan->datasheet_name = name;
+	chan->scan_index = scan_index;
+	chan->indexed = 1;
+	chan->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
+	chan->scan_type.sign = 'u';
+	chan->scan_type.realbits = 12;
+	chan->scan_type.storagebits = 16;
+
+}
+
+static int ma35d1_adc_chan_of_init(struct iio_dev *indio_dev)
+{
+	struct device_node *node = indio_dev->dev.of_node;
+	struct ma35d1_adc_diff_channel diff[EADC_CH_MAX];
+	struct property *prop;
+	const __be32 *cur;
+	struct iio_chan_spec *channels;
+	int scan_index = 0, num_channels = 0, num_diff = 0, ret, i;
+	u32 val;
+
+	ret = of_property_count_u32_elems(node, "eadc-channels");
+	if (ret > EADC_CH_MAX) {
+		dev_err(&indio_dev->dev, "Bad eadc-channels?\n");
+		return -EINVAL;
+	} else if (ret > 0) {
+		num_channels += ret;
+	}
+
+	ret = of_property_count_elems_of_size(node, "eadc-diff-channels",
+						sizeof(*diff));
+	if (ret > EADC_CH_MAX) {
+		dev_err(&indio_dev->dev, "Bad eadc-diff-channels?\n");
+		return -EINVAL;
+	} else if (ret > 0) {
+		int size = ret * sizeof(*diff) / sizeof(u32);
+
+		num_diff = ret;
+		num_channels += ret;
+		ret = of_property_read_u32_array(node, "eadc-diff-channels",
+						(u32 *)diff, size);
+		if (ret)
+			return ret;
+	}
+
+	if (!num_channels) {
+		dev_err(&indio_dev->dev, "No channels configured\n");
+		return -ENODATA;
+	}
+
+	channels = devm_kcalloc(&indio_dev->dev, num_channels,
+				sizeof(struct iio_chan_spec), GFP_KERNEL);
+	if (!channels)
+		return -ENOMEM;
+
+	of_property_for_each_u32(node, "eadc-channels", prop, cur, val) {
+		if (val >= EADC_CH_MAX) {
+			dev_err(&indio_dev->dev, "Invalid channel %d\n", val);
+			return -EINVAL;
+		}
+
+		/* Channel can't be configured both as single-ended & diff */
+		for (i = 0; i < num_diff; i++) {
+			if (val == diff[i].vinp) {
+				dev_err(&indio_dev->dev,
+					"channel %d miss-configured\n", val);
+				return -EINVAL;
+			}
+		}
+		nuvoton_adc_chan_init_one(indio_dev, &channels[scan_index], val,
+						0, scan_index, false);
+		scan_index++;
+	}
+
+	for (i = 0; i < num_diff; i++) {
+		if (diff[i].vinp >= EADC_CH_MAX||
+		    diff[i].vinn >= EADC_CH_MAX) {
+			dev_err(&indio_dev->dev, "Invalid channel in%d-in%d\n",
+				diff[i].vinp, diff[i].vinn);
+			return -EINVAL;
+		}
+		nuvoton_adc_chan_init_one(indio_dev, &channels[scan_index],
+						diff[i].vinp, diff[i].vinn, scan_index,
+						true);
+		scan_index++;
+	}
+
+	indio_dev->num_channels = scan_index;
+	indio_dev->channels = channels;
+
+	return 0;
+}
+
+
 static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 				struct iio_chan_spec const *chan,
 				int *val, int *val2, long mask)
@@ -204,6 +321,12 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 	// enable channel
 	writel((readl(info->regs + SCTL0) & ~CHSELMSK)
 		| chan->channel, info->regs + SCTL0);
+
+	// check if the channel is designated as differential channel
+	if (chan->differential)
+		writel((readl(info->regs + CTL) | DIFFEN), info->regs + CTL);
+	else
+		writel((readl(info->regs + CTL) & ~DIFFEN), info->regs + CTL);
 
 	// software trigger sample module 0
 	writel(1, info->regs + SWTRG);
@@ -222,14 +345,54 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 	return IIO_VAL_INT;
 }
 
+static int ma35d1_adc_conf_scan_seq(struct iio_dev *indio_dev,
+					const unsigned long *scan_mask)
+{
+	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+	const struct iio_chan_spec *chan;
+	u32 bit;
+	int i = 0;
+
+	for_each_set_bit(bit, scan_mask, indio_dev->masklength) {
+		chan = indio_dev->channels + bit;
+		/*
+		 * Assign one channel per Sample module
+		 */
+
+		dev_dbg(&indio_dev->dev, "%s chan %d to Sample module %d\n",
+			__func__, chan->channel, i);
+
+		// configure sample module channel select
+		writel((readl(info->regs + SCTL0 + (i << 2)) & ~CHSELMSK)
+			| chan->channel, info->regs + SCTL0 + (i << 2));
+		// check if the channel is designated as differential channel
+		if (chan->differential)
+			writel((readl(info->regs + CTL) | DIFFEN), info->regs + CTL);
+		else
+			writel((readl(info->regs + CTL) & ~DIFFEN), info->regs + CTL);
+
+		i++;
+		if (i > EADC_MAX_SP)
+			return -EINVAL;
+	}
+
+	if (!i)
+		return -EINVAL;
+
+	return 0;
+}
+
 static int ma35d1_adc_update_scan_mode(struct iio_dev *indio_dev,
 						const unsigned long *scan_mask)
 {
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+	int ret;
 
 	info->num_conv = bitmap_weight(scan_mask, indio_dev->masklength);
 
-	return 0;
+	ret = ma35d1_adc_conf_scan_seq(indio_dev, scan_mask);
+
+	return ret;
 }
 
 static int __ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
@@ -347,6 +510,7 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	}
 
 	indio_dev->dev.parent = &pdev->dev;
+	indio_dev->dev.of_node = pdev->dev.of_node;
 	indio_dev->name = dev_name(&pdev->dev);
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->info = &ma35d1_adc_info;
@@ -400,6 +564,10 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 			info->irq);
 		goto err_ret;
 	}
+
+	ret = ma35d1_adc_chan_of_init(indio_dev);
+	if (ret < 0)
+		return ret;
 
 	// enable ADCEN
 	writel(readl(info->regs + CTL) | ADCEN, info->regs + CTL);
