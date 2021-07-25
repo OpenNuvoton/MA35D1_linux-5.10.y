@@ -30,6 +30,7 @@
 
 static DEFINE_MUTEX(i2s_mutex);
 struct ma35d1_audio *ma35d1_i2s_data;
+EXPORT_SYMBOL(ma35d1_i2s_data);
 
 static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
                                 struct snd_pcm_hw_params *params,
