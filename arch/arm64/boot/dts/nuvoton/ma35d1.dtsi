@@ -100,6 +100,16 @@
 		//reg = <0x00000000 0x80000000 0 0x08000000>; /* DRAM space - 1, size : 128MB DRAM */
 	};
 
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		display_buf: display_buf@0 {
+			reg = <0x0 0x8C800000 0x0 0x3000000>; /* 48MiB */
+			no-map;
+		};
+	};
+
 	timer {
 		compatible = "arm,armv8-timer";
 		interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>, /* Physical Secure */
@@ -399,6 +409,8 @@
 		clock-frequency = <100000>;
 		resets = <&reset MA35D1_RESET_I2C1>;
 		status = "disable";
+		#address-cells = <1>;
+		#size-cells = <0>;
 	};
 
 	i2c2: i2c@40820000 {
@@ -1441,6 +1453,42 @@
 				vsync-len = <14>;
 				vfront-porch  = <21>;
 				vback-porch = <10>;
+			};
+
+			timing3: 2lane_1920x1080 {
+				clock-frequency = <148000000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <160>;
+				hfront-porch = <32>;
+				hback-porch = <48>;
+				vsync-len = <31>;
+				vfront-porch  = <5>;
+				vback-porch = <3>;
+			};
+
+			timing4: 4lane_1920x1080 {
+				clock-frequency = <150000000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <92>;
+				hfront-porch = <32>;
+				hback-porch = <48>;
+				vsync-len = <134>;
+				vfront-porch  = <5>;
+				vback-porch = <3>;
+			};
+
+			timing5: mipi_1920x1200 {
+				clock-frequency = <148000000>;
+				hactive = <1920>;
+				vactive = <1200>;
+				hsync-len = <16>;
+				hfront-porch = <32>;
+				hback-porch = <16>;
+				vsync-len = <2>;
+				vfront-porch  = <15>;
+				vback-porch = <18>;
 			};
 		};
 	};

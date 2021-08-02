@@ -121,6 +121,33 @@
 	pinctrl-0 = <&pinctrl_eadc0>;
 };
 
+&i2c1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c1>;
+	status = "disable";
+
+	lt8718: edp-bridge@66 {
+		compatible = "nvt, lt8718";
+		reg = <0x66>;
+		reset-gpios = <&gpiom 12 0x00>;
+		clocks = <&clk dcu_gate>;
+		nuvoton,disp = <&display>;
+		lane-count = <2>;
+		bl-gpios = <&gpiok 7 GPIO_ACTIVE_HIGH>;
+		pwr-gpios = <&gpiok 5 GPIO_ACTIVE_HIGH>;
+		bl-brightness = <100>;
+		status = "okay";
+	};
+
+	lt8918: mipi-bridge@40 {
+		compatible = "nvt, lt8918";
+		reg = <0x40>;
+		clocks = <&clk dcu_gate>;
+		nuvoton,disp = <&display>;
+		status = "disable";
+	};
+};
+
 &i2c2 {
 	status = "okay";
 	pinctrl-names = "default";
@@ -183,6 +210,7 @@
 &display {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_display0>;
+	memory-region = <&display_buf>;
 	status = "okay";
 };
 
@@ -300,6 +328,14 @@
 				<SYS_GPB_MFPL_PB5MFP_EADC0_CH5	&pcfg_default>,
 				<SYS_GPB_MFPL_PB6MFP_EADC0_CH6	&pcfg_default>,
 				<SYS_GPB_MFPL_PB7MFP_EADC0_CH7	&pcfg_default>;
+		};
+	};
+
+	i2c1 {
+		pinctrl_i2c1: i2c1grp{
+			nuvoton,pins =
+				<SYS_GPB_MFPH_PB10MFP_I2C1_SDA	&pcfg_default>,
+				<SYS_GPB_MFPH_PB11MFP_I2C1_SCL	&pcfg_default>;
 		};
 	};
 
