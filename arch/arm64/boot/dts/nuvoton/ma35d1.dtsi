@@ -108,6 +108,10 @@
 			reg = <0x0 0x8C800000 0x0 0x3000000>; /* 48MiB */
 			no-map;
 		};
+		vc8k_buf: vc8k_buf@0 {
+			reg = <0x0 0x8B000000 0x0 0x1800000>; /* 24MiB */
+			no-map;
+		};
 	};
 
 	timer {
@@ -303,10 +307,15 @@
 		clocks = <&clk vc8k_gate>;
 		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
+		memory-region = <&vc8k_buf>;
 		pp_out_enable = "yes";
-		pp_out_width = <1024>;
-		pp_out_height = <600>;
-		pp_out_format = "RGB888";   /* RGB888, RGB565, or YUV420P */
+		fb_width = <1024>;
+		fb_height = <600>;
+		fb_fmt = "RGB888";   /* RGB888, RGB565, or YUV420P */
+		vid_max_width = <1920>;
+		vid_max_height = <1080>;
+		vid_max_instance = <1>;
+		vid_refbuf_cnt = <6>;
 		status = "okay";
 	};
 
