@@ -1438,6 +1438,8 @@
 				vsync-len = <1>;
 				vfront-porch  = <23>;
 				vback-porch = <12>;
+				hsync-active = <1>;
+				vsync-active = <1>;
 			};
 
 			timing1: 800x480 {
@@ -1450,6 +1452,8 @@
 				vsync-len = <1>;
 				vfront-porch  = <22>;
 				vback-porch = <23>;
+				hsync-active = <1>;
+				vsync-active = <1>;
 			};
 
 			timing2: 1920x1080 {
@@ -1462,6 +1466,8 @@
 				vsync-len = <14>;
 				vfront-porch  = <21>;
 				vback-porch = <10>;
+				hsync-active = <1>;
+				vsync-active = <1>;
 			};
 
 			timing3: 2lane_1920x1080 {
@@ -1474,6 +1480,8 @@
 				vsync-len = <31>;
 				vfront-porch  = <5>;
 				vback-porch = <3>;
+				hsync-active = <1>;
+				vsync-active = <1>;
 			};
 
 			timing4: 4lane_1920x1080 {
@@ -1486,6 +1494,8 @@
 				vsync-len = <134>;
 				vfront-porch  = <5>;
 				vback-porch = <3>;
+				hsync-active = <1>;
+				vsync-active = <1>;
 			};
 
 			timing5: mipi_1920x1200 {
@@ -1498,6 +1508,22 @@
 				vsync-len = <2>;
 				vfront-porch  = <15>;
 				vback-porch = <18>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+
+			timing6: mipi_1024x600 {
+				clock-frequency = <54000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hsync-len = <20>;
+				hfront-porch = <160>;
+				hback-porch = <140>;
+				vsync-len = <3>;
+				vfront-porch = <12>;
+				vback-porch = <20>;
+				hsync-active = <0>;
+				vsync-active = <0>;
 			};
 		};
 	};
