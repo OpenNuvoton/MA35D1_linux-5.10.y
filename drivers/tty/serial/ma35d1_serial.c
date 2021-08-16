@@ -1323,6 +1323,11 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 	if (err)
 		return -ENOENT;
 
+	if(up->port.line != 0)
+	{
+		up->port.uartclk = clk_get_rate(clk);
+	}
+
 	if (of_property_read_u32_array(pdev->dev.of_node, "pdma-enable", val32, 1) != 0) {
 		dev_err(&pdev->dev, "can not get pdma-enable flag !\n");
 		return -EINVAL;
