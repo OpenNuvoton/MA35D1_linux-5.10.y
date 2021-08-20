@@ -10,6 +10,10 @@ Required properties:
 			Should be "clk dcu_gate" and "clk dcup_div"
 - resets : Display controller reset source.
 			Should be "reset MA35D1_RESET_DISP"
+
+- reset_offset_en : Reset on-screen buffer address offset to fb_release.
+			The default value is "no".
+
 - bits-per-pixel : Bits per Input pixel(16 or 32)
 - pixel-fmt : Input Formats (4:RGB565, 6:ARGB8, 8:UYVY, 17:NV12)
 - bus-width : Output width. Should be "24"

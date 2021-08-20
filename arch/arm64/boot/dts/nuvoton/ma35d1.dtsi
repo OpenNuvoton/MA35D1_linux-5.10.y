@@ -1409,6 +1409,8 @@
 		resets = <&reset MA35D1_RESET_DISP>;
 		status = "disabled";
 
+		reset_offset_en = "no";
+
 		//RGB interface
 		bits-per-pixel = <32>;
 		pixel-fmt = <6>; //6:RGB888 8:UYVY 17:NV12
