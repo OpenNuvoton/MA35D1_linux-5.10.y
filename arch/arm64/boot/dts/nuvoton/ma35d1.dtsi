@@ -164,6 +164,16 @@
 		status = "disabled";
 	};
 
+	uart11:serial@407B0000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x407B0000 0x0 0x10000>;
+		interrupts = <GIC_SPI 96 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart11_gate>;
+		port-number = <11>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
 	uart12:serial@407C0000 {
 		compatible = "nuvoton,ma35d1-uart";
 		reg = <0x0 0x407C0000 0x0 0x10000>;
