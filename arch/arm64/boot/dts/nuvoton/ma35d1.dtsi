@@ -154,6 +154,96 @@
 		status = "okay";
 	};
 
+	uart1:serial@40710000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40710000 0x0 0x10000>;
+		interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart1_gate>;
+		port-number = <1>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart2:serial@40720000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40720000 0x0 0x10000>;
+		interrupts = <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart2_gate>;
+		port-number = <2>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart3:serial@40730000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40730000 0x0 0x10000>;
+		interrupts = <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart3_gate>;
+		port-number = <3>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart4:serial@40740000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40740000 0x0 0x10000>;
+		interrupts = <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart4_gate>;
+		port-number = <4>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart5:serial@40750000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40750000 0x0 0x10000>;
+		interrupts = <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart5_gate>;
+		port-number = <5>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart6:serial@40760000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40760000 0x0 0x10000>;
+		interrupts = <GIC_SPI 91 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart6_gate>;
+		port-number = <6>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart7:serial@40770000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40770000 0x0 0x10000>;
+		interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart7_gate>;
+		port-number = <7>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart8:serial@40780000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40780000 0x0 0x10000>;
+		interrupts = <GIC_SPI 93 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart8_gate>;
+		port-number = <8>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart9:serial@40790000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40790000 0x0 0x10000>;
+		interrupts = <GIC_SPI 94 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart9_gate>;
+		port-number = <9>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
 	uart10:serial@407A0000 {
 		compatible = "nuvoton,ma35d1-uart";
 		reg = <0x0 0x407A0000 0x0 0x10000>;
@@ -200,6 +290,16 @@
 		interrupts = <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk uart14_gate>;
 		port-number = <14>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart15:serial@407F0000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x407F0000 0x0 0x10000>;
+		interrupts = <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk uart15_gate>;
+		port-number = <15>;
 		pdma-enable = <0>;
 		status = "disabled";
 	};
