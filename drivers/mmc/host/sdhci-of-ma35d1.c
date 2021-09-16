@@ -19,6 +19,14 @@
 #include <linux/reset.h>
 #include "sdhci-pltfm.h"
 
+#define MSHC_CTRL 0x508
+#define  CMD_CONFLICT_CHECK 0x1
+#define MBIU_CTRL 0x510
+#define  BURST_INCR_MASK 0xF
+#define  BURST_INCR16_EN 0x8
+#define  BURST_INCR8_EN 0x4
+#define  BURST_INCR4_EN 0x2
+#define  UNDEFL_INCR_EN 0x1
 #define SDH1VSTB (1<<17)
 
 #define BOUNDARY_OK(addr, len) \
@@ -146,9 +154,9 @@ void ma35d1_set_clock(struct sdhci_host *host, unsigned int clock)
 {
 	/* If clock > 100MHz, Need to set CMD_CONFIG_CHECK = 0 */
 	if (clock > 100000000)
-		sdhci_writew(host, sdhci_readw(host, 0x508)&~0x1, 0x508);
+		sdhci_writew(host, sdhci_readw(host, MSHC_CTRL)&~CMD_CONFLICT_CHECK, MSHC_CTRL);
 	else
-		sdhci_writew(host, sdhci_readw(host, 0x508)|0x1, 0x508);
+		sdhci_writew(host, sdhci_readw(host, MSHC_CTRL)|CMD_CONFLICT_CHECK, MSHC_CTRL);
 	sdhci_set_clock(host, clock);
 }
 
@@ -243,6 +251,9 @@ static int ma35d1_probe(struct platform_device *pdev)
 	err = sdhci_add_host(host);
 	if (err)
 		goto err_clk;
+
+	/* Enable INCR16 and INCR8 */
+	sdhci_writew(host, (sdhci_readw(host, MBIU_CTRL)&~BURST_INCR_MASK)|(BURST_INCR8_EN|BURST_INCR16_EN), MBIU_CTRL);
 
 	return 0;
 

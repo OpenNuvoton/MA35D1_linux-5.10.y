@@ -965,17 +965,17 @@
 				lable = "uboot-env";
 				reg = <0x300000 0xC0000>;
 			};
-			linux-device-tree@280000 {
-				lable = "linux-device-tree";
+			device-tree@3c0000 {
+				lable = "device-tree";
 				reg = <0x3C0000 0x40000>;
 			};
-			linux@300000 {
-				label = "linux";
-				reg = <0x400000 0xC00000>;
+			kernel@400000 {
+				label = "kernel";
+				reg = <0x400000 0x1800000>;
 			};
-			rootfs@e00000 {
+			rootfs@1c00000 {
 				label = "rootfs";
-				reg = <0x1000000 0x7000000>;
+				reg = <0x1C00000 0x6400000>;
 			};
 		};
 	};
@@ -1324,21 +1324,21 @@
 				label = "uboot";
 				reg = <0x0 0x300000>;
 			};
-			uboot-env@200000 {
+			uboot-env@300000 {
 				lable = "uboot-env";
 				reg = <0x300000 0xc0000>;
 			};
-			linux-device-tree@280000 {
-				lable = "linux-device-tree";
+			device-tree@3c0000 {
+				lable = "device-tree";
 				reg = <0x3c0000 0x40000>;
 			};
-			linux@300000 {
-				label = "linux";
-				reg = <0x400000 0xC00000>;
+			kernel@40000 {
+				label = "kernel";
+				reg = <0x400000 0x1800000>;
 			};
-			rootfs@e00000 {
+			rootfs@1c00000 {
 				label = "rootfs";
-				reg = <0x1000000 0x7000000>;
+				reg = <0x1c00000 0x6400000>;
 			};
 		};
 
