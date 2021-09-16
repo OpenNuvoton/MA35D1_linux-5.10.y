@@ -115,6 +115,10 @@ static const char *smc1_sel_clks[] = { "hxt", "pclk4", };
 
 static const char *kpi_sel_clks[] = { "hxt", "lxt", };
 
+static const struct clk_div_table ip_div_table[] = {
+	{ 0, 2 }, { 1, 4 }, { 2, 8 }, { 3, 16 }, { 0, 0 },
+};
+
 #if 0
 // ma35d1 clock source
 /*	0	*/	hxt, hxt_gate, lxt, lxt_gate, hirc, hirc_gate, lirc, lirc_gate,
@@ -232,22 +236,22 @@ static void __init ma35d1_init_clocks(struct device_node *clk_node)
 
 	// CAN0
 	clk[can0_mux] = ma35d1_clk_mux("can0_mux", clk_base+REG_CLK_CLKSEL4, 16, 1, can0_sel_clks, ARRAY_SIZE(can0_sel_clks));
-	clk[can0_div] = ma35d1_clk_divider("can0_div", "can0_mux", clk_base+REG_CLK_CLKDIV0, 0, 2);
+	clk[can0_div] = ma35d1_clk_divider_table("can0_div", "can0_mux", clk_base+REG_CLK_CLKDIV0, 0, 2, ip_div_table);
 	clk[can0_gate] = ma35d1_clk_gate("can0_gate", "can0_div", clk_base+REG_CLK_SYSCLK0, 8);
 
 	// CAN1
 	clk[can1_mux] = ma35d1_clk_mux("can1_mux", clk_base+REG_CLK_CLKSEL4, 17, 1, can1_sel_clks, ARRAY_SIZE(can1_sel_clks));
-	clk[can1_div] = ma35d1_clk_divider("can1_div", "can1_mux", clk_base+REG_CLK_CLKDIV0, 2, 2);
+	clk[can1_div] = ma35d1_clk_divider_table("can1_div", "can1_mux", clk_base+REG_CLK_CLKDIV0, 2, 2, ip_div_table);
 	clk[can1_gate] = ma35d1_clk_gate("can1_gate", "can1_div", clk_base+REG_CLK_SYSCLK0, 9);
 
 	// CAN2
 	clk[can2_mux] = ma35d1_clk_mux("can2_mux", clk_base+REG_CLK_CLKSEL4, 18, 1, can2_sel_clks, ARRAY_SIZE(can2_sel_clks));
-	clk[can2_div] = ma35d1_clk_divider("can2_div", "can2_mux", clk_base+REG_CLK_CLKDIV0, 4, 2);
+	clk[can2_div] = ma35d1_clk_divider_table("can2_div", "can2_mux", clk_base+REG_CLK_CLKDIV0, 4, 2, ip_div_table);
 	clk[can2_gate] = ma35d1_clk_gate("can2_gate", "can2_div", clk_base+REG_CLK_SYSCLK0, 10);
 
 	// CAN3
 	clk[can3_mux] = ma35d1_clk_mux("can3_mux", clk_base+REG_CLK_CLKSEL4, 19, 1, can3_sel_clks, ARRAY_SIZE(can3_sel_clks));
-	clk[can3_div] = ma35d1_clk_divider("can3_div", "can3_mux", clk_base+REG_CLK_CLKDIV0, 6, 2);
+	clk[can3_div] = ma35d1_clk_divider_table("can3_div", "can3_mux", clk_base+REG_CLK_CLKDIV0, 6, 2, ip_div_table);
 	clk[can3_gate] = ma35d1_clk_gate("can3_gate", "can3_div", clk_base+REG_CLK_SYSCLK0, 11);
 
 	// SDH0
@@ -280,8 +284,7 @@ static void __init ma35d1_init_clocks(struct device_node *clk_node)
 
 	// DCUP
 	clk[dcup_mux] = ma35d1_clk_mux("dcup_mux", clk_base+REG_CLK_CLKSEL0, 25, 1, dcup_sel_clks, ARRAY_SIZE(dcup_sel_clks));
-	//clk[dcup_div] = ma35d1_clk_divider("dcup_div", "dcup_mux", clk_base+REG_CLK_CLKDIV0, 24, 2);
-	clk[dcup_div] = ma35d1_clk_fixed_factor("dcup_div", "dcup_mux", 1, 2);// vpll/2
+	clk[dcup_div] = ma35d1_clk_divider_table("dcup_div", "dcup_mux", clk_base+REG_CLK_CLKDIV0, 24, 2, ip_div_table);
 
 	// EMAC0
 	clk[emac0_gate] = ma35d1_clk_gate("emac0_gate", "epll_div2", clk_base+REG_CLK_SYSCLK0, 27);
@@ -307,7 +310,7 @@ static void __init ma35d1_init_clocks(struct device_node *clk_node)
 
 	// WH0~1
 	clk[wh0_gate] = ma35d1_clk_gate("wh0_gate", "hclk0", clk_base+REG_CLK_SYSCLK1, 4);
-	clk[wh1_gate] = ma35d1_clk_gate("wh0_gate", "hclk0", clk_base+REG_CLK_SYSCLK1, 5);
+	clk[wh1_gate] = ma35d1_clk_gate("wh1_gate", "hclk0", clk_base+REG_CLK_SYSCLK1, 5);
 
 	// HWS
 	clk[hws_gate] = ma35d1_clk_gate("hws_gate", "hclk0", clk_base+REG_CLK_SYSCLK1, 6);
@@ -331,7 +334,7 @@ static void __init ma35d1_init_clocks(struct device_node *clk_node)
 
 	// CLKO
 	clk[cko_mux] = ma35d1_clk_mux("cko_mux", clk_base+REG_CLK_CLKSEL4, 24, 4, cko_sel_clks, ARRAY_SIZE(cko_sel_clks));
-	clk[cko_div] = ma35d1_clk_divider("cko_div", "cko_mux", clk_base+REG_CLK_CLKOCTL, 0, 4);
+	clk[cko_div] = ma35d1_clk_divider_pow2("cko_div", "cko_mux", clk_base+REG_CLK_CLKOCTL, 0, 4);
 	clk[cko_gate] = ma35d1_clk_gate("cko_gate", "cko_div", clk_base+REG_CLK_SYSCLK1, 13);
 
 	// GTMR todo

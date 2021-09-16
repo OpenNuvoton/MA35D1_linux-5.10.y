@@ -62,6 +62,24 @@ static inline struct clk *ma35d1_clk_divider(const char *name,
 	                            reg, shift, width, 0, &ma35d1_lock);
 }
 
+static inline struct clk *ma35d1_clk_divider_pow2(const char *name,
+        const char *parent,
+        void __iomem *reg, u8 shift,
+        u8 width)
+{
+	return clk_register_divider(NULL, name, parent, CLK_DIVIDER_POWER_OF_TWO,
+	                            reg, shift, width, 0, &ma35d1_lock);
+}
+
+static inline struct clk *ma35d1_clk_divider_table(const char *name,
+        const char *parent,
+        void __iomem *reg, u8 shift,
+        u8 width, const struct clk_div_table *table)
+{
+	return clk_register_divider_table(NULL, name, parent, 0,
+	                            reg, shift, width, 0, table, &ma35d1_lock);
+}
+
 static inline struct clk *ma35d1_clk_fixed_factor(const char *name,
         const char *parent,
         unsigned int mult,
