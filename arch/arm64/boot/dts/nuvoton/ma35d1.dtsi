@@ -883,12 +883,28 @@
 			drive-strength = <7>; /* 0 ~ 7 */
 		};
 
+		pcfg_sdhci_drive0_1_8V: pcfg-pcfg_sdhci_drive0_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <0>; /* 0 ~ 7 */
+		};
+
 		pcfg_sdhci_drive1_1_8V: pcfg-pcfg_sdhci_drive1_1_8V {
 			slew-rate = <0>; /* 0:normal, 1:high */
 			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
 			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
 			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
 			drive-strength = <1>; /* 0 ~ 7 */
+		};
+
+		pcfg_sdhci_drive4_1_8V: pcfg-pcfg_sdhci_drive4_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <4>; /* 0 ~ 7 */
 		};
 
 		pcfg_sdhci_drive7_1_8V: pcfg-pcfg_sdhci_drive7_1_8V {

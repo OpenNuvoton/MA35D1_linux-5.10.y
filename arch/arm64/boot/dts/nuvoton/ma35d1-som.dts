@@ -104,10 +104,10 @@
 
 &sdhci1 {
 	status = "okay";
-	pinctrl-names = "sdhci_3V3","sdhci_1V8";
-	pinctrl-0 = <&pinctrl_sdhci1_3_3V>;
+	pinctrl-names = "default";
 	pinctrl-1 = <&pinctrl_sdhci1_1_8V>;
-	vqmmc-supply = <&volt0_sdhci1>;
+	bus-width = <8>;
+	non-removable;
 };
 
 &adc0 {
@@ -439,18 +439,18 @@
 
 		pinctrl_sdhci1_1_8V: sdhci1_1_8Vgrp{
 			nuvoton,pins =
-				<SYS_GPJ_MFPL_PJ0MFP_eMMC1_DAT4	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ1MFP_eMMC1_DAT5	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ2MFP_eMMC1_DAT6	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ3MFP_eMMC1_DAT7	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ4MFP_SD1_WP	&pcfg_default>,
-				<SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>,
-				<SYS_GPJ_MFPL_PJ6MFP_eMMC1_CMD	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ7MFP_eMMC1_CLK	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPH_PJ8MFP_eMMC1_DAT0	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPH_PJ9MFP_eMMC1_DAT1	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPH_PJ10MFP_eMMC1_DAT2	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPH_PJ11MFP_eMMC1_DAT3	&pcfg_sdhci_drive7_1_8V>;
+				<SYS_GPJ_MFPL_PJ0MFP_eMMC1_DAT4	&pcfg_sdhci_drive0_1_8V>,
+				<SYS_GPJ_MFPL_PJ1MFP_eMMC1_DAT5	&pcfg_sdhci_drive0_1_8V>,
+				<SYS_GPJ_MFPL_PJ2MFP_eMMC1_DAT6	&pcfg_sdhci_drive0_1_8V>,
+				<SYS_GPJ_MFPL_PJ3MFP_eMMC1_DAT7	&pcfg_sdhci_drive0_1_8V>,
+				/* <SYS_GPJ_MFPL_PJ4MFP_SD1_WP	&pcfg_default>, */
+				/* <SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>, */
+				<SYS_GPJ_MFPL_PJ6MFP_eMMC1_CMD	&pcfg_sdhci_drive4_1_8V>,
+				<SYS_GPJ_MFPL_PJ7MFP_eMMC1_CLK	&pcfg_sdhci_drive4_1_8V>,
+				<SYS_GPJ_MFPH_PJ8MFP_eMMC1_DAT0	&pcfg_sdhci_drive4_1_8V>,
+				<SYS_GPJ_MFPH_PJ9MFP_eMMC1_DAT1	&pcfg_sdhci_drive4_1_8V>,
+				<SYS_GPJ_MFPH_PJ10MFP_eMMC1_DAT2	&pcfg_sdhci_drive4_1_8V>,
+				<SYS_GPJ_MFPH_PJ11MFP_eMMC1_DAT3	&pcfg_sdhci_drive4_1_8V>;
 		};
 	};
 
