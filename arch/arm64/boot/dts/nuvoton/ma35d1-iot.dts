@@ -82,6 +82,38 @@
 	};
 };
 
+&ccap0 {
+        status = "disabled";
+	port {
+		/* Parallel bus endpoint */
+		ccap0_1: endpoint {
+			remote-endpoint = <&hm1055_0>;
+			hsync-active = <0>;     /* Active low */
+			vsync-active = <0>;     /* Active low */
+			pclk-sample = <1>;      /* Rising */
+		};
+	};
+};
+
+&i2c_gpio0 {
+	status = "disabled";
+	hm1055@24 {
+		compatible = "himax,hm1055";
+		reg = <0x24>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ccap0>;
+		clocks = <&clk ccap0_gate>;
+		clock-names = "xclk";
+		reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
+		powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
+		port {
+			hm1055_0: endpoint {
+				remote-endpoint = <&ccap0_1>;
+			};
+		};
+	};
+};
+
 &gmac0 {
 	status = "okay";
 	pinctrl-names = "default";

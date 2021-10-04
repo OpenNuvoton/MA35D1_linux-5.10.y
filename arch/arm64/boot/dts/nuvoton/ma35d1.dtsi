@@ -1065,48 +1065,36 @@
 		reg = <0x0 0x40240000 0x0 0x2000>;
 		interrupts = <GIC_SPI 21 IRQ_TYPE_LEVEL_HIGH>;
 		status = "disabled";
-		port {
-			/* Parallel bus endpoint */
-			ccap0_1: endpoint {
-				remote-endpoint = <&hm1055_0>;
-				hsync-active = <0>;     /* Active low */
-				vsync-active = <0>;     /* Active low */
-				pclk-sample = <1>;      /* Rising */
-			};
-		};
 	};
 
-	i2c_gpio@0 {
+	i2c_gpio0: i2c-gpio-0 {
 		reg = <0 0 0 0>;
 		compatible = "i2c-gpio";
-		gpios =	<&gpiom 14 0 /* sda */
-			&gpiom 15 0 /* scl */
+		gpios = <&gpiom 14 0 /* sda */
+			 &gpiom 15 0 /* scl */
 			>;
 		i2c-gpio,delay-us = <20>;        /* ~100 kHz */
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "disabled";
-		hm1055@24 {
-			compatible = "himax,hm1055";
-			reg = <0x24>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_ccap0>;
-			clocks = <&clk ccap0_gate>;
-			clock-names = "xclk";
-			reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
-			powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
-			port {
-				hm1055_0: endpoint {
-					remote-endpoint = <&ccap0_1>;
-				};
-			};
-		};
 	};
 
 	ccap1: ccap@40250000{
 		compatible = "nuvoton,ma35d1-ccap";
 		reg = <0x0 0x40250000 0x0 0x2000>;
 		interrupts = <GIC_SPI 22 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	i2c_gpio1: i2c-gpio-1{
+		reg = <0 0 0 1>;
+		compatible = "i2c-gpio";
+		gpios = <&gpiol 4 0 /* sda */
+			 &gpiol 5 0 /* scl */
+			>;
+		i2c-gpio,delay-us = <20>;        /* ~100 kHz */
+		#address-cells = <1>;
+		#size-cells = <0>;
 		status = "disabled";
 	};
 
