@@ -82,6 +82,11 @@
 	};
 };
 
+&mem {
+	device_type = "memory";
+	reg = <0x00000000 0x80000000 0 0x08000000>; /* DRAM space - 1, size : 128MB DRAM */
+};
+
 &ccap0 {
         status = "disabled";
 	port {

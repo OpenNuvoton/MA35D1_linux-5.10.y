@@ -94,10 +94,9 @@
 		reg = <0x0  0x40460000  0x0  0x200>;
 	};
 
-	memory@80000000 {
+	mem: memory@80000000 {
 		device_type = "memory";
 		reg = <0x00000000 0x80000000 0 0x10000000>; /* DRAM space - 1, size : 256M DRAM */
-		//reg = <0x00000000 0x80000000 0 0x08000000>; /* DRAM space - 1, size : 128MB DRAM */
 	};
 
 	reserved-memory {
