@@ -364,9 +364,18 @@ static int nuvoton_aes_dma_start(struct nu_aes_dev *dd, int err)
 	dd->out_sg_off = 0;
 	dd->dma_len = 0;
 
-	/* program AES key */
-	for (i = 0; i < ctx->keylen / 4; i++)
-		nu_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
+	if (ctx->keylen == AES_KS_KEYLEN) {
+		/* configure AES Key from Key Store */
+		u8  *key = (u8 *)ctx->aes_key;
+
+		nu_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2],
+				AES_KSCTL);
+	} else {
+		/* program AES key */
+		nu_write_reg(dd, 0, AES_KSCTL);
+		for (i = 0; i < ctx->keylen / 4; i++)
+			nu_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
+	}
 
 	/* program AES IV */
 	if (iv) {
@@ -376,8 +385,6 @@ static int nuvoton_aes_dma_start(struct nu_aes_dev *dd, int err)
 		for (i = 0; i < 4; i++)
 			nu_write_reg(dd, 0, AES_IV(i));
 	}
-
-	nu_write_reg(dd, 0, AES_KSCTL);
 
 	nu_write_reg(dd, nu_read_reg(dd, INTEN) | (INTEN_AESIEN |
 			INTEN_AESEIEN), INTEN);
@@ -495,6 +502,23 @@ static int nuvoton_aes_setkey(struct crypto_ablkcipher *tfm, const u8 *key,
 
 	case AES_KEYSIZE_256:
 		ctx->keysz_sel = AES_KEYSZ_SEL_256;
+		break;
+
+	case AES_KS_KEYLEN:
+		/*
+		 *  AES key is from H/W Key Store
+		 *  key[0] select the key size
+		 *         0: AES-128
+		 *         1: AES-192
+		 *         2: AES-256
+		 *  key[1] select the Key Store storage type
+		 *         0: Key Store SRAM
+		 *         1: Key Store OTP
+		 *  key[2] select the Key Store key number
+		 */
+		if ((key[0] > 2) || (key[1] > 1) || (key[2] > 31))
+			return -EINVAL;
+		ctx->keysz_sel = (key[0] << AES_CTL_KEYSZ_OFFSET);
 		break;
 
 	default:
@@ -926,12 +950,21 @@ static int nuvoton_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 		}
 	}
 
-	/* program AES key */
-	for (i = 0; i < ctx->keylen/4; i++) {
-		key = ctx->aes_key[i];
-		key = ((key>>24)&0xff) | ((key>>8)&0xff00) |
-			((key&0xff00)<<8) | (key<<24);
-		nu_write_reg(dd, key, AES_KEY(i));
+	if (ctx->keylen == AES_KS_KEYLEN) {
+		/* configure AES Key from Key Store */
+		u8  *key = (u8 *)ctx->aes_key;
+
+		nu_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2],
+				AES_KSCTL);
+	} else {
+		/* program AES key */
+		nu_write_reg(dd, 0, AES_KSCTL);
+		for (i = 0; i < ctx->keylen/4; i++) {
+			key = ctx->aes_key[i];
+			key = ((key>>24)&0xff) | ((key>>8)&0xff00) |
+				((key&0xff00)<<8) | (key<<24);
+			nu_write_reg(dd, key, AES_KEY(i));
+		}
 	}
 
 	/* clear AES IV registers */
@@ -998,6 +1031,23 @@ static int nuvoton_aes_gcm_setkey(struct crypto_aead *tfm,
 
 	case AES_KEYSIZE_256:
 		ctx->keysz_sel = AES_KEYSZ_SEL_256;
+		break;
+
+	case AES_KS_KEYLEN:
+		/*
+		 *  AES key is from H/W Key Store
+		 *  key[0] select the key size
+		 *         0: AES-128
+		 *         1: AES-192
+		 *         2: AES-256
+		 *  key[1] select the Key Store storage type
+		 *         0: Key Store SRAM
+		 *         1: Key Store OTP
+		 *  key[2] select the Key Store key number
+		 */
+		if ((key[0] > 2) || (key[1] > 1) || (key[2] > 31))
+			return -EINVAL;
+		ctx->keysz_sel = (0x0 << AES_CTL_KEYSZ_OFFSET);
 		break;
 
 	default:
@@ -1213,9 +1263,18 @@ static int nuvoton_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 	for (i = 0; i < 4; i++)
 		nu_write_reg(dd, *((u32 *)&ctr[i*4]), AES_IV(i));
 
-	/* program AES key */
-	for (i = 0; i < ctx->keylen/4; i++)
-		nu_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
+	if (ctx->keylen == AES_KS_KEYLEN) {
+		/* configure AES Key from Key Store */
+		u8  *key = (u8 *)ctx->aes_key;
+
+		nu_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2],
+				AES_KSCTL);
+	} else {
+		/* program AES key */
+		nu_write_reg(dd, 0, AES_KSCTL);
+		for (i = 0; i < ctx->keylen/4; i++)
+			nu_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
+	}
 
 	nu_write_reg(dd, nu_read_reg(dd, INTEN) | (INTEN_AESIEN |
 			INTEN_AESEIEN), INTEN);
@@ -1261,34 +1320,6 @@ static int nuvoton_aes_ccm_decrypt(struct aead_request *req)
 	return nuvoton_aes_ccm_crypt(req, 0);
 }
 
-static int nuvoton_aes_ccm_setkey(struct crypto_aead *tfm, const u8 *key,
-				  unsigned int keylen)
-{
-	struct nu_aes_base_ctx  *ctx = crypto_aead_ctx(tfm);
-
-	switch (keylen) {
-	case AES_KEYSIZE_128:
-		ctx->keysz_sel = AES_KEYSZ_SEL_128;
-		break;
-
-	case AES_KEYSIZE_192:
-		ctx->keysz_sel = AES_KEYSZ_SEL_192;
-		break;
-
-	case AES_KEYSIZE_256:
-		ctx->keysz_sel = AES_KEYSZ_SEL_256;
-		break;
-
-	default:
-		pr_err("[%s]: Unsupported keylen %d!\n", __func__, keylen);
-		crypto_aead_set_flags(tfm, CRYPTO_TFM_RES_BAD_KEY_LEN);
-		return -EINVAL;
-	}
-	ctx->keylen = keylen;
-	memcpy(ctx->aes_key, key, keylen);
-	return 0;
-}
-
 static int nuvoton_aes_ccm_setauthsize(struct crypto_aead *aead, u32 authsize)
 {
 	struct nu_aes_base_ctx *ctx = crypto_aead_ctx(aead);
@@ -1332,7 +1363,7 @@ static void nuvoton_aes_ccm_exit(struct crypto_aead *aead)
 
 static struct aead_alg  nuvoton_aes_ccm_alg[] = {
 {
-	.setkey		= nuvoton_aes_ccm_setkey,
+	.setkey		= nuvoton_aes_gcm_setkey,  /* same routine as GCM */
 	.setauthsize	= nuvoton_aes_ccm_setauthsize,
 	.encrypt	= nuvoton_aes_ccm_encrypt,
 	.decrypt	= nuvoton_aes_ccm_decrypt,

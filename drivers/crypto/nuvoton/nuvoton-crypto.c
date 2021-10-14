@@ -116,11 +116,14 @@ static irqreturn_t nuvoton_crypto_irq(int irq, void *data)
 					(struct nuvoton_crypto_dev *)data;
 	struct nu_aes_dev  *aes_dd = &nu_cryp_dev->aes_dd;
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
-	u32  status, ret = IRQ_NONE;
+	u32  status, aes_sts, ret = IRQ_NONE;
 
 	status = readl_relaxed(nu_cryp_dev->reg_base + INTSTS);
 
 	if (status & (INTSTS_AESIF | INTSTS_AESEIF)) {
+		aes_sts = readl_relaxed(nu_cryp_dev->reg_base + AES_STS);
+		if (aes_sts & (AES_STS_KSERR | AES_STS_BUSERR))
+			pr_err("AES H/W error: AES_STS = 0x%x!\n", aes_sts);
 		writel_relaxed(INTSTS_AESIF | INTSTS_AESEIF,
 				nu_cryp_dev->reg_base + INTSTS);
 		tasklet_schedule(&aes_dd->done_task);

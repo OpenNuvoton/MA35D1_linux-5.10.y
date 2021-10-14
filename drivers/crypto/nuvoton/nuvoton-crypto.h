@@ -318,6 +318,7 @@
 #define AES_BUFF_SIZE		(PAGE_SIZE)
 #define SHA_BUFF_SIZE		(PAGE_SIZE)
 #define SHA_FDBCK_SIZE		(HMAC_FDBCK_WCNT * 4)
+#define AES_KS_KEYLEN		17
 
 /*-------------------------------------------------------------------------*/
 /*   AES                                                                   */
