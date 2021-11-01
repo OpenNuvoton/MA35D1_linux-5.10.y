@@ -17,7 +17,7 @@ Required properties:
                 property in the client node is the mailbox channel index.
 
 Optional properties:
-- wakeup-source: Flag to indicate whether this device can wake up the system
+- enable-wakeup: Flag to indicate whether this device can wake up the system
 
 
 
@@ -26,7 +26,7 @@ Example:
 		compatible = "nuvoton,ma35d1-wormhole";
 		reg = <0x0 0x403A0000 0x0 0x1000>;
 		interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
-		wakeup-source;
+		enable-wakeup;
 		#mbox-cells = <1>;
 		status = "okay";
 	};
