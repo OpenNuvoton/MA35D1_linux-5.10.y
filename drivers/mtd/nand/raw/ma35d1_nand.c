@@ -39,7 +39,7 @@
 
 /* NAND-type Flash Registers */
 #define REG_NFI_NANDCTL		(0x8A0)	/* NAND Flash Control Register */
-#define NFI_NANDTMCTL		(0x8A4)	/* NAND Flash Timing Control Register */
+#define REG_NFI_NANDTMCTL	(0x8A4)	/* NAND Flash Timing Control Register */
 #define REG_NFI_NANDINTEN	(0x8A8)	/* NAND Flash Interrupt Enable Register */
 #define REG_NFI_NANDINTSTS	(0x8AC)	/* NAND Flash Interrupt Status Register */
 #define REG_NFI_NANDCMD		(0x8B0)	/* NAND Flash Command Port Register */
@@ -495,10 +495,16 @@ static inline int ma35d1_nand_dma_transfer(struct nand_chip *chip, const u_char 
 	struct ma35d1_nand_info *nand = nand_get_controller_data(chip);
 	dma_addr_t dma_addr;
 	int ret;
+	unsigned long timeo = jiffies + HZ/2;
 
 	writel(readl(nand->base+REG_NFI_NANDCTL) & (~0x02000000), nand->base+REG_NFI_NANDCTL);
 	// For save, wait DMAC to ready
-	while ( readl(nand->base+REG_NFI_DMACTL) & 0x200 );
+	while (1) {
+		if ((readl(nand->base+REG_NFI_DMACTL) & 0x200) == 0)
+			break;
+		if (timeo < jiffies)
+			return -ETIMEDOUT;
+	}
 
 	// Reinitial dmac
 	ma35d1_nand_dmac_init(nand);
@@ -866,7 +872,12 @@ static int ma35d1_nand_attach_chip(struct nand_chip *chip)
 
 	//Set PSize bits of SMCSR register to select NAND card page size
 	reg = readl(host->base+REG_NFI_NANDCTL) & (~0x30000);
-	writel(reg | (mtd->writesize << 5), host->base+REG_NFI_NANDCTL);
+	if (mtd->writesize == 2048)
+		writel(reg | 0x10000, host->base+REG_NFI_NANDCTL);
+	else if (mtd->writesize == 4096)
+		writel(reg | 0x20000, host->base+REG_NFI_NANDCTL);
+	else if (mtd->writesize == 8192)
+		writel(reg | 0x30000, host->base+REG_NFI_NANDCTL);
 
 	if (chip->ecc.strength == 0) {
 		host->eBCHAlgo = eBCH_NONE; /* No ECC */
@@ -1029,9 +1040,16 @@ static int ma35d1_nand_remove(struct platform_device *pdev)
 static int ma35d1_nand_suspend(struct platform_device *pdev, pm_message_t pm)
 {
 	struct ma35d1_nand_info *ma35d1_nand = platform_get_drvdata(pdev);
+	unsigned long timeo = jiffies + HZ/2;
 
 	// For save, wait DMAC to ready
-	while ( readl(ma35d1_nand->base+REG_NFI_DMACTL) & 0x200 );
+	while (1) {
+		if ((readl(ma35d1_nand->base+REG_NFI_DMACTL) & 0x200) == 0)
+			break;
+		if (timeo < jiffies)
+			return -ETIMEDOUT;
+	}
+
 	clk_disable(ma35d1_nand->clk);
 
 	return 0;
