@@ -814,7 +814,8 @@ static int ma35d1serial_startup(struct uart_port *port)
 	 * Now, initialize the UART
 	 */
 
-	serial_out(up, UART_REG_FCR, serial_in(up, UART_REG_FCR) | 0x10); // Trigger level 4 byte
+	// FIFO trigger level 4 byte // RTS trigger level 8 bytes
+	serial_out(up, UART_REG_FCR, serial_in(up, UART_REG_FCR) | 0x10 | 0x20000);
 
 	serial_out(up, UART_REG_LCR, 0x7); // 8 bit
 	serial_out(up, UART_REG_TOR, 0x40);

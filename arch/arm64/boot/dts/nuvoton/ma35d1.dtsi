@@ -615,7 +615,7 @@
 
 	rpmsg {
 		compatible = "nuvoton,ma35d1-rpmsg";
-		share-mem-addr = <0x24000000>;
+		share-mem-addr = <0x2401ff00>;
 		mboxes = <&wormhole 2>;
 		tx-smem-size = <128>;
 		rx-smem-size = <128>;

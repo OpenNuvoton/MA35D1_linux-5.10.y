@@ -83,6 +83,11 @@ static void ma35d1_rpmsg_recv_from_remote(struct mbox_client *cl, void *msg)
 
 	u32 *data = (u32 *)msg;
 
+	if(ept == NULL) {
+		dev_err(&priv->dev, "endpoint not set !! \n");
+		return;
+	}
+
 	switch (data[0]) {
 		case COMMAND_RECEIVE_MSG:
 			ret = ept->cb(ept->rpdev, priv->rx_smem_start_addr, data[1], ept->priv, RPMSG_ADDR_ANY);
