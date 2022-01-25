@@ -606,6 +606,11 @@
 		status = "okay";
 	};
 
+	misctrl {
+		compatible	= "nuvoton,ma35d1-misctrl";
+		status = "disabled";
+	};
+
 	rproc {
 		compatible	= "nuvoton, ma35d1-rproc";
 		mboxes = <&wormhole 1>;

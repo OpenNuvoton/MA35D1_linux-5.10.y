@@ -60,4 +60,5 @@ obj-$(CONFIG_HISI_HIKEY_USB)	+= hisi_hikey_usb.o
 obj-$(CONFIG_MA35D1_KS)        += ma35d1_ks.o
 obj-$(CONFIG_MA35D1_TIMER)     += ma35d1-timer.o
 obj-$(CONFIG_MA35D1_EBI)       += ma35d1-ebi.o
+obj-$(CONFIG_MA35D1_MISCTRL)           += ma35d1_misctrl.o
 
