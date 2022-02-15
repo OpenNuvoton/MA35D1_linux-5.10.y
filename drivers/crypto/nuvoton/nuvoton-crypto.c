@@ -119,7 +119,6 @@ static irqreturn_t nuvoton_crypto_irq(int irq, void *data)
 	u32  status, aes_sts, ret = IRQ_NONE;
 
 	status = readl_relaxed(nu_cryp_dev->reg_base + INTSTS);
-
 	if (status & (INTSTS_AESIF | INTSTS_AESEIF)) {
 		aes_sts = readl_relaxed(nu_cryp_dev->reg_base + AES_STS);
 		if (aes_sts & (AES_STS_KSERR | AES_STS_BUSERR))
@@ -234,9 +233,11 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 		if (!strcmp("yes", str))
 			nu_cryp_dev->ecc_ioctl = true;
 	}
-	err = nuvoton_ecc_probe(dev, nu_cryp_dev);
-	if (err)
-		dev_err(dev, "failed to init ECC!\n");
+	if (nu_cryp_dev->use_optee == false) {
+		err = nuvoton_ecc_probe(dev, nu_cryp_dev);
+		if (err)
+			dev_err(dev, "failed to init ECC!\n");
+	}
 #endif
 
 #ifdef CONFIG_CRYPTO_RSA
@@ -245,9 +246,11 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 		if (!strcmp("yes", str))
 			nu_cryp_dev->rsa_ioctl = true;
 	}
-	err = nuvoton_rsa_probe(dev, nu_cryp_dev);
-	if (err)
-		dev_err(dev, "failed to init RSA!\n");
+	if (nu_cryp_dev->use_optee == false) {
+		err = nuvoton_rsa_probe(dev, nu_cryp_dev);
+		if (err)
+			dev_err(dev, "failed to init RSA!\n");
+	}
 #endif
 	return 0;
 }

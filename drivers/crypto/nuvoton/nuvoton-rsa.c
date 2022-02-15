@@ -740,7 +740,6 @@ int nuvoton_rsa_probe(struct device *dev,
 #ifdef CONFIG_OPTEE
 	rsa_dd->use_optee = nu_cryp_dev->use_optee;
 	rsa_dd->tee_cdev = nu_cryp_dev->tee_cdev;
-
 	if (rsa_dd->use_optee) {
 		if (optee_rsa_open(rsa_dd) != 0)
 			return -ENODEV;

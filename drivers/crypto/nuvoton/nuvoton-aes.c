@@ -228,7 +228,6 @@ static int nuvoton_aes_complete(struct nu_aes_dev *dd, int err)
 		inv_arg.func = PTA_CMD_CRYPTO_CLOSE_SESSION;
 		inv_arg.session = dd->session_id;
 		inv_arg.num_params = 4;
-
 		/* Fill invoke cmd params */
 		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
@@ -887,7 +886,6 @@ static struct crypto_alg   nuvoton_aes_algs[] = {
 #endif
 };   /* nuvoton_aes_algs */
 
-
 /*------------------------------------------------------------------------*/
 /*                                                                        */
 /*  AES GCM mode                                                          */
@@ -1080,8 +1078,40 @@ static int nuvoton_aes_gcm_init(struct crypto_aead *aead)
 		return -ENODEV;
 
 #ifdef CONFIG_OPTEE
-	if (aes_dd->use_optee == true)
-		return optee_aes_open(aes_dd);
+	if (aes_dd->use_optee == true) {
+		struct tee_ioctl_invoke_arg inv_arg;
+		struct tee_param param[4];
+		int  err;
+
+		err = optee_aes_open(aes_dd);
+		if (err != 0)
+			return err;
+
+		/*
+		 * Open a crypto session
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_OPEN_SESSION function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_OPEN_SESSION;
+		inv_arg.session = aes_dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT;
+		param[0].u.value.a = C_CODE_AES;
+
+		err = tee_client_invoke_func(aes_dd->octx, &inv_arg, param);
+		if ((err < 0) || (inv_arg.ret != 0)) {
+			pr_err("PTA_CMD_CRYPTO_OPEN_SESSION err: %x\n",
+				inv_arg.ret);
+			optee_aes_close(aes_dd);
+			return -EINVAL;
+		}
+		aes_dd->crypto_session_id = param[1].u.value.a;
+	}
 #endif
 	return 0;
 }
@@ -1093,9 +1123,31 @@ static void nuvoton_aes_gcm_exit(struct crypto_aead *aead)
 	struct nu_aes_dev  *aes_dd;
 
 	aes_dd = nuvoton_aes_find_dev(&ctx->base);
-	if (aes_dd) {
-		if (aes_dd->use_optee)
-			optee_aes_close(aes_dd);
+	if (aes_dd && (aes_dd->use_optee)) {
+		struct tee_ioctl_invoke_arg inv_arg;
+		struct tee_param param[4];
+
+		/*
+		 * Close the crypto session
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_CLOSE_SESSION function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_CLOSE_SESSION;
+		inv_arg.session = aes_dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = C_CODE_AES;
+		param[1].u.value.a = aes_dd->crypto_session_id;
+
+		tee_client_invoke_func(aes_dd->octx, &inv_arg, param);
+
+		optee_aes_close(aes_dd);
 	}
 #endif
 }
@@ -1341,8 +1393,40 @@ static int nuvoton_aes_ccm_init(struct crypto_aead *aead)
 		return -ENODEV;
 
 #ifdef CONFIG_OPTEE
-	if (aes_dd->use_optee == true)
-		return optee_aes_open(aes_dd);
+	if (aes_dd->use_optee == true) {
+		struct tee_ioctl_invoke_arg inv_arg;
+		struct tee_param param[4];
+		int  err;
+
+		err = optee_aes_open(aes_dd);
+		if (err != 0)
+			return err;
+
+		/*
+		 * Open a crypto session
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_OPEN_SESSION function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_OPEN_SESSION;
+		inv_arg.session = aes_dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT;
+		param[0].u.value.a = C_CODE_AES;
+
+		err = tee_client_invoke_func(aes_dd->octx, &inv_arg, param);
+		if ((err < 0) || (inv_arg.ret != 0)) {
+			pr_err("PTA_CMD_CRYPTO_OPEN_SESSION err: %x\n",
+				inv_arg.ret);
+			optee_aes_close(aes_dd);
+			return -EINVAL;
+		}
+		aes_dd->crypto_session_id = param[1].u.value.a;
+	}
 #endif
 	return 0;
 }
@@ -1354,9 +1438,31 @@ static void nuvoton_aes_ccm_exit(struct crypto_aead *aead)
 	struct nu_aes_dev  *aes_dd;
 
 	aes_dd = nuvoton_aes_find_dev(&ctx->base);
-	if (aes_dd) {
-		if (aes_dd->use_optee)
-			optee_aes_close(aes_dd);
+	if (aes_dd && (aes_dd->use_optee)) {
+		struct tee_ioctl_invoke_arg inv_arg;
+		struct tee_param param[4];
+
+		/*
+		 * Close the crypto session
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_CLOSE_SESSION function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_CLOSE_SESSION;
+		inv_arg.session = aes_dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = C_CODE_AES;
+		param[1].u.value.a = aes_dd->crypto_session_id;
+
+		tee_client_invoke_func(aes_dd->octx, &inv_arg, param);
+
+		optee_aes_close(aes_dd);
 	}
 #endif
 }
@@ -1403,11 +1509,43 @@ static void nuvoton_aes_done_task(unsigned long data)
 	(void)dd->resume(dd, 0);
 }
 
+static int nuvoton_register_gcm_ccm(struct device *dev)
+{
+	int err;
+
+	/*
+	 *  Register AES GCM algorithms
+	 */
+	err = crypto_register_aeads(nuvoton_aes_gcm_alg,
+					ARRAY_SIZE(nuvoton_aes_gcm_alg));
+	if (err) {
+		crypto_unregister_algs(nuvoton_aes_algs,
+					ARRAY_SIZE(nuvoton_aes_algs));
+		dev_err(dev, "Could not register nuvoton_aes_gcm_algs!\n");
+		return err;
+	}
+
+	/*
+	 *  Register AES CCM algorithms
+	 */
+	err = crypto_register_aeads(nuvoton_aes_ccm_alg,
+					ARRAY_SIZE(nuvoton_aes_ccm_alg));
+	if (err) {
+		crypto_unregister_algs(nuvoton_aes_algs,
+					ARRAY_SIZE(nuvoton_aes_algs));
+		crypto_unregister_aeads(nuvoton_aes_gcm_alg,
+					ARRAY_SIZE(nuvoton_aes_gcm_alg));
+		dev_err(dev, "Could not register nuvoton_aes_ccm_algs!\n");
+		return err;
+	}
+	return 0;
+}
+
 int nuvoton_aes_probe(struct device *dev,
 		      struct nuvoton_crypto_dev *nu_cryp_dev)
 {
-	struct nu_aes_dev  *aes_dd = &nu_cryp_dev->aes_dd;
-	int   err;
+	struct nu_aes_dev *aes_dd = &nu_cryp_dev->aes_dd;
+	int err;
 
 	aes_dd->dev = dev;
 	aes_dd->reg_base = nu_cryp_dev->reg_base;
@@ -1435,39 +1573,17 @@ int nuvoton_aes_probe(struct device *dev,
 	 *  Register AES/SM4 algorithms
 	 */
 	err = crypto_register_algs(nuvoton_aes_algs,
-					ARRAY_SIZE(nuvoton_aes_algs));
+				   ARRAY_SIZE(nuvoton_aes_algs));
 	if (err) {
 		dev_err(dev, "Could not register nuvoton_aes_algs!\n");
 		err = -EINVAL;
 		goto err_algs;
 	}
 
-	/*
-	 *  Register AES GCM algorithms
-	 */
-	err = crypto_register_aeads(nuvoton_aes_gcm_alg,
-					ARRAY_SIZE(nuvoton_aes_gcm_alg));
-	if (err) {
-		crypto_unregister_algs(nuvoton_aes_algs,
-					ARRAY_SIZE(nuvoton_aes_algs));
-		dev_err(dev, "Could not register nuvoton_aes_gcm_algs!\n");
-		err = -EINVAL;
-		goto err_algs;
-	}
-
-	/*
-	 *  Register AES CCM algorithms
-	 */
-	err = crypto_register_aeads(nuvoton_aes_ccm_alg,
-					ARRAY_SIZE(nuvoton_aes_ccm_alg));
-	if (err) {
-		crypto_unregister_algs(nuvoton_aes_algs,
-					ARRAY_SIZE(nuvoton_aes_algs));
-		crypto_unregister_aeads(nuvoton_aes_gcm_alg,
-					ARRAY_SIZE(nuvoton_aes_gcm_alg));
-		dev_err(dev, "Could not register nuvoton_aes_ccm_algs!\n");
-		err = -EINVAL;
-		goto err_algs;
+	if (aes_dd->use_optee == false) {
+		err = nuvoton_register_gcm_ccm(dev);
+		if (err)
+			goto err_algs;
 	}
 
 	pr_info("MA35D1 Crypto AES engine enabled.\n");
@@ -1479,7 +1595,6 @@ err_algs:
 	spin_unlock(&nu_aes.lock);
 	tasklet_kill(&aes_dd->done_task);
 	tasklet_kill(&aes_dd->queue_task);
-
 	return err;
 }
 

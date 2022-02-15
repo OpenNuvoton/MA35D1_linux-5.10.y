@@ -318,6 +318,7 @@
 #define AES_BUFF_SIZE		(PAGE_SIZE)
 #define SHA_BUFF_SIZE		(PAGE_SIZE)
 #define SHA_FDBCK_SIZE		(HMAC_FDBCK_WCNT * 4)
+#define HMAC_KEY_BUFF_SIZE	(1024)
 #define AES_KS_KEYLEN		17
 
 /*-------------------------------------------------------------------------*/
@@ -400,6 +401,8 @@ struct nu_sha_ctx {
 	struct nu_sha_dev  *dd;
 	u32	    hash_mode;
 	int	    hmac_key_len;	   /* HMAC key length in bytes       */
+	int	    keybufcnt;
+	u8	    keybuf[HMAC_KEY_BUFF_SIZE] __aligned(32);
 	int         bufcnt;                /* byte count in buffer           */
 	u8	    buffer[SHA_BUFF_SIZE] __aligned(32); /* data buffer      */
 	dma_addr_t  dma_buff;		   /* DMA mapping address of buffer[]*/
@@ -620,7 +623,7 @@ struct nuvoton_crypto_dev {
 /*-------------------------------------------------------------------------*/
 /*   OP-TEE                                                                */
 /*-------------------------------------------------------------------------*/
-#define CRYPTO_SHM_SIZE		(0x4000)
+#define CRYPTO_SHM_SIZE		(0x1000)
 
 #define TEE_ERROR_CRYPTO_BUSY		0x00000001
 #define TEE_ERROR_CRYPTO_FAIL		0x00000002
