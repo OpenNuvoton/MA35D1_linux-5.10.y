@@ -240,7 +240,7 @@ static int ma35d1wdt_probe(struct platform_device *pdev)
 
 	ma35d1_wdt->irq = platform_get_irq(pdev, 0);
 
-	of_property_read_u32(pdev->dev.of_node, "wakup-enable", &ma35d1_wdt->wkupen);
+	of_property_read_u32(pdev->dev.of_node, "wakeup-enable", &ma35d1_wdt->wkupen);
 
 	/* Initialize struct watchdog_device. */
 	ma35d1_wdd = ma35d1_wdt->wdog;

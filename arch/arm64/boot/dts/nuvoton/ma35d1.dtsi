@@ -1655,7 +1655,7 @@
 		nuvoton,clk = <&clk>;
 		clock-enable = "wdt1_gate";
 		clock-names = "wdt1_mux";
-		wakup-enable = <0>;
+		wakeup-enable = <0>;
 		status = "disabled";
 	};
 
