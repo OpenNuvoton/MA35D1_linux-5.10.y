@@ -1338,7 +1338,7 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 
 	up->port.irq=platform_get_irq(pdev, 0);
 	up->port.dev            = &pdev->dev;
-	up->port.flags          = ASYNC_BOOT_AUTOCONF;
+	up->port.flags          = UPF_BOOT_AUTOCONF;
 
 	up->port.rs485_config = ma35d1serial_config_rs485;
 
