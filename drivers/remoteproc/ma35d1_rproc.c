@@ -26,9 +26,7 @@
 #include <linux/regmap.h>
 #include <linux/remoteproc.h>
 #include <linux/reset.h>
-
-#include "remoteproc_internal.h"
-
+#include "remoteproc_internal.h" 
 
 enum ma35d1_rproc_messages {
 	RPROC_ECHO_REPLY	= 0xFF000000,
@@ -41,8 +39,14 @@ struct ma35d1_rproc {
 	struct mbox_chan        *channel;
 	struct mbox_client      mbox_client1;
 	struct reset_control    *m4_rst;
-	void   __iomem          *da_to_va_addr;
+	void   __iomem          *da_to_va_addr_1;
+	void   __iomem          *da_to_va_addr_2;
 	u32    da_to_va_offset;
+	void   *sram_va;
+	void   *ddr_va;
+	uint32_t sram_size;
+	uint32_t ddr_size;
+	uint32_t ddr_addr;
 };
 
 static void ma35d1_rx_callback(struct mbox_client *cl, void *msg)
@@ -120,9 +124,25 @@ static void *ma35d1_m4_rproc_da_to_va(struct rproc *rproc, u64 da, int len)
 	if (len <= 0)
 		return NULL;
 
-	va = (__force void *)(nproc->da_to_va_addr + nproc->da_to_va_offset);
+	va = (__force void *)(nproc->da_to_va_addr_1 + da);
 
-	nproc->da_to_va_offset = nproc->da_to_va_offset + len;
+	return va;
+}
+
+static void *ma35d1_m4_rproc_da_to_va_ddr(struct rproc *rproc, u64 da, int len)
+{
+	struct ma35d1_rproc *nproc = rproc->priv;
+	void *va = NULL;
+
+	if (len <= 0)
+		return NULL;
+
+	if(da >= nproc->sram_size)
+		da = da - nproc->sram_size;
+	else
+		return NULL;
+
+	va = (__force void *)(nproc->da_to_va_addr_2 + da);
 
 	return va;
 }
@@ -135,6 +155,8 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 	struct elf32_phdr *phdr;
 	int i, ret = 0, j;
 	const u8 *elf_data = fw->data;
+	uint32_t total_size = nproc->sram_size + nproc->ddr_size;
+	uint32_t rtp_ddr_addr = nproc->ddr_addr;
 
 	reset_control_assert(nproc->m4_rst);
 
@@ -152,7 +174,20 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 		if (phdr->p_type != PT_LOAD)
 			continue;
 
-		dev_dbg(dev, "phdr: type %d da 0x%x memsz 0x%x filesz 0x%x\n", phdr->p_type, da, memsz, filesz);
+		dev_dbg(dev, "phdr: type %d da 0x%x memsz 0x%x filesz 0x%x file_offset 0x%x fw_size 0x%zx\n",
+				 phdr->p_type, da, memsz, filesz, offset, fw->size);
+
+		if(((da+filesz) >= total_size) && (da < 0x20000)){
+			dev_err(dev, "bad phdr address 0x%x~0x%x over RTP memory size 0x%x \n", da, (da+filesz), total_size);
+			ret = -EINVAL;
+			break;
+		}
+
+		if((da > rtp_ddr_addr) && ((da-rtp_ddr_addr+filesz) >= total_size)) {
+			dev_err(dev, "bad phdr address 0x%x~0x%x over RTP memory size 0x%x \n", da, (da-rtp_ddr_addr+filesz), total_size);
+			ret = -EINVAL;
+			break;
+		}
 
 		if (filesz > memsz) {
 			dev_err(dev, "bad phdr filesz 0x%x memsz 0x%x\n",
@@ -169,29 +204,58 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 		}
 
 		/* grab the kernel address for this device address */
-		ptr = rproc_da_to_va(rproc, da, memsz);
-		if (!ptr) {
-			dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, memsz);
-			ret = -EINVAL;
-			break;
-		}
+		if((da < nproc->sram_size) && ((da + filesz) <= nproc->sram_size)) {
+			ptr = rproc_da_to_va(rproc, da, filesz);
+			if (!ptr) {
+				dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, filesz);
+				ret = -EINVAL;
+				break;
+			}
 
-		for(j = 0; j <= phdr->p_filesz; j++)
-		{
-			*((volatile unsigned char *)(ptr+j)) = *((volatile unsigned char *)(elf_data + phdr->p_offset+j));
-		}
+			for(j = 0; j <= phdr->p_filesz; j++) {
+				*((volatile unsigned char *)(ptr+j)) = *((volatile unsigned char *)(elf_data + phdr->p_offset+j));
+			}
+		} else if((da < nproc->sram_size) && ((da + filesz) > nproc->sram_size) && ((da + filesz) < total_size)) {
+			uint32_t sram_remaining = nproc->sram_size - da;
+			uint32_t file_remaining = filesz - sram_remaining;
 
-		/*
-		 * Zero out remaining memory for this segment.
-		 *
-		 * This isn't strictly required since dma_alloc_coherent already
-		 * did this for us. albeit harmless, we may consider removing
-		 * this.
-		 */
-		for(j = 0; j <= (memsz - filesz); j++)
-		{
-			*((volatile unsigned char *)(ptr + filesz+j)) = 0x0;
+			ptr = rproc_da_to_va(rproc, da, sram_remaining);
+			if (!ptr) {
+				dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, filesz);
+				ret = -EINVAL;
+				break;
+			}
+
+			for(j = 0; j < sram_remaining; j++) {
+				*((volatile unsigned char *)(ptr+j)) = *((volatile unsigned char *)(elf_data + phdr->p_offset+j));
+			}
+
+			ptr = ma35d1_m4_rproc_da_to_va_ddr(rproc, (da + sram_remaining), file_remaining);
+			if (!ptr) {
+				dev_err(dev, " 22: bad phdr da 0x%x filesz 0x%x\n", da + sram_remaining, filesz);
+				ret = -EINVAL;
+				break;
+			}
+
+			for(j = 0; j < file_remaining; j++) {
+				*((volatile unsigned char *)(ptr+j)) = 
+					*((volatile unsigned char *)(elf_data + phdr->p_offset + sram_remaining +j));
+			}
 		}
+		else if((da > nproc->sram_size) && ((da + filesz) < total_size)) {
+			ptr = ma35d1_m4_rproc_da_to_va_ddr(rproc, da, filesz);
+			if (!ptr) {
+				dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, filesz);
+				ret = -EINVAL;
+				break;
+			}
+
+			for(j = 0; j < filesz; j++) {
+				*((volatile unsigned char *)(ptr+j)) = *((volatile unsigned char *)(elf_data + phdr->p_offset +j));
+			}
+		}
+		else
+			dev_err(dev, "bad address 0x%x ~ 0x%x\n", da, (da + filesz));
 	}
 
 	return ret;
@@ -201,7 +265,7 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 
 static int ma35d1_rproc_parse_fw(struct rproc *rproc, const struct firmware *fw)
 {
-  return 0;
+	return 0;
 }
 
 static struct rproc_ops ma35d1_rproc_ops = {
@@ -228,6 +292,8 @@ static int ma35d1_rproc_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct rproc *rproc;
 	int ret;
+	struct device_node *node;
+	struct resource r;
 
 	match = of_match_device(ma35d1_rproc_match, dev);
 	if (!match) {
@@ -245,8 +311,19 @@ static int ma35d1_rproc_probe(struct platform_device *pdev)
 	nproc->rproc = rproc;
 	nproc->dev = dev;
 
-	nproc->da_to_va_addr = devm_ioremap_nocache(&pdev->dev, 0x24000000, 0x20000);
+	nproc->sram_size = 0x20000;
+	nproc->da_to_va_addr_1 = devm_ioremap_nocache(&pdev->dev, 0x24000000, 0x20000);
 	nproc->da_to_va_offset = 0;
+
+	node = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
+	if(np) {
+		ret = of_address_to_resource(node, 0, &r);
+		if(ret == 0) {
+			nproc->ddr_addr = r.start;
+			nproc->ddr_size  = resource_size(&r);
+			nproc->da_to_va_addr_2 = memremap(nproc->ddr_addr, nproc->ddr_size, MEMREMAP_WT);
+		} 
+	}
 
 	platform_set_drvdata(pdev, rproc);
 

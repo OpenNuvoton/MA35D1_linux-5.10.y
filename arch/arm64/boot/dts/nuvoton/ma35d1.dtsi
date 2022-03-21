@@ -111,6 +111,10 @@
 			reg = <0x0 0x8B000000 0x0 0x1800000>; /* 24MiB */
 			no-map;
 		};
+		rproc_buf: rproc_buf@0 {
+			reg = <0x0 0x80020000 0x0 0x60000>; /* 384KB */
+			no-map;
+		};
 	};
 
 	timer {
@@ -615,6 +619,7 @@
 		compatible	= "nuvoton, ma35d1-rproc";
 		mboxes = <&wormhole 1>;
 		resets = <&reset MA35D1_RESET_CM4>;
+		memory-region = <&rproc_buf>;
 		status = "okay";
 	};
 
