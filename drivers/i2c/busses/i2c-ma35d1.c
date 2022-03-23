@@ -320,6 +320,7 @@ static void I2C_SlaveTRx(struct ma35d1_i2c *i2c, unsigned long iicstat)
 		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
 	} else {
 		dev_err(i2c->dev, "Status is NOT processed\n");
+		writel(((readl(i2c->regs+CTL0) &~ (0x3C))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
 	}
 }
 
@@ -364,7 +365,9 @@ static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iics
 			/* send stop */
 			ma35d1_i2c_stop(i2c, 0);
 		}
-	} else if ((iicstat == M_TRAN_ADDR_NACK) || (iicstat == M_RECE_ADDR_NACK)) {
+	} else if (iicstat == M_TRAN_DATA_NACK)
+		ma35d1_i2c_stop(i2c, 0);
+	else if ((iicstat == M_TRAN_ADDR_NACK) || (iicstat == M_RECE_ADDR_NACK)) {
 		/* Master Transmit Address NACK */
 		/* 0x20: SLA+W has been transmitted and NACK has been received */
 		/* 0x48: SLA+R has been transmitted and NACK has been received */
@@ -425,7 +428,9 @@ static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iics
 		}
 
 	} else {
-		dev_dbg(i2c->dev,"Status is NOT processed\n");
+		dev_err(i2c->dev,"Status is NOT processed\n");
+		ma35d1_i2c_disable_irq(i2c);
+		ma35d1_i2c_stop(i2c, 0);
 	}
 
 }
@@ -454,7 +459,9 @@ static irqreturn_t ma35d1_i2c_irq(int irqno, void *dev_id)
 	}
 
 	if (status == BUS_ERROR) {
-		dev_dbg(i2c->dev, "IRQ: error i2c->state == IDLE\n");
+		dev_err(i2c->dev, "IRQ: error i2c->state == IDLE\n");
+		ma35d1_i2c_disable_irq(i2c);
+		ma35d1_i2c_stop(i2c, 0);
 		goto out;
 	}
 
@@ -506,6 +513,8 @@ static int ma35d1_i2c_doxfer(struct ma35d1_i2c *i2c,
 		dev_dbg(i2c->dev, "timeout\n");
 	else if (ret != num)
 		dev_dbg(i2c->dev, "incomplete xfer (%d)\n", ret);
+
+	ma35d1_i2c_disable_irq(i2c);
 
 	/* ensure the stop has been through the bus */
 	dev_dbg(i2c->dev, "waiting for bus idle\n");
