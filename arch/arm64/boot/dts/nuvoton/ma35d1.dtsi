@@ -1528,15 +1528,17 @@
 		compatible = "nuvoton,ma35d1-fb";
 		reg = <0x0 0x40260000 0x0 0x2000>;
 		interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+		nuvoton,clk = <&clk>;
 		clocks = <&clk dcu_gate>, <&clk dcup_div>;
 		resets = <&reset MA35D1_RESET_DISP>;
+		bl-gpios = <&gpiok 7 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 
 		reset_offset_en = "no";
 
 		//RGB interface
 		bits-per-pixel = <32>;
-		pixel-fmt = <6>; //6:RGB888 8:UYVY 17:NV12
+		pixel-fmt = <6>; //4:RGB565 6:RGB888 8:UYVY 17:NV12
 		bus-width = <24>;
 
 		buffer-num = <3>;
