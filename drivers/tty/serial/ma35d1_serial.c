@@ -451,13 +451,6 @@ static inline void __stop_tx(struct uart_ma35d1_port *p)
 
 	if (p->rs485.flags & SER_RS485_ENABLED)
 		rs485_start_rx(p);
-
-	if (tty->termios.c_line == N_IRDA) {
-		while(!(serial_in(p, UART_REG_FSR) & TX_EMPTY));
-		while(!(serial_in(p, UART_REG_FSR) & TE_FLAG));
-
-		serial_out(p, UART_REG_IRCR, (serial_in(p, UART_REG_IRCR) & ~0x2) ); // Tx disable (select Rx)
-	}
 }
 
 static void ma35d1serial_stop_tx(struct uart_port *port)
@@ -475,10 +468,6 @@ static void ma35d1serial_start_tx(struct uart_port *port)
 	unsigned int ier;
 	struct tty_struct *tty = up->port.state->port.tty;
 	struct circ_buf *xmit = &up->port.state->xmit;
-
-	if (tty->termios.c_line == N_IRDA) {
-		serial_out(up, UART_REG_IRCR, (serial_in(up, UART_REG_IRCR) | 0x2) ); // Tx enable
-	}
 
 	if (up->rs485.flags & SER_RS485_ENABLED)
 		rs485_stop_rx(up);
@@ -967,32 +956,6 @@ ma35d1serial_set_termios(struct uart_port *port, struct ktermios *termios, struc
 }
 
 static void
-ma35d1serial_set_ldisc(struct uart_port *port, struct ktermios *termios)
-{
-	struct uart_ma35d1_port *uart = (struct uart_ma35d1_port *)port;
-	unsigned int baud;
-
-	switch (termios->c_line) {
-	case N_IRDA:
-		baud = serial_in(uart, UART_REG_BAUD);
-		baud = baud & (0x0000ffff);
-		baud = baud + 2;
-		baud = baud / 16;
-		baud = baud - 2;
-
-		serial_out(uart, UART_REG_BAUD, baud);
-		serial_out(uart, UART_REG_IRCR, (serial_in(uart, UART_REG_IRCR) & ~0x40) );  // Rx inverse
-
-		serial_out(uart, UART_FUN_SEL, (serial_in(uart, UART_FUN_SEL) & ~FUN_SEL_Msk) );
-		serial_out(uart, UART_FUN_SEL, (serial_in(uart, UART_FUN_SEL) | FUN_SEL_IrDA) );
-		break;
-	default:
-		serial_out(uart, UART_FUN_SEL, (serial_in(uart, UART_FUN_SEL) & ~FUN_SEL_Msk) );
-	}
-
-}
-
-static void
 ma35d1serial_pm(struct uart_port *port, unsigned int state, unsigned int oldstate)
 {
 	struct uart_ma35d1_port *p = (struct uart_ma35d1_port *)port;
@@ -1097,7 +1060,6 @@ static struct uart_ops ma35d1serial_ops = {
 	.startup     = ma35d1serial_startup,
 	.shutdown    = ma35d1serial_shutdown,
 	.set_termios = ma35d1serial_set_termios,
-	.set_ldisc   = ma35d1serial_set_ldisc,
 	.pm          = ma35d1serial_pm,
 	.type        = ma35d1serial_type,
 	.release_port= ma35d1serial_release_port,
