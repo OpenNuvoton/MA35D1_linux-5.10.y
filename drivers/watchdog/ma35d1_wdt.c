@@ -140,7 +140,7 @@ static int ma35d1wdt_set_timeout(struct watchdog_device *wdd, unsigned int timeo
 
 	if (ma35d1_wdt->wkupen == 1) {
 
-		if(timeout < 2) {
+		if (timeout < 2) {
 			val |= 0x5 << 8;
 		} else if (timeout < 8) {
 			val |= 0x6 << 8;
@@ -149,7 +149,7 @@ static int ma35d1wdt_set_timeout(struct watchdog_device *wdd, unsigned int timeo
 		}
 	} else {
 
-		if(timeout < 2) {
+		if (timeout < 2) {
 			val |= 0x5 << 8;
 		} else if (timeout < 11) {
 			val |= 0x6 << 8;
@@ -217,9 +217,10 @@ static int ma35d1wdt_probe(struct platform_device *pdev)
 	of_property_read_string(pdev->dev.of_node, "clock-enable", &clkgate);
 	ma35d1_wdt->clk = devm_clk_get(&pdev->dev, clkgate);
 	if (IS_ERR(ma35d1_wdt->clk)) {
-		if (PTR_ERR(ma35d1_wdt->clk) != -ENOENT)
+		if (PTR_ERR(ma35d1_wdt->clk) != -ENOENT) {
+			dev_err(&pdev->dev, "failed to get clock gate clock\n");
 			return PTR_ERR(ma35d1_wdt->clk);
-
+		}
 		ma35d1_wdt->clk = NULL;
 	}
 

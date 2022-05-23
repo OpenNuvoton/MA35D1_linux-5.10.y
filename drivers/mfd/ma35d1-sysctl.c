@@ -20,7 +20,7 @@ struct reg_protect {
 } rp;
 
 
-void ma35d1_reg_lock(void)
+void ma35d1_reg_unlock(void)
 {
 	unsigned long flags;
 	unsigned int reg;
@@ -41,9 +41,9 @@ void ma35d1_reg_lock(void)
 	spin_unlock_irqrestore(&rp.lock, flags);
 
 }
-EXPORT_SYMBOL(ma35d1_reg_lock);
+EXPORT_SYMBOL(ma35d1_reg_unlock);
 
-void ma35d1_reg_unlock(void)
+void ma35d1_reg_lock(void)
 {
 	unsigned long flags;
 
@@ -54,7 +54,7 @@ void ma35d1_reg_unlock(void)
 	spin_unlock_irqrestore(&rp.lock, flags);
 
 }
-EXPORT_SYMBOL(ma35d1_reg_unlock);
+EXPORT_SYMBOL(ma35d1_reg_lock);
 
 static int ma35d1_sysctrl_probe(struct platform_device *pdev)
 {

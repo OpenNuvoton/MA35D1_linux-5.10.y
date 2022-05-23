@@ -206,9 +206,9 @@ static void ma35d1_check_work(struct work_struct *work)
 			reset_control_deassert(rst);
 		}
 
-		ma35d1_reg_lock();
-		writel(tmp, (i2c->regs+CLKDIV));
 		ma35d1_reg_unlock();
+		writel(tmp, (i2c->regs+CLKDIV));
+		ma35d1_reg_lock();
 
 		writel((readl(i2c->regs+CTL0) | (0x40)), (i2c->regs+CTL0));
 	}

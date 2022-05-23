@@ -32,9 +32,9 @@ static int ma35d1_restart_handler(struct notifier_block *this,
 	struct ma35d1_reboot_data *data =
 			container_of(this, struct ma35d1_reboot_data,
 					restart_handler);
-	ma35d1_reg_lock();
-	regmap_write(data->regmap, REG_SYS_IPRST0, 1 << MA35D1_RESET_CHIP);
 	ma35d1_reg_unlock();
+	regmap_write(data->regmap, REG_SYS_IPRST0, 1 << MA35D1_RESET_CHIP);
+	ma35d1_reg_lock();
 
 	while (1)
 		cpu_do_idle();
@@ -50,7 +50,7 @@ static int ma35d1_reset_update(struct reset_controller_dev *rcdev,
 	int reg;
 	int offset = (id / RST_PRE_REG) * 4;
 
-	ma35d1_reg_lock();
+	ma35d1_reg_unlock();
 	regmap_read(data->regmap, REG_SYS_IPRST0 + offset, &reg);
 	if (assert)
 		reg |= 1 << (id % RST_PRE_REG);
@@ -59,7 +59,7 @@ static int ma35d1_reset_update(struct reset_controller_dev *rcdev,
 
 	regmap_write(data->regmap, REG_SYS_IPRST0 + offset, reg);
 
-	ma35d1_reg_unlock();
+	ma35d1_reg_lock();
 	return 0;
 }
 

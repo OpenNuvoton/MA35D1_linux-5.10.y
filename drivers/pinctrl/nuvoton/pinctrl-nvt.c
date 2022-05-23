@@ -899,18 +899,18 @@ static int nvt_pinconf_get_drive_strength(struct nvt_pinctrl *npctl,
 {
 
 	int port_num, group_num;
-	unsigned int u_value, value;
+	unsigned int value;
 	void __iomem *base;
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_DS);
-	value = ((value & 1<<port_num)>>port_num)|
-		((value & 1<<(port_num+16))>>(port_num+16))<<1;
-	u_value =
-	    (__raw_readl(base + GPIO_UDS) >> port_num) &
-	    0x1;
-	*strength = (u_value << 2) | value;
+	if(port_num>8) {
+		value = __raw_readl(base + GPIO_DS);
+		*strength = (value>>(port_num*4))&0x7;
+	} else {
+		value = __raw_readl(base + GPIO_UDS);
+		*strength = (value>>((port_num-8)*4))&0x7;
+	}
 
 	return 0;
 }
@@ -920,20 +920,23 @@ static int nvt_pinconf_set_drive_strength(struct nvt_pinctrl *npctl,
 {
 
 	int port_num, group_num;
-	unsigned int value, u_value;
+	unsigned int value;
 	void __iomem *base;
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_DS);
-	value = (value & ~(1<<port_num)) | ((strength&0x1)<<port_num);
-	value = (value & ~(1<<(port_num+16))) | (((strength>>1)&0x1)<<(port_num+16));
-	__raw_writel(value, base + GPIO_DS);
 
-	u_value = __raw_readl(base + GPIO_UDS);
-	u_value &= ~(1 << port_num);
-	u_value |= ((strength >> 2) & 0x1) << port_num;
-	__raw_writel(u_value, base + GPIO_UDS);
+	if(port_num<8) {
+		value = __raw_readl(base + GPIO_DS);
+		value = value & ~(0x7<<(port_num*4));
+		value = value | ((strength&0x7)<<(port_num*4));
+		__raw_writel(value, base + GPIO_DS);
+	} else {
+		value = __raw_readl(base + GPIO_UDS);
+		value = value & ~(0x7<<((port_num-8)*4));
+		value = value | ((strength&0x7)<<((port_num-8)*4));
+		__raw_writel(value, base + GPIO_UDS);
+	}
 
 	return 0;
 }

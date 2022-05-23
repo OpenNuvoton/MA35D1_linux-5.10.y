@@ -12,6 +12,9 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/regmap.h>
+#include <linux/mfd/syscon.h>
+#include <linux/mfd/ma35d1-sys.h>
 
 #include "hwspinlock_internal.h"
 
@@ -32,6 +35,26 @@ struct nvt_hwsem {
 	struct clk *clk;
 	struct hwspinlock_device bank;
 };
+
+static void hwsem_UnLockReg(struct regmap *regmap)
+{
+        int ret;
+
+        /* Unlock hwsem registers */
+        do {
+                regmap_write(regmap, REG_SYS_RLKTZNS, 0x59);
+                regmap_write(regmap, REG_SYS_RLKTZNS, 0x16);
+                regmap_write(regmap, REG_SYS_RLKTZNS, 0x88);
+                regmap_read(regmap, REG_SYS_RLKTZNS, &ret);
+        }while(ret == 0);
+}
+
+static void hwsem_LockReg(struct regmap *regmap)
+{
+        /* Lock hwsem registers */
+        regmap_write(regmap, REG_SYS_RLKTZNS, 0x0);
+}
+
 
 static int nvt_hwsem_trylock(struct hwspinlock *lock)
 {
@@ -65,6 +88,7 @@ static const struct hwspinlock_ops nvt_hwsem_ops = {
 static int nvt_hwsem_probe(struct platform_device *pdev)
 {
 	struct nvt_hwsem *hw;
+	struct regmap *regmap;
 	void __iomem *io_base;
 	size_t array_size;
 	int i, ret;
@@ -82,7 +106,13 @@ static int nvt_hwsem_probe(struct platform_device *pdev)
 	if (IS_ERR(hw->clk))
 		return PTR_ERR(hw->clk);
 
+	regmap = syscon_regmap_lookup_by_phandle(pdev->dev.of_node, "nuvoton,sys");
+	if (IS_ERR(regmap))
+		return PTR_ERR(regmap);
+
+	hwsem_UnLockReg(regmap);
 	ret = clk_prepare_enable(hw->clk);
+	hwsem_LockReg(regmap);
 	if (ret)
 		return ret;
 

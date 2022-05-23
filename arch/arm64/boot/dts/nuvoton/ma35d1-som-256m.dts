@@ -16,7 +16,7 @@
 #include "ma35d1.dtsi"
 
 / {
-	model = "Nuvoton MA35D1-EVB";
+	model = "Nuvoton MA35D1-SOM";
 
 	chosen {
 		bootargs = "root=/dev/mmcblk1p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=256M";
@@ -66,6 +66,11 @@
 		regulator-name = "volt0_sdhci1";
 		regulator-always-on;
         };
+};
+
+&mem {
+	device_type = "memory";
+	reg = <0x00000000 0x80000000 0 0x10000000>; /* DRAM space - 1, size : 256MB DRAM */
 };
 
 &ccap0 {
@@ -168,13 +173,15 @@
 
 &sdhci1 {
 	status = "okay";
-	pinctrl-names = "sdhci_3V3","sdhci_1V8";
-	pinctrl-0 = <&pinctrl_sdhci1_3_3V>;
-	pinctrl-1 = <&pinctrl_sdhci1_1_8V>;
-	vqmmc-supply = <&volt0_sdhci1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sdhci1_1_8V>;
+	max-frequency = <200000000>;
+	bus-width = <8>;
+	non-removable;
 };
 
 &adc0 {
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_adc0>;
 };
@@ -226,7 +233,7 @@
 &i2c5 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c5>;
-	status = "okay";
+	status = "disabled";
 
 	goodix_ts@5d {
 		compatible = "goodix,gt911";
@@ -278,10 +285,10 @@
 	status = "okay";
 };
 
-&uart10 {
+&uart11 {
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart10>;
+	pinctrl-0 = <&pinctrl_uart11>;
 };
 
 &uart12 {
@@ -377,7 +384,10 @@
 	adc0 {
 		pinctrl_adc0: adc0grp {
 			nuvoton,pins =
-				<SYS_GPB_MFPH_PB8MFP_ADC0_CH0	&pcfg_default>;
+				<SYS_GPB_MFPH_PB12MFP_ADC0_CH4   &pcfg_default>,
+				<SYS_GPB_MFPH_PB13MFP_ADC0_CH5   &pcfg_default>,
+				<SYS_GPB_MFPH_PB14MFP_ADC0_CH6   &pcfg_default>,
+				<SYS_GPB_MFPH_PB15MFP_ADC0_CH7   &pcfg_default>;
 		};
 	};
 
@@ -503,18 +513,18 @@
 
 		pinctrl_sdhci1_1_8V: sdhci1_1_8Vgrp{
 			nuvoton,pins =
-				<SYS_GPJ_MFPL_PJ0MFP_eMMC1_DAT4	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ1MFP_eMMC1_DAT5	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ2MFP_eMMC1_DAT6	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ3MFP_eMMC1_DAT7	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPL_PJ4MFP_SD1_WP	&pcfg_default>,
-				<SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>,
-				<SYS_GPJ_MFPL_PJ6MFP_eMMC1_CMD	&pcfg_sdhci_drive7_1_8V>,
+				<SYS_GPJ_MFPL_PJ0MFP_eMMC1_DAT4	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPL_PJ1MFP_eMMC1_DAT5	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPL_PJ2MFP_eMMC1_DAT6	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPL_PJ3MFP_eMMC1_DAT7	&pcfg_sdhci_drive1_1_8V>,
+				/* <SYS_GPJ_MFPL_PJ4MFP_SD1_WP	&pcfg_default>, */
+				/* <SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>, */
+				<SYS_GPJ_MFPL_PJ6MFP_eMMC1_CMD	&pcfg_sdhci_drive4_1_8V>,
 				<SYS_GPJ_MFPL_PJ7MFP_eMMC1_CLK	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPH_PJ8MFP_eMMC1_DAT0	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPH_PJ9MFP_eMMC1_DAT1	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPH_PJ10MFP_eMMC1_DAT2	&pcfg_sdhci_drive7_1_8V>,
-				<SYS_GPJ_MFPH_PJ11MFP_eMMC1_DAT3	&pcfg_sdhci_drive7_1_8V>;
+				<SYS_GPJ_MFPH_PJ8MFP_eMMC1_DAT0	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPH_PJ9MFP_eMMC1_DAT1	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPH_PJ10MFP_eMMC1_DAT2	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPH_PJ11MFP_eMMC1_DAT3	&pcfg_sdhci_drive1_1_8V>;
 		};
 	};
 
@@ -588,13 +598,13 @@
 		};
 	};
 
-	uart10 {
-		pinctrl_uart10: uart10grp{
+	uart11 {
+		pinctrl_uart11: uart11grp{
 			nuvoton,pins =
-				<SYS_GPC_MFPH_PC8MFP_UART10_nCTS	&pcfg_default>,
-				<SYS_GPC_MFPH_PC9MFP_UART10_nRTS	&pcfg_default>,
-				<SYS_GPC_MFPH_PC10MFP_UART10_RXD	&pcfg_default>,
-				<SYS_GPC_MFPH_PC11MFP_UART10_TXD	&pcfg_default>;
+				<SYS_GPL_MFPL_PL0MFP_UART11_nCTS	&pcfg_default>,
+				<SYS_GPL_MFPL_PL1MFP_UART11_nRTS	&pcfg_default>,
+				<SYS_GPL_MFPL_PL2MFP_UART11_RXD		&pcfg_default>,
+				<SYS_GPL_MFPL_PL3MFP_UART11_TXD		&pcfg_default>;
 		};
 	};
 

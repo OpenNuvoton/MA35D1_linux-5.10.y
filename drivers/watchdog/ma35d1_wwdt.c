@@ -116,8 +116,11 @@ static int ma35d1wwdt_probe(struct platform_device *pdev)
 	of_property_read_string(pdev->dev.of_node, "clock-enable", &clkgate);
 	clk = devm_clk_get(&pdev->dev, clkgate);
 	if (IS_ERR(clk)) {
-		dev_err(&pdev->dev, "failed to get clock gate clock\n");
+		if (PTR_ERR(clk) != -ENOENT) {
+			dev_err(&pdev->dev, "failed to get clock gate clock\n");
 			return PTR_ERR(clk);
+		}
+		clk = NULL;
 	}
 
 	ret = clk_prepare_enable(clk);
@@ -129,8 +132,11 @@ static int ma35d1wwdt_probe(struct platform_device *pdev)
 	of_property_read_string(pdev->dev.of_node, "clock-names", &clkmux);
 	clksrc = devm_clk_get(&pdev->dev, clkmux);
 	if (IS_ERR(clksrc)) {
-		dev_err(&pdev->dev, "failed to get clock source\n");
+		if (PTR_ERR(clksrc) != -ENOENT) {
+			dev_err(&pdev->dev, "failed to get clock source\n");
 			return PTR_ERR(clksrc);
+		}
+		clksrc = NULL;
 	}
 
 	/* Initialize struct watchdog_device. */

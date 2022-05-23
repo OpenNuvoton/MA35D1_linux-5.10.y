@@ -77,8 +77,7 @@ static int ma35d1_sdhci_init_pinctrl(struct device *dev,
 	ma35d1_priv->pinctrl_state_3v3 =
 		pinctrl_lookup_state(ma35d1_priv->pinctrl, "sdhci_3V3");
 	if (IS_ERR(ma35d1_priv->pinctrl_state_3v3)) {
-		dev_warn(dev, "Missing 3.3V pad state, err: %ld\n",
-			 PTR_ERR(ma35d1_priv->pinctrl_state_3v3));
+		dev_warn(dev, "Missing 3.3V pad state\n");
 		return -1;
 	}
 
@@ -160,6 +159,45 @@ void ma35d1_set_clock(struct sdhci_host *host, unsigned int clock)
 	sdhci_set_clock(host, clock);
 }
 
+#define REG_RESTORE_NUM 7
+int ma35d1_execute_tuning(struct mmc_host *mmc, u32 opcode)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+        struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+        struct ma35d1_priv *priv = sdhci_pltfm_priv(pltfm_host);
+
+        if (!IS_ERR(priv->rst)) 
+	{
+		int idx;
+		u32 value[REG_RESTORE_NUM];
+		int reg[REG_RESTORE_NUM] = {
+			SDHCI_CLOCK_CONTROL,
+			SDHCI_BLOCK_SIZE,
+			SDHCI_INT_ENABLE,
+			SDHCI_SIGNAL_ENABLE,
+			SDHCI_AUTO_CMD_STATUS,
+			SDHCI_HOST_CONTROL,
+			SDHCI_TIMEOUT_CONTROL,
+		};
+
+		for(idx=0; idx<(REG_RESTORE_NUM-1); idx++)
+			value[idx] = sdhci_readl(host, reg[idx]);
+		value[(REG_RESTORE_NUM-1)] = sdhci_readb(host, reg[(REG_RESTORE_NUM-1)]);
+
+                reset_control_assert(priv->rst);
+                reset_control_deassert(priv->rst);
+
+		for(idx=0; idx<(REG_RESTORE_NUM-1); idx++)
+			sdhci_writel(host, value[idx], reg[idx]);
+		sdhci_writeb(host, value[(REG_RESTORE_NUM-1)], reg[(REG_RESTORE_NUM-1)]);
+
+		sdhci_writew(host, sdhci_readw(host, MSHC_CTRL)&~CMD_CONFLICT_CHECK, MSHC_CTRL);
+		sdhci_writew(host, (sdhci_readw(host, MBIU_CTRL)&~BURST_INCR_MASK)|
+				(BURST_INCR8_EN|BURST_INCR16_EN), MBIU_CTRL);
+        }
+
+	return sdhci_execute_tuning(mmc,opcode);
+}
 static const struct sdhci_ops sdhci_ma35d1_ops = {
 	.set_clock		= ma35d1_set_clock,
 	.set_bus_width		= sdhci_set_bus_width,
@@ -247,6 +285,9 @@ static int ma35d1_probe(struct platform_device *pdev)
 			ma35d1_sdhci_set_padctrl(host, MMC_SIGNAL_VOLTAGE_330);
 		}
 	}
+
+	
+	host->mmc_host_ops.execute_tuning = ma35d1_execute_tuning;
 
 	err = sdhci_add_host(host);
 	if (err)

@@ -28,8 +28,6 @@
 #include <asm/irq.h>
 #include <linux/spi/spi_bitbang.h>
 
-#define PCLK_FREQ	189000000
-
 /* spi registers offset */
 #define REG_CTL		0x00
 #define REG_CLKDIV	0x04
@@ -404,11 +402,7 @@ static int ma35d1_qspi_update_state(struct spi_device *spi,
 		hw->pdata->txbitlen = bpw;
 
 	if(hw->pdata->hz != hz) {
-#if 0 /* TODO: turn on this after design fix */
 		clk = clk_get_rate(hw->clk);
-#else
-		clk = PCLK_FREQ;
-#endif
 		div = DIV_ROUND_UP(clk, hz) - 1;
 		hw->pdata->hz = hz;
 		hw->pdata->divider = div;

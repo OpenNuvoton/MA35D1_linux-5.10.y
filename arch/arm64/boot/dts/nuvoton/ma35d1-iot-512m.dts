@@ -19,7 +19,7 @@
 	model = "Nuvoton MA35D1-IoT";
 
 	chosen {
-		bootargs = "root=/dev/mmcblk1p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=128M";
+		bootargs = "root=/dev/mmcblk1p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=512M";
 	};
 
 	gpio_keys_test {
@@ -84,7 +84,7 @@
 
 &mem {
 	device_type = "memory";
-	reg = <0x00000000 0x80000000 0 0x08000000>; /* DRAM space - 1, size : 128MB DRAM */
+	reg = <0x00000000 0x80000000 0 0x20000000>; /* DRAM space - 1, size : 512MB DRAM */
 };
 
 &ccap0 {

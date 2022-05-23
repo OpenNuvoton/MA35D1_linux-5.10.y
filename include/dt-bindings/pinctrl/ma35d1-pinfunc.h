@@ -128,6 +128,7 @@
 #define SYS_GPB_MFPH_PB8MFP_GPIO             0x08C    0x00    0x0
 #define SYS_GPB_MFPH_PB8MFP_I2C2_SDA         0x08C    0x00    0x4
 #define SYS_GPB_MFPH_PB8MFP_QEI2_INDEX       0x08C    0x00    0xE
+#define SYS_GPB_MFPH_PB8MFP_KPI_ROW6         0x08C    0x00    0xF
 #define SYS_GPB_MFPH_PB8MFP_SPI0_I2SMCLK     0x08C    0x00    0x6
 #define SYS_GPB_MFPH_PB8MFP_SPI0_SS1         0x08C    0x00    0x5
 #define SYS_GPB_MFPH_PB8MFP_TM4              0x08C    0x00    0xB
@@ -142,12 +143,13 @@
 #define SYS_GPB_MFPH_PB9MFP_I2S0_MCLK        0x08C    0x04    0x6
 #define SYS_GPB_MFPH_PB9MFP_I2S1_MCLK        0x08C    0x04    0xC
 #define SYS_GPB_MFPH_PB9MFP_QEI2_A           0x08C    0x04    0xE
+#define SYS_GPB_MFPH_PB9MFP_KPI_ROW7         0x08C    0x00    0xF
 #define SYS_GPB_MFPH_PB9MFP_SC0_nCD          0x08C    0x04    0xD
 #define SYS_GPB_MFPH_PB9MFP_SPI0_CLK         0x08C    0x04    0x5
 #define SYS_GPB_MFPH_PB9MFP_TM0_EXT          0x08C    0x04    0xB
 #define SYS_GPB_MFPH_PB9MFP_UART1_TXD        0x08C    0x04    0x3
 #define SYS_GPB_MFPH_PB9MFP_UART2_nRTS       0x08C    0x04    0x2
-#define SYS_GPB_MFPH_PB9MFP_VCAP1_HSYNC      0x08C    0x04    0x7
+#define SYS_GPB_MFPH_PB9MFP_CCAP1_HSYNC      0x08C    0x04    0x7
 #define SYS_GPB_MFPH_PB10MFP_ADC0_CH2        0x08C    0x08    0x8
 #define SYS_GPB_MFPH_PB10MFP_CAN0_RXD        0x08C    0x08    0x3
 #define SYS_GPB_MFPH_PB10MFP_EBI_AD14        0x08C    0x08    0xA
@@ -162,7 +164,7 @@
 #define SYS_GPB_MFPH_PB10MFP_TM5             0x08C    0x08    0xB
 #define SYS_GPB_MFPH_PB10MFP_UART2_RXD       0x08C    0x08    0x2
 #define SYS_GPB_MFPH_PB10MFP_USBHL2_DM       0x08C    0x08    0x4
-#define SYS_GPB_MFPH_PB10MFP_VCAP1_VSYNC     0x08C    0x08    0x7
+#define SYS_GPB_MFPH_PB10MFP_CCAP1_VSYNC     0x08C    0x08    0x7
 #define SYS_GPB_MFPH_PB11MFP_ADC0_CH3        0x08C    0x0C    0x8
 #define SYS_GPB_MFPH_PB11MFP_CAN0_TXD        0x08C    0x0C    0x3
 #define SYS_GPB_MFPH_PB11MFP_EBI_ALE         0x08C    0x0C    0xA
@@ -177,7 +179,7 @@
 #define SYS_GPB_MFPH_PB11MFP_TM5_EXT         0x08C    0x0C    0xB
 #define SYS_GPB_MFPH_PB11MFP_UART2_TXD       0x08C    0x0C    0x2
 #define SYS_GPB_MFPH_PB11MFP_USBHL2_DP       0x08C    0x0C    0x4
-#define SYS_GPB_MFPH_PB11MFP_VCAP1_SFIELD    0x08C    0x0C    0x7
+#define SYS_GPB_MFPH_PB11MFP_CCAP1_SFIELD    0x08C    0x0C    0x7
 #define SYS_GPB_MFPH_PB12MFP_ADC0_CH4        0x08C    0x10    0x8
 #define SYS_GPB_MFPH_PB12MFP_CAN2_RXD        0x08C    0x10    0x5
 #define SYS_GPB_MFPH_PB12MFP_EBI_ADR16       0x08C    0x10    0x9
@@ -437,80 +439,80 @@
 #define SYS_GPE_MFPL_PE0MFP_RMII0_MDC        0x0A0    0x00    0x9 //gmac0
 #define SYS_GPE_MFPL_PE0MFP_UART8_RXD        0x0A0    0x00    0x3
 #define SYS_GPE_MFPL_PE0MFP_UART9_nCTS       0x0A0    0x00    0x2
-#define SYS_GPE_MFPL_PE0MFP_VCAP1_DATA0      0x0A0    0x00    0x7
+#define SYS_GPE_MFPL_PE0MFP_CCAP1_DATA0      0x0A0    0x00    0x7
 #define SYS_GPE_MFPL_PE1MFP_GPIO             0x0A0    0x04    0x0
 #define SYS_GPE_MFPL_PE1MFP_RGMII0_MDIO      0x0A0    0x04    0x8 //gmac0
 #define SYS_GPE_MFPL_PE1MFP_RMII0_MDIO       0x0A0    0x04    0x9 //gmac0
 #define SYS_GPE_MFPL_PE1MFP_UART8_TXD        0x0A0    0x04    0x3
 #define SYS_GPE_MFPL_PE1MFP_UART9_nRTS       0x0A0    0x04    0x2
-#define SYS_GPE_MFPL_PE1MFP_VCAP1_DATA1      0x0A0    0x04    0x7
+#define SYS_GPE_MFPL_PE1MFP_CCAP1_DATA1      0x0A0    0x04    0x7
 #define SYS_GPE_MFPL_PE2MFP_GPIO             0x0A0    0x08    0x0
 #define SYS_GPE_MFPL_PE2MFP_RGMII0_TXCTL     0x0A0    0x08    0x8 //gmac0
 #define SYS_GPE_MFPL_PE2MFP_RMII0_TXEN       0x0A0    0x08    0x9 //gmac0
 #define SYS_GPE_MFPL_PE2MFP_UART9_RXD        0x0A0    0x08    0x2
-#define SYS_GPE_MFPL_PE2MFP_VCAP1_DATA2      0x0A0    0x08    0x7
+#define SYS_GPE_MFPL_PE2MFP_CCAP1_DATA2      0x0A0    0x08    0x7
 #define SYS_GPE_MFPL_PE3MFP_GPIO             0x0A0    0x0C    0x0
 #define SYS_GPE_MFPL_PE3MFP_RGMII0_TXD0      0x0A0    0x0C    0x8 //gmac0
 #define SYS_GPE_MFPL_PE3MFP_RMII0_TXD0       0x0A0    0x0C    0x9 //gmac0
 #define SYS_GPE_MFPL_PE3MFP_UART9_TXD        0x0A0    0x0C    0x2
-#define SYS_GPE_MFPL_PE3MFP_VCAP1_DATA3      0x0A0    0x0C    0x7
+#define SYS_GPE_MFPL_PE3MFP_CCAP1_DATA3      0x0A0    0x0C    0x7
 #define SYS_GPE_MFPL_PE4MFP_GPIO             0x0A0    0x10    0x0
 #define SYS_GPE_MFPL_PE4MFP_RGMII0_TXD1      0x0A0    0x10    0x8 //gmac0
 #define SYS_GPE_MFPL_PE4MFP_RMII0_TXD1       0x0A0    0x10    0x9 //gmac0
 #define SYS_GPE_MFPL_PE4MFP_UART3_RXD        0x0A0    0x10    0x3
 #define SYS_GPE_MFPL_PE4MFP_UART4_nCTS       0x0A0    0x10    0x2
-#define SYS_GPE_MFPL_PE4MFP_VCAP1_DATA4      0x0A0    0x10    0x7
+#define SYS_GPE_MFPL_PE4MFP_CCAP1_DATA4      0x0A0    0x10    0x7
 #define SYS_GPE_MFPL_PE5MFP_GPIO             0x0A0    0x14    0x0
 #define SYS_GPE_MFPL_PE5MFP_RGMII0_RXCLK     0x0A0    0x14    0x8 //gmac0
 #define SYS_GPE_MFPL_PE5MFP_RMII0_REFCLK     0x0A0    0x14    0x9 //gmac0
 #define SYS_GPE_MFPL_PE5MFP_UART3_TXD        0x0A0    0x14    0x3
 #define SYS_GPE_MFPL_PE5MFP_UART4_nRTS       0x0A0    0x14    0x2
-#define SYS_GPE_MFPL_PE5MFP_VCAP1_DATA5      0x0A0    0x14    0x7
+#define SYS_GPE_MFPL_PE5MFP_CCAP1_DATA5      0x0A0    0x14    0x7
 #define SYS_GPE_MFPL_PE6MFP_GPIO             0x0A0    0x18    0x0
 #define SYS_GPE_MFPL_PE6MFP_RGMII0_RXCTL     0x0A0    0x18    0x8 //gmac0
 #define SYS_GPE_MFPL_PE6MFP_RMII0_CRSDV      0x0A0    0x18    0x9 //gmac0
 #define SYS_GPE_MFPL_PE6MFP_UART4_RXD        0x0A0    0x18    0x2
-#define SYS_GPE_MFPL_PE6MFP_VCAP1_DATA6      0x0A0    0x18    0x7
+#define SYS_GPE_MFPL_PE6MFP_CCAP1_DATA6      0x0A0    0x18    0x7
 #define SYS_GPE_MFPL_PE7MFP_GPIO             0x0A0    0x1C    0x0
 #define SYS_GPE_MFPL_PE7MFP_RGMII0_RXD0      0x0A0    0x1C    0x8 //gmac0
 #define SYS_GPE_MFPL_PE7MFP_RMII0_RXD0       0x0A0    0x1C    0x9 //gmac0
 #define SYS_GPE_MFPL_PE7MFP_UART4_TXD        0x0A0    0x1C    0x2
-#define SYS_GPE_MFPL_PE7MFP_VCAP1_DATA7      0x0A0    0x1C    0x7
+#define SYS_GPE_MFPL_PE7MFP_CCAP1_DATA7      0x0A0    0x1C    0x7
 /********************* Bit definition of GPE_MFPH register **********************/
 #define SYS_GPE_MFPH_PE8MFP_GPIO             0x0A4    0x00    0x0
 #define SYS_GPE_MFPH_PE8MFP_RGMII0_RXD1      0x0A4    0x00    0x8 //gmac0
 #define SYS_GPE_MFPH_PE8MFP_RMII0_RXD1       0x0A4    0x00    0x9 //gmac0
 #define SYS_GPE_MFPH_PE8MFP_UART12_RXD       0x0A4    0x00    0x3
 #define SYS_GPE_MFPH_PE8MFP_UART13_nCTS      0x0A4    0x00    0x2
-#define SYS_GPE_MFPH_PE8MFP_VCAP1_SCLK       0x0A4    0x00    0x7
+#define SYS_GPE_MFPH_PE8MFP_CCAP1_SCLK       0x0A4    0x00    0x7
 #define SYS_GPE_MFPH_PE9MFP_GPIO             0x0A4    0x04    0x0
 #define SYS_GPE_MFPH_PE9MFP_RGMII0_RXD2      0x0A4    0x04    0x8 //gmac0
 #define SYS_GPE_MFPH_PE9MFP_RMII0_RXERR      0x0A4    0x04    0x9 //gmac0
 #define SYS_GPE_MFPH_PE9MFP_UART12_TXD       0x0A4    0x04    0x3
 #define SYS_GPE_MFPH_PE9MFP_UART13_nRTS      0x0A4    0x04    0x2
-#define SYS_GPE_MFPH_PE9MFP_VCAP1_PIXCLK     0x0A4    0x04    0x7
+#define SYS_GPE_MFPH_PE9MFP_CCAP1_PIXCLK     0x0A4    0x04    0x7
 #define SYS_GPE_MFPH_PE10MFP_GPIO            0x0A4    0x08    0x0
 #define SYS_GPE_MFPH_PE10MFP_RGMII0_RXD3     0x0A4    0x08    0x8 //gmac0
 #define SYS_GPE_MFPH_PE10MFP_SPI1_SS0        0x0A4    0x08    0x5
 #define SYS_GPE_MFPH_PE10MFP_UART14_RXD      0x0A4    0x08    0x3
 #define SYS_GPE_MFPH_PE10MFP_UART15_nCTS     0x0A4    0x08    0x2
-#define SYS_GPE_MFPH_PE10MFP_VCAP1_HSYNC     0x0A4    0x08    0x7
+#define SYS_GPE_MFPH_PE10MFP_CCAP1_HSYNC     0x0A4    0x08    0x7
 #define SYS_GPE_MFPH_PE11MFP_GPIO            0x0A4    0x0C    0x0
 #define SYS_GPE_MFPH_PE11MFP_RGMII0_TXCLK    0x0A4    0x0C    0x8 //gmac0
 #define SYS_GPE_MFPH_PE11MFP_SPI1_CLK        0x0A4    0x0C    0x5
 #define SYS_GPE_MFPH_PE11MFP_UART14_TXD      0x0A4    0x0C    0x3
 #define SYS_GPE_MFPH_PE11MFP_UART15_nRTS     0x0A4    0x0C    0x2
-#define SYS_GPE_MFPH_PE11MFP_VCAP1_VSYNC     0x0A4    0x0C    0x7
+#define SYS_GPE_MFPH_PE11MFP_CCAP1_VSYNC     0x0A4    0x0C    0x7
 #define SYS_GPE_MFPH_PE12MFP_GPIO            0x0A4    0x10    0x0
 #define SYS_GPE_MFPH_PE12MFP_RGMII0_TXD2     0x0A4    0x10    0x8 //gmac0
 #define SYS_GPE_MFPH_PE12MFP_SPI1_MOSI       0x0A4    0x10    0x5
 #define SYS_GPE_MFPH_PE12MFP_UART15_RXD      0x0A4    0x10    0x2
-#define SYS_GPE_MFPH_PE12MFP_VCAP1_DATA8     0x0A4    0x10    0x7
+#define SYS_GPE_MFPH_PE12MFP_CCAP1_DATA8     0x0A4    0x10    0x7
 #define SYS_GPE_MFPH_PE13MFP_GPIO            0x0A4    0x14    0x0
 #define SYS_GPE_MFPH_PE13MFP_RGMII0_TXD3     0x0A4    0x14    0x8 //gmac0
 #define SYS_GPE_MFPH_PE13MFP_SPI1_MISO       0x0A4    0x14    0x5
 #define SYS_GPE_MFPH_PE13MFP_UART15_TXD      0x0A4    0x14    0x2
-#define SYS_GPE_MFPH_PE13MFP_VCAP1_DATA9     0x0A4    0x14    0x7
+#define SYS_GPE_MFPH_PE13MFP_CCAP1_DATA9     0x0A4    0x14    0x7
 #define SYS_GPE_MFPH_PE14MFP_GPIO            0x0A4    0x18    0x0
 #define SYS_GPE_MFPH_PE14MFP_UART0_TXD       0x0A4    0x18    0x1
 #define SYS_GPE_MFPH_PE15MFP_GPIO            0x0A4    0x1C    0x0
@@ -637,7 +639,7 @@
 #define SYS_GPF_MFPH_PF14MFP_SPI1_I2SMCLK    0x0AC    0x18    0x6
 #define SYS_GPF_MFPH_PF14MFP_SPI1_SS1        0x0AC    0x18    0xD
 #define SYS_GPF_MFPH_PF14MFP_TM0             0x0AC    0x18    0xB
-#define SYS_GPF_MFPH_PF14MFP_VCAP1_SFIELD    0x0AC    0x18    0x7
+#define SYS_GPF_MFPH_PF14MFP_CCAP1_SFIELD    0x0AC    0x18    0x7
 #define SYS_GPF_MFPH_PF15MFP_GPIO            0x0AC    0x1C    0x0
 #define SYS_GPF_MFPH_PF15MFP_HSUSB0_VBUSVLD  0x0AC    0x1C    0x1
 /********************* Bit definition of GPG_MFPL register **********************/
@@ -1167,19 +1169,19 @@
 #define SYS_GPK_MFPH_PK9MFP_EBI_ADR0         0x0D4    0x04    0xA
 #define SYS_GPK_MFPH_PK9MFP_GPIO             0x0D4    0x04    0x0
 #define SYS_GPK_MFPH_PK9MFP_I2C3_SCL         0x0D4    0x04    0x4
-#define SYS_GPK_MFPH_PK9MFP_VCAP0_SCLK       0x0D4    0x04    0x6
+#define SYS_GPK_MFPH_PK9MFP_CCAP0_SCLK       0x0D4    0x04    0x6
 #define SYS_GPK_MFPH_PK10MFP_CAN1_RXD        0x0D4    0x08    0x3
 #define SYS_GPK_MFPH_PK10MFP_EBI_AD1         0x0D4    0x08    0x8
 #define SYS_GPK_MFPH_PK10MFP_EBI_ADR1        0x0D4    0x08    0xA
 #define SYS_GPK_MFPH_PK10MFP_GPIO            0x0D4    0x08    0x0
 #define SYS_GPK_MFPH_PK10MFP_USBHL3_DM       0x0D4    0x08    0x4
-#define SYS_GPK_MFPH_PK10MFP_VCAP0_PIXCLK    0x0D4    0x08    0x6
+#define SYS_GPK_MFPH_PK10MFP_CCAP0_PIXCLK    0x0D4    0x08    0x6
 #define SYS_GPK_MFPH_PK11MFP_CAN1_TXD        0x0D4    0x0C    0x3
 #define SYS_GPK_MFPH_PK11MFP_EBI_AD2         0x0D4    0x0C    0x8
 #define SYS_GPK_MFPH_PK11MFP_EBI_ADR2        0x0D4    0x0C    0xA
 #define SYS_GPK_MFPH_PK11MFP_GPIO            0x0D4    0x0C    0x0
 #define SYS_GPK_MFPH_PK11MFP_USBHL3_DP       0x0D4    0x0C    0x4
-#define SYS_GPK_MFPH_PK11MFP_VCAP0_HSYNC     0x0D4    0x0C    0x6
+#define SYS_GPK_MFPH_PK11MFP_CCAP0_HSYNC     0x0D4    0x0C    0x6
 #define SYS_GPK_MFPH_PK12MFP_EPWM2_CH0       0x0D4    0x10    0x1
 #define SYS_GPK_MFPH_PK12MFP_GPIO            0x0D4    0x10    0x0
 #define SYS_GPK_MFPH_PK12MFP_I2C4_SDA        0x0D4    0x10    0x4
@@ -1425,58 +1427,58 @@
 #define SYS_GPM_MFPL_PM0MFP_EBI_ADR3         0x0E0    0x00    0xA
 #define SYS_GPM_MFPL_PM0MFP_GPIO             0x0E0    0x00    0x0
 #define SYS_GPM_MFPL_PM0MFP_I2C4_SDA         0x0E0    0x00    0x4
-#define SYS_GPM_MFPL_PM0MFP_VCAP0_VSYNC      0x0E0    0x00    0x6
+#define SYS_GPM_MFPL_PM0MFP_CCAP0_VSYNC      0x0E0    0x00    0x6
 #define SYS_GPM_MFPL_PM1MFP_EBI_AD4          0x0E0    0x04    0x8
 #define SYS_GPM_MFPL_PM1MFP_EBI_ADR4         0x0E0    0x04    0xA
 #define SYS_GPM_MFPL_PM1MFP_GPIO             0x0E0    0x04    0x0
 #define SYS_GPM_MFPL_PM1MFP_I2C4_SCL         0x0E0    0x04    0x4
 #define SYS_GPM_MFPL_PM1MFP_SPI3_I2SMCLK     0x0E0    0x04    0x5
-#define SYS_GPM_MFPL_PM1MFP_VCAP0_SFIELD     0x0E0    0x04    0x6
+#define SYS_GPM_MFPL_PM1MFP_CCAP0_SFIELD     0x0E0    0x04    0x6
 #define SYS_GPM_MFPL_PM2MFP_CAN3_RXD         0x0E0    0x08    0x3
 #define SYS_GPM_MFPL_PM2MFP_EBI_AD5          0x0E0    0x08    0x8
 #define SYS_GPM_MFPL_PM2MFP_EBI_ADR5         0x0E0    0x08    0xA
 #define SYS_GPM_MFPL_PM2MFP_GPIO             0x0E0    0x08    0x0
 #define SYS_GPM_MFPL_PM2MFP_USBHL0_DM        0x0E0    0x08    0x4
-#define SYS_GPM_MFPL_PM2MFP_VCAP0_DATA0      0x0E0    0x08    0x6
+#define SYS_GPM_MFPL_PM2MFP_CCAP0_DATA0      0x0E0    0x08    0x6
 #define SYS_GPM_MFPL_PM3MFP_CAN3_TXD         0x0E0    0x0C    0x3
 #define SYS_GPM_MFPL_PM3MFP_EBI_AD6          0x0E0    0x0C    0x8
 #define SYS_GPM_MFPL_PM3MFP_EBI_ADR6         0x0E0    0x0C    0xA
 #define SYS_GPM_MFPL_PM3MFP_GPIO             0x0E0    0x0C    0x0
 #define SYS_GPM_MFPL_PM3MFP_USBHL0_DP        0x0E0    0x0C    0x4
-#define SYS_GPM_MFPL_PM3MFP_VCAP0_DATA1      0x0E0    0x0C    0x6
+#define SYS_GPM_MFPL_PM3MFP_CCAP0_DATA1      0x0E0    0x0C    0x6
 #define SYS_GPM_MFPL_PM4MFP_EBI_AD7          0x0E0    0x10    0x8
 #define SYS_GPM_MFPL_PM4MFP_EBI_ADR7         0x0E0    0x10    0xA
 #define SYS_GPM_MFPL_PM4MFP_GPIO             0x0E0    0x10    0x0
 #define SYS_GPM_MFPL_PM4MFP_I2C5_SDA         0x0E0    0x10    0x4
-#define SYS_GPM_MFPL_PM4MFP_VCAP0_DATA2      0x0E0    0x10    0x6
+#define SYS_GPM_MFPL_PM4MFP_CCAP0_DATA2      0x0E0    0x10    0x6
 #define SYS_GPM_MFPL_PM5MFP_EBI_AD8          0x0E0    0x14    0x8
 #define SYS_GPM_MFPL_PM5MFP_EBI_ADR8         0x0E0    0x14    0xA
 #define SYS_GPM_MFPL_PM5MFP_GPIO             0x0E0    0x14    0x0
 #define SYS_GPM_MFPL_PM5MFP_I2C5_SCL         0x0E0    0x14    0x4
-#define SYS_GPM_MFPL_PM5MFP_VCAP0_DATA3      0x0E0    0x14    0x6
+#define SYS_GPM_MFPL_PM5MFP_CCAP0_DATA3      0x0E0    0x14    0x6
 #define SYS_GPM_MFPL_PM6MFP_CAN0_RXD         0x0E0    0x18    0x3
 #define SYS_GPM_MFPL_PM6MFP_EBI_AD9          0x0E0    0x18    0x8
 #define SYS_GPM_MFPL_PM6MFP_EBI_ADR9         0x0E0    0x18    0xA
 #define SYS_GPM_MFPL_PM6MFP_GPIO             0x0E0    0x18    0x0
 #define SYS_GPM_MFPL_PM6MFP_USBHL1_DM        0x0E0    0x18    0x4
-#define SYS_GPM_MFPL_PM6MFP_VCAP0_DATA4      0x0E0    0x18    0x6
+#define SYS_GPM_MFPL_PM6MFP_CCAP0_DATA4      0x0E0    0x18    0x6
 #define SYS_GPM_MFPL_PM7MFP_CAN0_TXD         0x0E0    0x1C    0x3
 #define SYS_GPM_MFPL_PM7MFP_EBI_AD10         0x0E0    0x1C    0x8
 #define SYS_GPM_MFPL_PM7MFP_EBI_ADR10        0x0E0    0x1C    0xA
 #define SYS_GPM_MFPL_PM7MFP_GPIO             0x0E0    0x1C    0x0
 #define SYS_GPM_MFPL_PM7MFP_USBHL1_DP        0x0E0    0x1C    0x4
-#define SYS_GPM_MFPL_PM7MFP_VCAP0_DATA5      0x0E0    0x1C    0x6
+#define SYS_GPM_MFPL_PM7MFP_CCAP0_DATA5      0x0E0    0x1C    0x6
 /********************* Bit definition of GPM_MFPH register **********************/
 #define SYS_GPM_MFPH_PM8MFP_EBI_AD11         0x0E4    0x00    0x8
 #define SYS_GPM_MFPH_PM8MFP_EBI_ADR11        0x0E4    0x00    0xA
 #define SYS_GPM_MFPH_PM8MFP_GPIO             0x0E4    0x00    0x0
 #define SYS_GPM_MFPH_PM8MFP_I2C0_SDA         0x0E4    0x00    0x4
-#define SYS_GPM_MFPH_PM8MFP_VCAP0_DATA6      0x0E4    0x00    0x6
+#define SYS_GPM_MFPH_PM8MFP_CCAP0_DATA6      0x0E4    0x00    0x6
 #define SYS_GPM_MFPH_PM9MFP_EBI_AD12         0x0E4    0x04    0x8
 #define SYS_GPM_MFPH_PM9MFP_EBI_ADR12        0x0E4    0x04    0xA
 #define SYS_GPM_MFPH_PM9MFP_GPIO             0x0E4    0x04    0x0
 #define SYS_GPM_MFPH_PM9MFP_I2C0_SCL         0x0E4    0x04    0x4
-#define SYS_GPM_MFPH_PM9MFP_VCAP0_DATA7      0x0E4    0x04    0x6
+#define SYS_GPM_MFPH_PM9MFP_CCAP0_DATA7      0x0E4    0x04    0x6
 #define SYS_GPM_MFPH_PM10MFP_CAN2_RXD        0x0E4    0x08    0x3
 #define SYS_GPM_MFPH_PM10MFP_EBI_AD13        0x0E4    0x08    0x8
 #define SYS_GPM_MFPH_PM10MFP_EBI_ADR13       0x0E4    0x08    0xA
@@ -1485,7 +1487,7 @@
 #define SYS_GPM_MFPH_PM10MFP_SPI2_I2SMCLK    0x0E4    0x08    0x7
 #define SYS_GPM_MFPH_PM10MFP_SPI3_SS0        0x0E4    0x08    0x5
 #define SYS_GPM_MFPH_PM10MFP_USBHL4_DM       0x0E4    0x08    0x4
-#define SYS_GPM_MFPH_PM10MFP_VCAP0_DATA8     0x0E4    0x08    0x6
+#define SYS_GPM_MFPH_PM10MFP_CCAP0_DATA8     0x0E4    0x08    0x6
 #define SYS_GPM_MFPH_PM11MFP_CAN2_TXD        0x0E4    0x0C    0x3
 #define SYS_GPM_MFPH_PM11MFP_EBI_AD14        0x0E4    0x0C    0x8
 #define SYS_GPM_MFPH_PM11MFP_EBI_ADR14       0x0E4    0x0C    0xA
@@ -1494,7 +1496,7 @@
 #define SYS_GPM_MFPH_PM11MFP_SPI2_SS1        0x0E4    0x0C    0x7
 #define SYS_GPM_MFPH_PM11MFP_SPI3_SS1        0x0E4    0x0C    0x5
 #define SYS_GPM_MFPH_PM11MFP_USBHL4_DP       0x0E4    0x0C    0x4
-#define SYS_GPM_MFPH_PM11MFP_VCAP0_DATA9     0x0E4    0x0C    0x6
+#define SYS_GPM_MFPH_PM11MFP_CCAP0_DATA9     0x0E4    0x0C    0x6
 #define SYS_GPM_MFPH_PM12MFP_EBI_AD8         0x0E4    0x10    0x8
 #define SYS_GPM_MFPH_PM12MFP_EPWM1_CH4       0x0E4    0x10    0x1
 #define SYS_GPM_MFPH_PM12MFP_GPIO            0x0E4    0x10    0x0
@@ -1539,68 +1541,68 @@
 /********************* Bit definition of GPN_MFPL register **********************/
 #define SYS_GPN_MFPL_PN0MFP_GPIO             0x0E8    0x00    0x0
 #define SYS_GPN_MFPL_PN0MFP_I2C2_SDA         0x0E8    0x00    0x4
-#define SYS_GPN_MFPL_PN0MFP_VCAP1_DATA0      0x0E8    0x00    0x6
+#define SYS_GPN_MFPL_PN0MFP_CCAP1_DATA0      0x0E8    0x00    0x6
 #define SYS_GPN_MFPL_PN1MFP_GPIO             0x0E8    0x04    0x0
 #define SYS_GPN_MFPL_PN1MFP_I2C2_SCL         0x0E8    0x04    0x4
-#define SYS_GPN_MFPL_PN1MFP_VCAP1_DATA1      0x0E8    0x04    0x6
+#define SYS_GPN_MFPL_PN1MFP_CCAP1_DATA1      0x0E8    0x04    0x6
 #define SYS_GPN_MFPL_PN2MFP_CAN0_RXD         0x0E8    0x08    0x3
 #define SYS_GPN_MFPL_PN2MFP_GPIO             0x0E8    0x08    0x0
 #define SYS_GPN_MFPL_PN2MFP_USBHL0_DM        0x0E8    0x08    0x4
-#define SYS_GPN_MFPL_PN2MFP_VCAP1_DATA2      0x0E8    0x08    0x6
+#define SYS_GPN_MFPL_PN2MFP_CCAP1_DATA2      0x0E8    0x08    0x6
 #define SYS_GPN_MFPL_PN3MFP_CAN0_TXD         0x0E8    0x0C    0x3
 #define SYS_GPN_MFPL_PN3MFP_GPIO             0x0E8    0x0C    0x0
 #define SYS_GPN_MFPL_PN3MFP_USBHL0_DP        0x0E8    0x0C    0x4
-#define SYS_GPN_MFPL_PN3MFP_VCAP1_DATA3      0x0E8    0x0C    0x6
+#define SYS_GPN_MFPL_PN3MFP_CCAP1_DATA3      0x0E8    0x0C    0x6
 #define SYS_GPN_MFPL_PN4MFP_GPIO             0x0E8    0x10    0x0
 #define SYS_GPN_MFPL_PN4MFP_I2C1_SDA         0x0E8    0x10    0x4
-#define SYS_GPN_MFPL_PN4MFP_VCAP1_DATA4      0x0E8    0x10    0x6
+#define SYS_GPN_MFPL_PN4MFP_CCAP1_DATA4      0x0E8    0x10    0x6
 #define SYS_GPN_MFPL_PN5MFP_GPIO             0x0E8    0x14    0x0
 #define SYS_GPN_MFPL_PN5MFP_I2C1_SCL         0x0E8    0x14    0x4
-#define SYS_GPN_MFPL_PN5MFP_VCAP1_DATA5      0x0E8    0x14    0x6
+#define SYS_GPN_MFPL_PN5MFP_CCAP1_DATA5      0x0E8    0x14    0x6
 #define SYS_GPN_MFPL_PN6MFP_CAN1_RXD         0x0E8    0x18    0x3
 #define SYS_GPN_MFPL_PN6MFP_GPIO             0x0E8    0x18    0x0
 #define SYS_GPN_MFPL_PN6MFP_USBHL1_DM        0x0E8    0x18    0x4
-#define SYS_GPN_MFPL_PN6MFP_VCAP1_DATA6      0x0E8    0x18    0x6
+#define SYS_GPN_MFPL_PN6MFP_CCAP1_DATA6      0x0E8    0x18    0x6
 #define SYS_GPN_MFPL_PN7MFP_CAN1_TXD         0x0E8    0x1C    0x3
 #define SYS_GPN_MFPL_PN7MFP_GPIO             0x0E8    0x1C    0x0
 #define SYS_GPN_MFPL_PN7MFP_USBHL1_DP        0x0E8    0x1C    0x4
-#define SYS_GPN_MFPL_PN7MFP_VCAP1_DATA7      0x0E8    0x1C    0x6
+#define SYS_GPN_MFPL_PN7MFP_CCAP1_DATA7      0x0E8    0x1C    0x6
 /********************* Bit definition of GPN_MFPH register **********************/
 #define SYS_GPN_MFPH_PN8MFP_EPWM2_CH4        0x0EC    0x00    0x1
 #define SYS_GPN_MFPH_PN8MFP_GPIO             0x0EC    0x00    0x0
 #define SYS_GPN_MFPH_PN8MFP_I2C0_SDA         0x0EC    0x00    0x4
 #define SYS_GPN_MFPH_PN8MFP_SPI2_I2SMCLK     0x0EC    0x00    0x5
-#define SYS_GPN_MFPH_PN8MFP_VCAP1_DATA8      0x0EC    0x00    0x6
+#define SYS_GPN_MFPH_PN8MFP_CCAP1_DATA8      0x0EC    0x00    0x6
 #define SYS_GPN_MFPH_PN9MFP_EPWM2_CH5        0x0EC    0x04    0x1
 #define SYS_GPN_MFPH_PN9MFP_GPIO             0x0EC    0x04    0x0
 #define SYS_GPN_MFPH_PN9MFP_I2C0_SCL         0x0EC    0x04    0x4
 #define SYS_GPN_MFPH_PN9MFP_SPI1_I2SMCLK     0x0EC    0x04    0x5
-#define SYS_GPN_MFPH_PN9MFP_VCAP1_DATA9      0x0EC    0x04    0x6
+#define SYS_GPN_MFPH_PN9MFP_CCAP1_DATA9      0x0EC    0x04    0x6
 #define SYS_GPN_MFPH_PN10MFP_CAN2_RXD        0x0EC    0x08    0x3
 #define SYS_GPN_MFPH_PN10MFP_GPIO            0x0EC    0x08    0x0
 #define SYS_GPN_MFPH_PN10MFP_USBHL2_DM       0x0EC    0x08    0x4
-#define SYS_GPN_MFPH_PN10MFP_VCAP1_SCLK      0x0EC    0x08    0x6
+#define SYS_GPN_MFPH_PN10MFP_CCAP1_SCLK      0x0EC    0x08    0x6
 #define SYS_GPN_MFPH_PN11MFP_CAN2_TXD        0x0EC    0x0C    0x3
 #define SYS_GPN_MFPH_PN11MFP_GPIO            0x0EC    0x0C    0x0
 #define SYS_GPN_MFPH_PN11MFP_USBHL2_DP       0x0EC    0x0C    0x4
-#define SYS_GPN_MFPH_PN11MFP_VCAP1_PIXCLK    0x0EC    0x0C    0x6
+#define SYS_GPN_MFPH_PN11MFP_CCAP1_PIXCLK    0x0EC    0x0C    0x6
 #define SYS_GPN_MFPH_PN12MFP_GPIO            0x0EC    0x10    0x0
 #define SYS_GPN_MFPH_PN12MFP_I2C5_SDA        0x0EC    0x10    0x4
 #define SYS_GPN_MFPH_PN12MFP_UART12_RXD      0x0EC    0x10    0x3
 #define SYS_GPN_MFPH_PN12MFP_UART6_nCTS      0x0EC    0x10    0x2
-#define SYS_GPN_MFPH_PN12MFP_VCAP1_HSYNC     0x0EC    0x10    0x6
+#define SYS_GPN_MFPH_PN12MFP_CCAP1_HSYNC     0x0EC    0x10    0x6
 #define SYS_GPN_MFPH_PN13MFP_GPIO            0x0EC    0x14    0x0
 #define SYS_GPN_MFPH_PN13MFP_I2C5_SCL        0x0EC    0x14    0x4
 #define SYS_GPN_MFPH_PN13MFP_UART12_TXD      0x0EC    0x14    0x3
 #define SYS_GPN_MFPH_PN13MFP_UART6_nRTS      0x0EC    0x14    0x2
-#define SYS_GPN_MFPH_PN13MFP_VCAP1_VSYNC     0x0EC    0x14    0x6
+#define SYS_GPN_MFPH_PN13MFP_CCAP1_VSYNC     0x0EC    0x14    0x6
 #define SYS_GPN_MFPH_PN14MFP_CAN3_RXD        0x0EC    0x18    0x3
 #define SYS_GPN_MFPH_PN14MFP_GPIO            0x0EC    0x18    0x0
 #define SYS_GPN_MFPH_PN14MFP_SPI1_I2SMCLK    0x0EC    0x18    0x7
 #define SYS_GPN_MFPH_PN14MFP_SPI1_SS1        0x0EC    0x18    0x5
 #define SYS_GPN_MFPH_PN14MFP_UART6_RXD       0x0EC    0x18    0x2
 #define SYS_GPN_MFPH_PN14MFP_USBHL3_DM       0x0EC    0x18    0x4
-#define SYS_GPN_MFPH_PN14MFP_VCAP1_SFIELD    0x0EC    0x18    0x6
+#define SYS_GPN_MFPH_PN14MFP_CCAP1_SFIELD    0x0EC    0x18    0x6
 #define SYS_GPN_MFPH_PN15MFP_CAN3_TXD        0x0EC    0x1C    0x3
 #define SYS_GPN_MFPH_PN15MFP_CLKO            0x0EC    0x1C    0xA
 #define SYS_GPN_MFPH_PN15MFP_EADC0_ST        0x0EC    0x1C    0x9

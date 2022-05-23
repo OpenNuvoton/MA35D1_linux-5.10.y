@@ -22,7 +22,6 @@
 #include <asm/irq.h>
 #include <linux/platform_data/dma-ma35d1.h>
 
-#define PCLK_FREQ       189000000
 #define QSPI0_BASEADDR  0x40680000
 #define QSPI1_BASEADDR  0x40690000
 
@@ -164,11 +163,7 @@ static int nuvoton_spi_clk_setup(struct nuvoton_spi *hw, unsigned long freq)
 	unsigned int clk;
 	unsigned int div;
 
-#if 0 /* TODO: turn on this after design fix */
 	clk = clk_get_rate(hw->clk);
-#else
-	clk = PCLK_FREQ;
-#endif
 	div = DIV_ROUND_UP(clk, freq) - 1;
 	hw->pdata->hz = freq;
 	hw->pdata->divider = div;
