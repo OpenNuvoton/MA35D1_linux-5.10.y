@@ -1279,6 +1279,8 @@
 		reg = <0x0 0x40100000 0x0 0x10>;
 		bank = <0>;
 		clock-enable = "ebi_gate";
+		clock-names = "ebi_gate";
+		clocks = <&clk EBI_GATE>;
 		status = "disabled";
 		busmode = <1>;//Address/Data Bus Separate Mode. 0:Disabled, 1:Enabled
 		csactiveLevel = <0>;//0:Low, 1: High
@@ -1294,6 +1296,8 @@
 		reg = <0x0 0x40100010 0x0 0x10>;
 		bank = <1>;
 		clock-enable = "ebi_gate";
+		clock-names = "ebi_gate";
+		clocks = <&clk EBI_GATE>;
 		status = "disabled";
 		busmode = <1>;//Address/Data Bus Separate Mode. 0:Disabled, 1:Enabled
 		csactiveLevel = <0>;//0:Low, 1: High
@@ -1310,6 +1314,8 @@
 		reg = <0x0 0x40100020 0x0 0x0fe0>;
 		bank = <2>;
 		clock-enable = "ebi_gate";
+		clock-names = "ebi_gate";
+		clocks = <&clk EBI_GATE>;
 		status = "disabled";
 		busmode = <1>;//Address/Data Bus Separate Mode. 0:Disabled, 1:Enabled
 		csactiveLevel = <0>;//0:Low, 1: High
