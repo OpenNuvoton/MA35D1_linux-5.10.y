@@ -34,6 +34,7 @@
 #define REG_STATUS      0x14
 #define REG_TX          0x20
 #define REG_RX          0x30
+#define REG_INTERNAL    0x48
 
 /* spi register bit */
 #define QUADIOEN        (0x01 << 22)
@@ -96,6 +97,7 @@ struct nuvoton_qspi_info {
 	unsigned int hz;
 	unsigned int quad;
 	unsigned int use_pdma;
+	unsigned int mrxphase;
 	unsigned int pdma_reqsel_tx;
 	unsigned int pdma_reqsel_rx;
 };
@@ -331,6 +333,9 @@ static void nuvoton_spi_hw_init(struct nuvoton_spi *hw)
 	nuvoton_set_sleep(hw, hw->pdata->sleep);
 	nuvoton_setup_txbitlen(hw, hw->pdata->txbitlen);
 	nuvoton_set_clock_polarity(hw, hw->pdata->clkpol);
+
+	__raw_writel((__raw_readl(hw->regs + REG_INTERNAL) & ~0xF000) | (hw->pdata->mrxphase << 12),
+			hw->regs + REG_INTERNAL); /* MRxPhase(QSPI_INTERNAL[15:12] */
 
 	__raw_writel(__raw_readl(hw->regs + REG_CTL) | SPIEN, hw->regs + REG_CTL); /* enable SPI */
 	while ((__raw_readl(hw->regs + REG_STATUS) & (1<<15)) == 0); //SPIENSTS
@@ -730,6 +735,13 @@ static struct nuvoton_qspi_info *nuvoton_spi_parse_dt(struct device *dev)
 		sci->use_pdma = 0;
 	} else {
 		sci->use_pdma = temp;
+	}
+
+	if (of_property_read_u32(dev->of_node, "mrxphase", &temp)) {
+		dev_warn(dev, "can't get mrxphase from dt\n");
+		sci->mrxphase = 0;
+	} else {
+		sci->mrxphase = temp;
 	}
 
 	if (of_property_read_u32(dev->of_node, "pdma_reqsel_tx", &temp)) {

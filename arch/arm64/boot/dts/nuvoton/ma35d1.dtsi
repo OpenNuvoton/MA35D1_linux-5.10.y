@@ -879,6 +879,62 @@
 			drive-strength = <1>; /* 0 ~ 7 */
 		};
 
+		pcfg_spi_drive1_1_8V: pcfg-pcfg_spi_drive1_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <1>; /* 0 ~ 7 */
+		};
+
+		pcfg_spi_drive2_1_8V: pcfg-pcfg_spi_drive2_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <2>; /* 0 ~ 7 */
+		};
+
+		pcfg_spi_drive3_1_8V: pcfg-pcfg_spi_drive3_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <3>; /* 0 ~ 7 */
+		};
+
+		pcfg_spi_drive4_1_8V: pcfg-pcfg_spi_drive4_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <4>; /* 0 ~ 7 */
+		};
+
+		pcfg_spi_drive5_1_8V: pcfg-pcfg_spi_drive5_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <5>; /* 0 ~ 7 */
+		};
+
+		pcfg_spi_drive6_1_8V: pcfg-pcfg_spi_drive6_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <6>; /* 0 ~ 7 */
+		};
+
+		pcfg_spi_drive7_1_8V: pcfg-pcfg_spi_drive7_1_8V {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <7>; /* 0 ~ 7 */
+		};
+
 		pcfg_sdhci_drive1_3_3V: pcfg-pcfg_sdhci_drive1_3_3V {
 			slew-rate = <0>; /* 0:normal, 1:high */
 			input-schmitt-enable;  /* input-schmitt-disable, input-schmitt-enable */
@@ -1341,6 +1397,7 @@
 		txbitlen = <8>;
 		quad = <0>;
 		bus_num = <0>;
+		mrxphase = <0>;
 		status = "disabled";
 
 		#address-cells = <1>;
@@ -1349,7 +1406,7 @@
 		flash: flash@0 {
 			compatible = "spi-nand";
 			reg = <0 0x0 0x2000000>;
-			spi-max-frequency = <60000000>;
+			spi-max-frequency = <50000000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
 
