@@ -18,6 +18,7 @@
 
 #include <linux/platform_data/dma-ma35d1.h>
 #include <linux/of.h>
+#include <linux/of_dma.h>
 #include "dmaengine.h"
 
 /* PDMA registers */
@@ -1254,6 +1255,23 @@ static void ma35d1_dma_issue_pending(struct dma_chan *chan)
 	LEAVE();
 }
 
+static struct dma_chan *ma35d1_dma_of_xlate(struct of_phandle_args *dma_spec,
+                struct of_dma *of)
+{
+	struct ma35d1_dma_engine *edma = of->of_dma_data;
+        unsigned int request;
+
+        if (dma_spec->args_count != 1)
+                return NULL;
+
+        request = dma_spec->args[0];
+        if (request >= edma->pdata->num_channels)
+                return NULL;
+
+        return dma_get_slave_channel(&(edma->channels[request].chan));
+}
+
+
 static int ma35d1_dma_probe(struct platform_device *pdev)
 {
 	struct ma35d1_dma_platform_data *pdata;
@@ -1373,6 +1391,18 @@ static int ma35d1_dma_probe(struct platform_device *pdev)
 	else
 		dev_info(dma_dev->dev, "ma35d1 DMA ready\n");
 
+	ret = of_dma_controller_register(pdev->dev.of_node,
+                                         ma35d1_dma_of_xlate, edma);
+        if (ret < 0) {
+                dev_err(&pdev->dev,
+                        "MA35D1 DMA DMA OF registration failed %d\n", ret);
+                goto err_unregister;
+        }
+	return 0;
+
+err_unregister:
+	dma_async_device_unregister(dma_dev);
+	clk_disable_unprepare(pdma_clk);
 	return ret;
 }
 
