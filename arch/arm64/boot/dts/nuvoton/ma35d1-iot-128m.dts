@@ -478,12 +478,12 @@
 		pinctrl_sdhci1_3_3V: sdhci1_3_3Vgrp{
 			nuvoton,pins =
 				<SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>,
-				<SYS_GPJ_MFPL_PJ6MFP_SD1_CMD	&pcfg_sdhci_drive4_3_3V>,
-				<SYS_GPJ_MFPL_PJ7MFP_SD1_CLK	&pcfg_sdhci_drive7_3_3V>,
-				<SYS_GPJ_MFPH_PJ8MFP_SD1_DAT0	&pcfg_sdhci_drive1_3_3V>,
-				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_sdhci_drive1_3_3V>,
-				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_sdhci_drive1_3_3V>,
-				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_sdhci_drive1_3_3V>;
+				<SYS_GPJ_MFPL_PJ6MFP_SD1_CMD	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPL_PJ7MFP_SD1_CLK	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPH_PJ8MFP_SD1_DAT0	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_sdhci_drive2_3_3V>;
 		};
 
 		pinctrl_sdhci1_1_8V: sdhci1_1_8Vgrp{
