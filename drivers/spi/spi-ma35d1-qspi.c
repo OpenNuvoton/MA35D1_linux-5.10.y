@@ -94,6 +94,7 @@ struct nuvoton_qspi_info {
 	unsigned int txbitlen;
 	unsigned int clkpol;
 	int bus_num;
+	unsigned int spimode;
 	unsigned int hz;
 	unsigned int quad;
 	unsigned int use_pdma;
@@ -270,6 +271,11 @@ static int nuvoton_spi_update_state(struct spi_device *spi)
 	struct nuvoton_spi *hw = (struct nuvoton_spi *)to_hw(spi);
 	unsigned char spimode;
 
+	spi->mode = hw->pdata->spimode;
+
+	if (hw->pdata->quad)
+		spi->mode |= (SPI_TX_QUAD | SPI_RX_QUAD);
+
 	//Mode 0: CPOL=0, CPHA=0; active high
 	//Mode 1: CPOL=0, CPHA=1; active low
 	//Mode 2: CPOL=1, CPHA=0; active low
@@ -327,6 +333,19 @@ static void nuvoton_spi_hw_init(struct nuvoton_spi *hw)
 	spin_lock_init(&hw->lock);
 
 	spin_lock_irqsave(&hw->lock, flags);
+
+	if (hw->pdata->spimode & SPI_CPOL)
+		hw->pdata->clkpol = 1;
+	else
+		hw->pdata->clkpol = 0;
+
+	if ((hw->pdata->spimode == SPI_MODE_0) || (hw->pdata->spimode == SPI_MODE_3)) {
+		hw->pdata->txneg = 1;
+		hw->pdata->rxneg = 0;
+	} else {
+		hw->pdata->txneg = 0;
+		hw->pdata->rxneg = 1;
+	}
 
 	nuvoton_tx_rx_edge(hw, hw->pdata->txneg, hw->pdata->rxneg);
 	nuvoton_send_first(hw, hw->pdata->lsb);
@@ -723,6 +742,13 @@ static struct nuvoton_qspi_info *nuvoton_spi_parse_dt(struct device *dev)
 		sci->bus_num = temp;
 	}
 
+	if (of_property_read_u32(dev->of_node, "spimode", &temp)) {
+		dev_warn(dev, "can't get spimode from dt\n");
+		sci->spimode = 0;
+	} else {
+		sci->spimode = temp;
+	}
+
 	if (of_property_read_u32(dev->of_node, "quad", &temp)) {
 		dev_warn(dev, "can't get quad from dt\n");
 		sci->quad = 0;
@@ -955,7 +981,7 @@ static int nuvoton_spi_probe(struct platform_device *pdev)
 		 * the channel for the proxy channel also.
 		 */
 		pdma = &nuvoton->dma;
-		pdma->chan_rx = dma_request_channel(mask, NULL, NULL);
+		pdma->chan_rx = dma_request_slave_channel_reason(&pdev->dev,"rx");
 		if (!pdma->chan_rx) {
 			dev_err(&pdev->dev, "RX DMA channel request error\n");
 			err = -ENOENT;
@@ -963,7 +989,7 @@ static int nuvoton_spi_probe(struct platform_device *pdev)
 		}
 		pr_debug("RX %s: %s module removed\n",__func__, dma_chan_name(pdma->chan_rx));
 
-		pdma->chan_tx = dma_request_channel(mask, NULL, NULL);
+		pdma->chan_tx = dma_request_slave_channel_reason(&pdev->dev,"tx");
 		if (!pdma->chan_tx) {
 			dev_err(&pdev->dev, "TX DMA channel request error\n");
 			err = -ENOENT;

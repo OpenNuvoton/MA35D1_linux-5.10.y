@@ -1115,7 +1115,7 @@
 		#dma-cells = <1>;
 		#dma-channels = <10>;
 		#dma-requests = <32>;
-		status = "disabled";
+		status = "okay";
 	};
 
 	pdma2: pdma@400A0000 {
@@ -1389,6 +1389,8 @@
 		reg = <0x0 0x40680000 0x0 0x10000>;
 		interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk QSPI0_GATE>;
+		dmas = <&pdma1 0>,<&pdma1 1>;
+		dma-names = "tx","rx";
 		pdma_reqsel_tx = <54>;
 		pdma_reqsel_rx = <55>;
 		use_pdma = <1>;
@@ -1398,6 +1400,7 @@
 		txbitlen = <8>;
 		quad = <0>;
 		bus_num = <0>;
+		spimode = <0>;
 		mrxphase = <0>;
 		status = "disabled";
 
@@ -1445,6 +1448,8 @@
 		reg = <0x0 0x40690000 0x0 0x10000>;
 		interrupts = <GIC_SPI 58 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk QSPI1_GATE>;
+		dmas = <&pdma1 2>,<&pdma1 3>;
+		dma-names = "tx","rx";
 		pdma_reqsel_tx = <56>;
 		pdma_reqsel_rx = <57>;
 		use_pdma = <0>;
@@ -1454,6 +1459,8 @@
 		txbitlen = <8>;
 		quad = <0>;
 		bus_num = <1>;
+		spimode = <0>;
+		mrxphase = <0>;
 		status = "disabled";
 
 		#address-cells = <1>;
@@ -1485,6 +1492,8 @@
 		reg = <0x0 0x40600000 0x0 0x10000>;
 		interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk SPI0_GATE>;
+		dmas = <&pdma1 4>,<&pdma1 5>;
+		dma-names = "tx","rx";
 		pdma_reqsel_tx = <60>;
 		pdma_reqsel_rx = <61>;
 		use_pdma = <0>;
@@ -1493,6 +1502,8 @@
 		sleep = <0>;
 		txbitlen = <8>;
 		bus_num = <2>;
+		spimode = <0>;
+		mrxphase = <0>;
 		spi-max-frequency = <10000000>;
 		status = "disabled";
 	};
@@ -1502,6 +1513,8 @@
 		reg = <0x0 0x40610000 0x0 0x10000>;
 		interrupts = <GIC_SPI 90 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk SPI1_GATE>;
+		dmas = <&pdma1 6>,<&pdma1 7>;
+		dma-names = "tx","rx";
 		pdma_reqsel_tx = <62>;
 		pdma_reqsel_rx = <63>;
 		use_pdma = <0>;
@@ -1510,6 +1523,8 @@
 		sleep = <0>;
 		txbitlen = <8>;
 		bus_num = <3>;
+		spimode = <0>;
+		mrxphase = <0>;
 		spi-max-frequency = <10000000>;
 		status = "disabled";
 	};
@@ -1519,6 +1534,8 @@
 		reg = <0x0 0x40620000 0x0 0x10000>;
 		interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk SPI2_GATE>;
+		dmas = <&pdma1 8>,<&pdma1 9>;
+		dma-names = "tx","rx";
 		pdma_reqsel_tx = <64>;
 		pdma_reqsel_rx = <65>;
 		use_pdma = <0>;
@@ -1527,6 +1544,8 @@
 		sleep = <0>;
 		txbitlen = <8>;
 		bus_num = <4>;
+		spimode = <0>;
+		mrxphase = <0>;
 		spi-max-frequency = <10000000>;
 		status = "disabled";
 	};
@@ -1536,6 +1555,8 @@
 		reg = <0x0 0x40630000 0x0 0x10000>;
 		interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk SPI3_GATE>;
+		dmas = <&pdma2 0>,<&pdma2 1>;
+		dma-names = "tx","rx";
 		pdma_reqsel_tx = <66>;
 		pdma_reqsel_rx = <67>;
 		use_pdma = <0>;
@@ -1544,6 +1565,8 @@
 		sleep = <0>;
 		txbitlen = <8>;
 		bus_num = <5>;
+		spimode = <0>;
+		mrxphase = <0>;
 		spi-max-frequency = <10000000>;
 		status = "disabled";
 	};
