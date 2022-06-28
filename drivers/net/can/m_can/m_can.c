@@ -321,10 +321,33 @@ enum m_can_reg {
 #define TX_EVENT_MM_SHIFT	TX_BUF_MM_SHIFT
 #define TX_EVENT_MM_MASK	(0xff << TX_EVENT_MM_SHIFT)
 
+#define CANFD_READ_REG_TIMEOUT    48                 /*!< CANFD read register time-out count */
+
+#if 1
+static inline u32 m_can_read(struct m_can_classdev *cdev, enum m_can_reg reg)
+{
+	u32 u32ReadReg = 0x0;
+	u32 u32TimeOutCnt = 0x0;
+	u32ReadReg = 0UL;
+
+	do{
+		u32ReadReg = cdev->ops->read_reg(cdev, reg);
+		u32TimeOutCnt++;
+		if(u32TimeOutCnt > 50) {
+			break;
+		}
+	}while(u32ReadReg == 0x0);
+	
+	return u32ReadReg;
+}
+#endif
+
+#if 0
 static inline u32 m_can_read(struct m_can_classdev *cdev, enum m_can_reg reg)
 {
 	return cdev->ops->read_reg(cdev, reg);
 }
+#endif
 
 static inline void m_can_write(struct m_can_classdev *cdev, enum m_can_reg reg,
 			       u32 val)
@@ -1464,6 +1487,7 @@ static netdev_tx_t m_can_tx_handler(struct m_can_classdev *cdev)
 	u32 id, cccr, fdflags;
 	int i;
 	int putidx;
+	u32 check_idle_timeout = 0;
 
 	cdev->tx_skb = NULL;
 
@@ -1567,6 +1591,15 @@ static netdev_tx_t m_can_tx_handler(struct m_can_classdev *cdev)
 		can_put_echo_skb(skb, dev, putidx);
 
 		/* Enable TX FIFO element to start transfer  */
+		#if 1
+		while((m_can_read(cdev, M_CAN_PSR) & 0x18) != 0x8){
+			check_idle_timeout++;
+			if(check_idle_timeout > 0xffffff) {
+				return NETDEV_TX_BUSY;
+			}
+		}
+		#endif
+		
 		m_can_write(cdev, M_CAN_TXBAR, (1 << putidx));
 
 		/* stop network queue if fifo full */
