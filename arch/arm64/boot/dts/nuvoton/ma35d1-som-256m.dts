@@ -59,6 +59,15 @@
 		};
 	};
 
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		brightness-levels = <250 225 175 125 75 25>;
+		default-brightness-level = <5>;
+		pwms = <&epwm1 1 50000>;
+		enable-gpios = <&gpiok 7 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+        };
+
 	volt0_sdhci1: regulator-volt0_sdhci1 {
 		compatible = "nuvoton,ma35d1-volt";
 		regulator-min-microvolt = <1800000>;
@@ -323,6 +332,7 @@
 
 &epwm1 {
 	status = "okay";
+	#pwm-cells = <2>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_epwm1>;
 };
@@ -655,6 +665,7 @@
 	epwm1 {
 		pinctrl_epwm1: epwm1grp{
 			nuvoton,pins =
+				<SYS_GPK_MFPL_PK5MFP_EPWM1_CH1	&pcfg_default>,
 				<SYS_GPM_MFPH_PM13MFP_EPWM1_CH5	&pcfg_default>;
 		};
 	};

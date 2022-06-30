@@ -1638,7 +1638,6 @@
 		clocks = <&clk DCU_GATE>;
 		clock-names = "dcu_gate";
 		resets = <&reset MA35D1_RESET_DISP>;
-		bl-gpios = <&gpiok 7 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 
 		reset_offset_en = "no";
