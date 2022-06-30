@@ -163,7 +163,13 @@
 		interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk UART1_GATE>;
 		port-number = <1>;
-		pdma-enable = <0>;
+		
+		/* PDMA Setting*/
+		dmas = <&pdma2 2>,<&pdma3 3>;
+        	dma-names = "tx", "rx";
+                /*pdma-enable = <1>;*/ /* enable PDMA */
+		pdma-enable = <0>; /* Disable PDMA */
+
 		status = "disabled";
 	};
 
