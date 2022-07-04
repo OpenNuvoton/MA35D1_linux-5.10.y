@@ -258,6 +258,11 @@ static int ma35d1_ebi_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "EBI Timing control 'IDLE' cannot be read!\n");
 		return ret;
 	}
+	ret = of_property_read_u32_array(pdev->dev.of_node,"MCLKDIV",&ebi[ch]->MCLKDIV, 1);
+	if (ret) {
+		dev_err(&pdev->dev, "EBI Timing control 'MCLKDIV' cannot be read!\n");
+		return ret;
+	}
 
 	ma35d1_set_ebi_ctl(ebi[ch]->bank);
 

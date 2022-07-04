@@ -1348,6 +1348,7 @@
 		busmode = <1>;//Address/Data Bus Separate Mode. 0:Disabled, 1:Enabled
 		csactiveLevel = <0>;//0:Low, 1: High
 		datawidth = <1>;//0:8bit, 1: 16bit
+		MCLKDIV = <2>;//0 ~ 7,EBI_CTL0[10:8]
 		tALE = <1>;//0 ~ 7,EBI_CTL0[18:16]
 		tACC = <1>;//0 ~ 31, EBI_TCTLx[7:3]
 		tAHD = <1>;//0 ~ 7, EBI_TCTLx[10:9]
