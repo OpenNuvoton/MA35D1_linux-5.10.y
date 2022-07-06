@@ -46,7 +46,7 @@ static const char *const sdh_sel_clks[] = {
 };
 
 static const char *const dcu_sel_clks[] = {
-	"vpll", "syspll"
+	"epll_div2", "syspll"
 };
 
 static const char *const gfx_sel_clks[] = {

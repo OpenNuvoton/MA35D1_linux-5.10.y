@@ -1636,8 +1636,8 @@
 		reg = <0x0 0x40260000 0x0 0x2000>;
 		interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
 		nuvoton,clk = <&clk>;
-		clocks = <&clk DCU_GATE>;
-		clock-names = "dcu_gate";
+		clocks = <&clk DCU_GATE>, <&clk DCUP_DIV>;
+		clock-names = "dcu_gate", "dcup_div";
 		resets = <&reset MA35D1_RESET_DISP>;
 		status = "disabled";
 
