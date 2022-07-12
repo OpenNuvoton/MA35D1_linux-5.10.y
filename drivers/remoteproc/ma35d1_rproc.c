@@ -116,7 +116,7 @@ static void ma35d1_rproc_kick(struct rproc *rproc, int vqid)
 		dev_err(dev, "failed to send mailbox message, status = %d\n", ret);
 }
 
-static void *ma35d1_m4_rproc_da_to_va(struct rproc *rproc, u64 da, int len)
+static void *ma35d1_m4_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
 {
 	struct ma35d1_rproc *nproc = rproc->priv;
 	void *va = NULL;
@@ -312,7 +312,7 @@ static int ma35d1_rproc_probe(struct platform_device *pdev)
 	nproc->dev = dev;
 
 	nproc->sram_size = 0x20000;
-	nproc->da_to_va_addr_1 = devm_ioremap_nocache(&pdev->dev, 0x24000000, 0x20000);
+	nproc->da_to_va_addr_1 = devm_ioremap(&pdev->dev, 0x24000000, 0x20000);
 	nproc->da_to_va_offset = 0;
 
 	node = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);

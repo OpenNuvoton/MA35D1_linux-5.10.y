@@ -1861,7 +1861,7 @@ static int ccap_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&ccap_dev->buf_list);
 	pm_runtime_enable(&pdev->dev);
 	pm_runtime_resume(&pdev->dev);
-	ret = video_register_device(vdev, VFL_TYPE_GRABBER, -1);
+	ret = video_register_device(vdev, VFL_TYPE_VIDEO, -1);
 	if (ret < 0)
 		goto evregdev;
 

@@ -160,8 +160,11 @@ static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
 
 static irqreturn_t ma35d1_adc_isr(int irq, void *dev_id)
 {
-	struct ma35d1_adc_device *info = (struct ma35d1_adc_device *)dev_id;
-	struct iio_dev *indio_dev = iio_priv_to_dev(info);
+	struct iio_dev *indio_dev = dev_id;
+        struct ma35d1_adc_device *info = iio_priv(indio_dev);
+
+	//struct ma35d1_adc_device *info = (struct ma35d1_adc_device *)dev_id;
+	//struct iio_dev *indio_dev = iio_priv(info);
 
 	if (readl(info->regs + STATUS2) & 1) {  //check ADIF0
 		writel(1, info->regs + STATUS2); //clear ADIF0
@@ -426,8 +429,8 @@ static int __ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 
 static int ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 {
-	int ret;
-
+	int ret = 0;
+#if 0 //schung
 	ret = iio_triggered_buffer_postenable(indio_dev);
 	if (ret < 0)
 		return ret;
@@ -435,7 +438,7 @@ static int ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 	ret = __ma35d1_adc_buffer_postenable(indio_dev);
 	if (ret < 0)
 		iio_triggered_buffer_predisable(indio_dev);
-
+#endif
 	return ret;
 }
 
@@ -451,14 +454,15 @@ static void __ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
 
 static int ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
 {
-	int ret;
+	int ret = 0;
 
 	__ma35d1_adc_buffer_predisable(indio_dev);
 
+#if 0 //schung	
 	ret = iio_triggered_buffer_predisable(indio_dev);
 	if (ret < 0)
 		dev_err(&indio_dev->dev, "predisable failed\n");
-
+#endif
 	return ret;
 }
 
@@ -485,7 +489,7 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	const char *clkgate;
 	u32 freq;
 
-	indio_dev = iio_device_alloc(sizeof(struct ma35d1_adc_device));
+	indio_dev = iio_device_alloc(dev, sizeof(struct ma35d1_adc_device));
 	if (indio_dev == NULL) {
 		dev_err(&pdev->dev, "failed to allocate iio device\n");
 		ret = -ENOMEM;

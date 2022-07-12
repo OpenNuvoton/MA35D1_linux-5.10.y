@@ -985,7 +985,8 @@ static int ma35d1_nand_probe(struct platform_device *pdev)
 	chip->ecc.write_page = ma35d1_nand_write_page_hwecc;
 	chip->ecc.read_page  = ma35d1_nand_read_page_hwecc_oob_first;
 	chip->ecc.read_oob   = ma35d1_nand_read_oob_hwecc;
-	chip->options |= (NAND_NO_SUBPAGE_WRITE | NAND_USE_BOUNCE_BUFFER);
+	// chip->options |= (NAND_NO_SUBPAGE_WRITE | NAND_USE_BOUNCE_BUFFER); //schung
+	 chip->options |= (NAND_NO_SUBPAGE_WRITE); 
 
 	ma35d1_nand_initialize(ma35d1_nand);
 	platform_set_drvdata(pdev, ma35d1_nand);
@@ -1016,7 +1017,7 @@ static int ma35d1_nand_probe(struct platform_device *pdev)
 	return retval;
 
 fail:
-	nand_release(chip);
+	//nand_release(chip);  //schung
 	devm_kfree(&pdev->dev, ma35d1_nand);
 	return retval;
 }

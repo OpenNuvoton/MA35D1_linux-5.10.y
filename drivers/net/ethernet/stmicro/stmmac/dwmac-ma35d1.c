@@ -41,6 +41,7 @@ static struct nvt_priv_data *nvt_gmac_setup(struct platform_device *pdev,
 	struct device *dev = &pdev->dev;
 	int value;
 	u32 reg;
+	int ret;
 
 	bsp_priv = devm_kzalloc(dev, sizeof(*bsp_priv), GFP_KERNEL);
 	if (!bsp_priv)
@@ -62,7 +63,12 @@ static struct nvt_priv_data *nvt_gmac_setup(struct platform_device *pdev,
 		    bsp_priv->id == 0 ? REG_SYS_GMAC0MISCR : REG_SYS_GMAC1MISCR, &reg);
 	reg &= ~(TXDLY_MSK | RXDLY_MSK);
 
-	bsp_priv->phy_mode = of_get_phy_mode(pdev->dev.of_node);
+	ret = of_get_phy_mode(pdev->dev.of_node, bsp_priv->phy_mode);
+	if (ret) {
+		dev_err(dev, "missing phy mode property\n");
+		return -EINVAL;
+	}
+
 	switch (bsp_priv->phy_mode) {
 	case PHY_INTERFACE_MODE_RGMII:		/* Fall through */
 	case PHY_INTERFACE_MODE_RGMII_ID	/* Fall through */:

@@ -1098,7 +1098,7 @@ static void __init ma35d1serial_init_ports(void)
 		}
 
 		p->port.iobase = val32[1];
-		p->port.membase = ioremap_nocache(p->port.iobase, 0x10000);
+		p->port.membase = ioremap(p->port.iobase, 0x10000);
 		p->port.ops = &ma35d1serial_ops;
 
 		if (of_property_read_u32_array(np, "port-number", val32, 1) != 0) {
@@ -1271,7 +1271,7 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	up->port.iobase = res_mem->start;
-	up->port.membase = ioremap_nocache(up->port.iobase, 0x10000);
+	up->port.membase = ioremap(up->port.iobase, 0x10000);
 	up->port.ops = &ma35d1serial_ops;
 
 	spin_lock_init(&up->port.lock);

@@ -483,7 +483,7 @@ config HW_RANDOM_MA35D1
 	tristate "Nuvoton MA35D1 Random Number Generator support"
 	depends on ARCH_MA35D1
 	default HW_RANDOM
-	---help---
+	help
 	  This driver provides kernel-side support for the MA35D1 True Random Number
 	  Generator.
 

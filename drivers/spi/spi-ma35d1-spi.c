@@ -915,7 +915,7 @@ static int nuvoton_spi_probe(struct platform_device *pdev)
 		 * the channel for the proxy channel also.
 		 */
 		pdma = &nuvoton->dma;
-		pdma->chan_rx = dma_request_slave_channel_reason(&pdev->dev,"rx");
+		pdma->chan_rx = dma_request_slave_channel(&pdev->dev,"rx");
 		if (!pdma->chan_rx) {
 			dev_err(&pdev->dev, "RX DMA channel request error\n");
 			err = -ENOENT;
@@ -923,7 +923,7 @@ static int nuvoton_spi_probe(struct platform_device *pdev)
 		}
 		pr_debug("RX %s: %s module removed\n",__func__, dma_chan_name(pdma->chan_rx));
 
-		pdma->chan_tx = dma_request_slave_channel_reason(&pdev->dev,"tx");
+		pdma->chan_tx = dma_request_slave_channel(&pdev->dev,"tx");
 		if (!pdma->chan_tx) {
 			dev_err(&pdev->dev, "TX DMA channel request error\n");
 			err = -ENOENT;
