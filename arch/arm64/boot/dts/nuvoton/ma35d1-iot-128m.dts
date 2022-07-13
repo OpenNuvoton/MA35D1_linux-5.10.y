@@ -120,13 +120,13 @@
 };
 
 &gmac0 {
-	status = "okay";
+	status = "disabled";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_gmac0>;
 };
 
 &gmac1 {
-	status = "okay";
+	status = "disabled";
 	phy-mode = "rmii";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_gmac1>;
@@ -225,17 +225,17 @@
 };
 
 &i2s0 {
-	status = "okay";
+	status = "disabled";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2s0>;
 };
 
 &i2s_pcm {
-	status = "okay";
+	status = "disabled";
 };
 
 &sound {
-	status = "okay";
+	status = "disabled";
 };
 
 &qspi0 {
