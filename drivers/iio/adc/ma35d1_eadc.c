@@ -528,7 +528,7 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 		panic("missing 'eadc-frequency' property");
 
 	of_property_read_string(pdev->dev.of_node, "clock-enable", &clkgate);
-	info->eclk = devm_clk_get(dev, clkgate);
+	info->eclk = devm_clk_get(&pdev->dev, "eadc_gate");
 	if (IS_ERR(info->eclk)) {
 		if (PTR_ERR(info->eclk) != -ENOENT)
 			return PTR_ERR(info->eclk);
