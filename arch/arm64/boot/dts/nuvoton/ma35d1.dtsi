@@ -384,25 +384,27 @@
 	};
 
 	ehci0: ehci@40140000 {
-		compatible = "nuvoton,ma35d1-ehci0";
+		compatible = "nuvoton,ma35d1-ehci";
 		reg = <0x0 0x40140000 0x0 0x1000>;
 		clocks = <&clk HUSBH0_GATE>;
+		clock-names = "hsusbh0_gate";
 		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>;
 		status = "okay";
 	};
 
 	ehci1:ehci@401C0000 {
-		compatible = "nuvoton,ma35d1-ehci1";
+		compatible = "nuvoton,ma35d1-ehci";
 		reg = <0x0 0x401C0000 0x0 0x1000>;
 		clocks = <&clk HUSBH1_GATE>;
+		clock-names = "hsusbh1_gate";
 		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 		status = "okay";
 	};
 
 	ohci0:ohci@40150000 {
-		compatible = "nuvoton,ma35d1-ohci0";
+		compatible = "nuvoton,ma35d1-ohci";
 		reg = <0x0 0x40150000 0x0 0x1000>;
 		clocks = <&clk HUSBH0_GATE>;
 		nuvoton,sys = <&sys>;
@@ -411,7 +413,7 @@
 	};
 
 	ohci1:ohci@401D0000 {
-		compatible = "nuvoton,ma35d1-ohci1";
+		compatible = "nuvoton,ma35d1-ohci";
 		reg = <0x0 0x401D0000 0x0 0x1000>;
 		clocks = <&clk HUSBH1_GATE>;
 		nuvoton,sys = <&sys>;
@@ -613,6 +615,8 @@
 	wormhole: mailbox@403A0000 {
 		compatible = "nuvoton,ma35d1-wormhole";
 		reg = <0x0 0x403A0000 0x0 0x1000>;
+		clocks = <&clk WH0_GATE>;
+		clock-names = "wh0_gate";
 		interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
 		wakeup-source;
 		#mbox-cells = <1>;
@@ -625,7 +629,7 @@
 	};
 
 	rproc {
-		compatible	= "nuvoton, ma35d1-rproc";
+		compatible = "nuvoton,ma35d1-rproc";
 		mboxes = <&wormhole 1>;
 		resets = <&reset MA35D1_RESET_CM4>;
 		memory-region = <&rproc_buf>;

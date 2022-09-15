@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * linux/driver/usb/host/ehci-ma35d1.c
+ * linux/driver/usb/host/ohci-ma35d1.c
  *
  * Copyright (c) 2020 Nuvoton technology corporation.
  *
@@ -151,9 +151,7 @@ MODULE_ALIAS("platform:usb-ohci");
 
 #ifdef CONFIG_OF
 static const struct of_device_id ohci_hcd_ma35d1_match[] = {
-	{ .compatible = "nuvoton,ma35d1-ohci0" },
-	{ .compatible = "nuvoton,ma35d1-ohci1" },
-	{ .compatible = "nuvoton,ma35d1-ohci2" },
+	{ .compatible = "nuvoton,ma35d1-ohci" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, ohci_hcd_ma35d1_match);

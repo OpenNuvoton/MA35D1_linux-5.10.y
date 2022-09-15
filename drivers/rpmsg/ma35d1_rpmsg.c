@@ -287,8 +287,8 @@ struct ma35d1_rpmsg_priv *ma35d1_rpmsg_register(struct device *parent, struct de
 		return ERR_PTR(-EINVAL);
 	}
 
-	priv->tx_smem_start_addr = ioremap_nocache(share_mem_addr, tx_share_size);
-	priv->rx_smem_start_addr = ioremap_nocache((share_mem_addr + tx_share_size), rx_share_size);
+	priv->tx_smem_start_addr = ioremap(share_mem_addr, tx_share_size);
+	priv->rx_smem_start_addr = ioremap((share_mem_addr + tx_share_size), rx_share_size);
 	priv->tx_smem_size = tx_share_size;
 	priv->tx_smem_size = rx_share_size;
 
@@ -405,6 +405,8 @@ static void __exit ma35d1_rpmsg_dev_exit(void)
 {
 	platform_driver_unregister(&ma35d1_rpmsg_driver);
 }
+
+module_init(ma35d1_rpmsg_dev_init);
 module_exit(ma35d1_rpmsg_dev_exit);
 
 

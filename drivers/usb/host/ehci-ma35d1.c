@@ -64,6 +64,10 @@ static void ma35d1_start_ehci(struct platform_device *pdev)
 	/*                                 0 => USBH Host over-current detect is low-active  */
 	regmap_read(ma35d1_ehci->sysregmap, REG_SYS_MISCFCR0, &reg);
 	regmap_write(ma35d1_ehci->sysregmap, REG_SYS_MISCFCR0, (reg & ~(1<<12)));
+
+	reg = 0x55555555;
+	regmap_read(ma35d1_ehci->sysregmap, 0x204, &reg);
+	printk("ma35d1_start_ehci %d, SYSCLK0 = 0x%x\n", __LINE__, reg);
 }
 
 static void ma35d1_stop_ehci(struct platform_device *pdev)
@@ -127,7 +131,9 @@ static int ehci_ma35d1_drv_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to get core clk: %d\n", retval);
 		return -ENOENT;
 	}
+	ma35d1_reg_unlock();
 	retval = clk_prepare_enable(ma35d1_ehci->clk);
+	ma35d1_reg_lock();
 	if (retval)
 		return -ENOENT;
 
@@ -198,8 +204,7 @@ static int __maybe_unused ehci_ma35d1_drv_resume(struct device *dev)
 
 #ifdef CONFIG_OF
 static const struct of_device_id ma35d1_ehci_dt_ids[] = {
-	{ .compatible = "nuvoton,ma35d1-ehci0" },
-	{ .compatible = "nuvoton,ma35d1-ehci1" },
+	{ .compatible = "nuvoton,ma35d1-ehci" },
 	{ /* sentinel */ }
 };
 
