@@ -52,22 +52,27 @@ static void ma35d1_start_ehci(struct platform_device *pdev)
 {
 	struct usb_hcd *hcd = platform_get_drvdata(pdev);
 	struct ma35d1_ehci_priv *ma35d1_ehci = hcd_to_ma35d1_ehci_priv(hcd);
-	u32   reg;
+	u32   reg, timeout = (500 / 20);
 
 	ma35d1_ehci->sysregmap = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
 					"nuvoton,sys");
 
 	/* USBPMISCR; HSUSBH0 & HSUSBH1 PHY */
-	regmap_write(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, 0x20002);
+	regmap_read(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
+	if ((reg & 0x20302) != 0x20302) {
+		regmap_write(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, 0x20002);
+		do {
+			msleep(20);
+			regmap_read(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
+		} while (((reg & 0x20302) != 0x20302) && (timeout-- > 0));
+	}
+	regmap_read(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
+	dev_dbg(&pdev->dev, "REG_SYS_USBPMISCR = 0x%x, timeout = %d\n", reg, timeout);
 
 	/* set UHOVRCURH(SYS_MISCFCR0[12]) 1 => USBH Host over-current detect is high-active */
 	/*                                 0 => USBH Host over-current detect is low-active  */
 	regmap_read(ma35d1_ehci->sysregmap, REG_SYS_MISCFCR0, &reg);
 	regmap_write(ma35d1_ehci->sysregmap, REG_SYS_MISCFCR0, (reg & ~(1<<12)));
-
-	reg = 0x55555555;
-	regmap_read(ma35d1_ehci->sysregmap, 0x204, &reg);
-	printk("ma35d1_start_ehci %d, SYSCLK0 = 0x%x\n", __LINE__, reg);
 }
 
 static void ma35d1_stop_ehci(struct platform_device *pdev)
@@ -116,7 +121,6 @@ static int ehci_ma35d1_drv_probe(struct platform_device *pdev)
 		retval = -ENOMEM;
 		goto fail_create_hcd;
 	}
-	ma35d1_ehci = hcd_to_ma35d1_ehci_priv(hcd);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	hcd->regs = devm_ioremap_resource(&pdev->dev, res);
@@ -125,24 +129,27 @@ static int ehci_ma35d1_drv_probe(struct platform_device *pdev)
 		goto fail_request_resource;
 	}
 
+	hcd->rsrc_start = res->start;
+	hcd->rsrc_len = resource_size(res);
+	ehci = hcd_to_ehci(hcd);
+	ehci->caps = hcd->regs;
+
+	ma35d1_ehci = hcd_to_ma35d1_ehci_priv(hcd);
+
 	ma35d1_ehci->clk = of_clk_get(pdev->dev.of_node, 0);
 	if (IS_ERR(ma35d1_ehci->clk)) {
 		retval = PTR_ERR(ma35d1_ehci->clk);
 		dev_err(&pdev->dev, "failed to get core clk: %d\n", retval);
-		return -ENOENT;
+		retval = -ENOENT;
+		goto fail_request_resource;
 	}
-	ma35d1_reg_unlock();
+
 	retval = clk_prepare_enable(ma35d1_ehci->clk);
-	ma35d1_reg_lock();
-	if (retval)
-		return -ENOENT;
-
-	hcd->rsrc_start = res->start;
-	hcd->rsrc_len = resource_size(res);
-
-	ehci = hcd_to_ehci(hcd);
-	/* registers start at offset 0x0 */
-	ehci->caps = hcd->regs;
+	if (retval) {
+		dev_err(&pdev->dev, "failed to enable usb host clk: %d\n", retval);
+		retval = -ENOENT;
+		goto fail_request_resource;
+	}
 
 	ma35d1_start_ehci(pdev);
 
@@ -150,8 +157,6 @@ static int ehci_ma35d1_drv_probe(struct platform_device *pdev)
 	if (retval)
 		goto fail_add_hcd;
 	device_wakeup_enable(hcd->self.controller);
-
-	// printk(KERN_INFO "PORT0 = 0x%x\n", __raw_readl(hcd->regs+0x54));
 
 	return retval;
 
