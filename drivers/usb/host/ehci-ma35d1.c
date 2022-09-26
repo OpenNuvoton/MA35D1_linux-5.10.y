@@ -60,13 +60,13 @@ static void ma35d1_start_ehci(struct platform_device *pdev)
 	/* USBPMISCR; HSUSBH0 & HSUSBH1 PHY */
 	regmap_read(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
 	if ((reg & 0x20302) != 0x20302) {
-		regmap_write(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, 0x20002);
+		reg = (reg & ~0x30003) | 0x20002;
+		regmap_write(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, reg);
 		do {
 			msleep(20);
 			regmap_read(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
 		} while (((reg & 0x20302) != 0x20302) && (timeout-- > 0));
 	}
-	regmap_read(ma35d1_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
 	dev_dbg(&pdev->dev, "REG_SYS_USBPMISCR = 0x%x, timeout = %d\n", reg, timeout);
 
 	/* set UHOVRCURH(SYS_MISCFCR0[12]) 1 => USBH Host over-current detect is high-active */

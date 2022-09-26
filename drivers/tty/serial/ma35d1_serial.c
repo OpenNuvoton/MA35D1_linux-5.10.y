@@ -443,7 +443,6 @@ static void rs485_stop_rx(struct uart_ma35d1_port *port)
 static inline void __stop_tx(struct uart_ma35d1_port *p)
 {
 	unsigned int ier;
-	struct tty_struct *tty = p->port.state->port.tty;
 
 	if ((ier = serial_in(p, UART_REG_IER)) & THRE_IEN) {
 		serial_out(p, UART_REG_IER, ier & ~THRE_IEN);
