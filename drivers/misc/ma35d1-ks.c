@@ -54,6 +54,8 @@ static uint16_t au8OTPCntTbl[7] = {4, 6, 6, 7, 8, 8, 8};
 #define TEE_ERROR_KS_BUSY		0x00000001
 #define TEE_ERROR_KS_FAIL		0x00000002
 #define TEE_ERROR_KS_INVALID		0x00000003
+#define TEE_ERROR_OTP_INVALID		0x00000011
+#define TEE_ERROR_OTP_FAIL		0x00000012
 
 /*
  * PTA_CMD_KS_INIT - Initialize Key Store
@@ -164,6 +166,22 @@ static uint16_t au8OTPCntTbl[7] = {4, 6, 6, 7, 8, 8, 8};
  */
 #define PTA_CMD_KS_REMAIN		0x7
 
+/*
+ * PTA_CMD_OTP_READ - Read OTP
+ *
+ * param[0] (in value) - value.a: OTP address
+ * param[1] (inout memref) - memref.size: word count of OTP key
+ *                           memref.buffer: key buffer
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_OTP_INVALID - Incorrect input param
+ * TEE_ERROR_OTP_FAIL - read OTP failed
+ */
+#define PTA_CMD_OTP_READ		0x12
+
 #define KS_DATA_SHM_SZ			1024
 
 /**
@@ -220,8 +238,6 @@ static int optee_ks_read(struct optee_ks_private *ks_priv, void __user *arg)
 
 	err = tee_client_invoke_func(ks_priv->ctx, &inv_arg, param);
 	if ((err < 0) || (inv_arg.ret != 0)) {
-		dev_err(ks_priv->dev, "PTA_CMD_KS_READ invoke err: %x\n",
-			inv_arg.ret);
 		return -EINVAL;
 	}
 
@@ -450,6 +466,45 @@ static int optee_ks_remain(struct optee_ks_private *ks_priv)
 	return param[0].u.value.a;
 }
 
+static int optee_ks_read_otp(struct optee_ks_private *ks_priv, void __user *arg)
+{
+	struct ks_read_args  r_args;
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
+	int   err;
+
+	err = copy_from_user(&r_args, arg, sizeof(r_args));
+	if (err)
+		return -EFAULT;
+
+	memset(&inv_arg, 0, sizeof(inv_arg));
+	memset(&param, 0, sizeof(param));
+
+	/* Invoke PTA_CMD_KS_READ function of Trusted App */
+	inv_arg.func = PTA_CMD_OTP_READ;
+	inv_arg.session = ks_priv->session_id;
+	inv_arg.num_params = 4;
+
+	/* Fill invoke cmd params */
+	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+
+	param[0].u.value.a = r_args.key_idx;
+	param[1].u.memref.shm = ks_priv->ks_shm_pool;
+	param[1].u.memref.size = r_args.word_cnt;
+	param[1].u.memref.shm_offs = 0;
+
+	err = tee_client_invoke_func(ks_priv->ctx, &inv_arg, param);
+	if ((err < 0) || (inv_arg.ret != 0)) {
+		dev_err(ks_priv->dev, "PTA_CMD_OTP_READ invoke err: %x\n",
+			inv_arg.ret);
+		return -EINVAL;
+	}
+
+	memcpy((u8 *)r_args.key, ks_priv->va_shm, r_args.word_cnt * 4);
+	return copy_to_user(arg, &r_args, sizeof(r_args));
+}
+
 static int optee_ks_dev_open(struct inode *iptr, struct file *fptr)
 {
 	struct optee_ks_private  *ks_priv;
@@ -516,6 +571,9 @@ static long optee_ks_dev_ioctl(struct file *fptr, unsigned int cmd,
 		break;
 	case NU_KS_IOCTL_GET_REMAIN:
 		rval = optee_ks_remain(ks_priv);
+		break;
+	case NU_KS_IOCTL_READ_OTP:
+		rval = optee_ks_read_otp(ks_priv, argp);
 		break;
 	default:
 		/* Should not get here */

@@ -126,6 +126,8 @@
 				       struct ks_kidx_args *)
 #define NU_KS_IOCTL_GET_REMAIN   _IOWR(MA35D1_KS_MAGIC, 7, \
 				       unsigned long)
+#define NU_KS_IOCTL_READ_OTP     _IOWR(MA35D1_KS_MAGIC, 11, \
+				       struct ks_read_args *)
 
 
 /* type of key */
