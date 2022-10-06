@@ -985,8 +985,7 @@ static int ma35d1_nand_probe(struct platform_device *pdev)
 	chip->ecc.write_page = ma35d1_nand_write_page_hwecc;
 	chip->ecc.read_page  = ma35d1_nand_read_page_hwecc_oob_first;
 	chip->ecc.read_oob   = ma35d1_nand_read_oob_hwecc;
-	// chip->options |= (NAND_NO_SUBPAGE_WRITE | NAND_USE_BOUNCE_BUFFER); //schung
-	 chip->options |= (NAND_NO_SUBPAGE_WRITE); 
+	chip->options |= (NAND_NO_SUBPAGE_WRITE | NAND_USES_DMA);
 
 	ma35d1_nand_initialize(ma35d1_nand);
 	platform_set_drvdata(pdev, ma35d1_nand);
@@ -1017,7 +1016,7 @@ static int ma35d1_nand_probe(struct platform_device *pdev)
 	return retval;
 
 fail:
-	//nand_release(chip);  //schung
+	nand_cleanup(chip);
 	devm_kfree(&pdev->dev, ma35d1_nand);
 	return retval;
 }
@@ -1025,12 +1024,17 @@ fail:
 static int ma35d1_nand_remove(struct platform_device *pdev)
 {
 	struct ma35d1_nand_info *ma35d1_nand = platform_get_drvdata(pdev);
+	struct nand_chip *chip = &ma35d1_nand->chip;
+	int ret;
+
+	ret = mtd_device_unregister(nand_to_mtd(chip));
+	WARN_ON(ret);
+	nand_cleanup(chip);
 
 	clk_disable(ma35d1_nand->clk);
 	clk_put(ma35d1_nand->clk);
 
 	kfree(ma35d1_nand);
-
 	platform_set_drvdata(pdev, NULL);
 
 	return 0;
