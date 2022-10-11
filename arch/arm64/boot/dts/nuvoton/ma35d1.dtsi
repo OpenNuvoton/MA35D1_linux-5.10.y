@@ -1074,24 +1074,24 @@
 			#size-cells = <1>;
 
 			uboot@0 {
-				label = "uboot";
+				label = "nand-uboot";
 				reg = <0x0000000 0x300000>;
 				read-only;
 			};
 			uboot-env@300000 {
-				lable = "uboot-env";
+				label = "nand-uboot-env";
 				reg = <0x300000 0xC0000>;
 			};
 			device-tree@3c0000 {
-				lable = "device-tree";
+				label = "nand-device-tree";
 				reg = <0x3C0000 0x40000>;
 			};
 			kernel@400000 {
-				label = "kernel";
+				label = "nand-kernel";
 				reg = <0x400000 0x1800000>;
 			};
 			rootfs@1c00000 {
-				label = "rootfs";
+				label = "nand-rootfs";
 				reg = <0x1C00000 0x6400000>;
 			};
 		};
@@ -1438,23 +1438,23 @@
 			#size-cells = <1>;
 
 			uboot@0 {
-				label = "uboot";
+				label = "spinand-uboot";
 				reg = <0x0 0x300000>;
 			};
 			uboot-env@300000 {
-				lable = "uboot-env";
+				label = "spinand-uboot-env";
 				reg = <0x300000 0xc0000>;
 			};
 			device-tree@3c0000 {
-				lable = "device-tree";
+				label = "spinand-device-tree";
 				reg = <0x3c0000 0x40000>;
 			};
-			kernel@40000 {
-				label = "kernel";
+			kernel@400000 {
+				label = "spinand-kernel";
 				reg = <0x400000 0x1800000>;
 			};
 			rootfs@1c00000 {
-				label = "rootfs";
+				label = "spinand-rootfs";
 				reg = <0x1c00000 0x6400000>;
 			};
 		};
