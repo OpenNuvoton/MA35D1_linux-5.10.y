@@ -147,13 +147,13 @@
 };
 
 &gmac0 {
-	status = "disabled";
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_gmac0>;
 };
 
 &gmac1 {
-	status = "disabled";
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_gmac1>;
 };

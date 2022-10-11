@@ -29,7 +29,7 @@ struct nvt_priv_data {
 	int id;
 	bool suspended;
 	struct regmap *regmap;
-	int phy_mode;
+	phy_interface_t phy_mode;
 	int tx_delay;
 	int rx_delay;
 };
@@ -63,7 +63,7 @@ static struct nvt_priv_data *nvt_gmac_setup(struct platform_device *pdev,
 		    bsp_priv->id == 0 ? REG_SYS_GMAC0MISCR : REG_SYS_GMAC1MISCR, &reg);
 	reg &= ~(TXDLY_MSK | RXDLY_MSK);
 
-	ret = of_get_phy_mode(pdev->dev.of_node, bsp_priv->phy_mode);
+	ret = of_get_phy_mode(pdev->dev.of_node, &bsp_priv->phy_mode);
 	if (ret) {
 		dev_err(dev, "missing phy mode property\n");
 		return -EINVAL;
