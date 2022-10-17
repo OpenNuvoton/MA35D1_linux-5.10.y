@@ -136,7 +136,7 @@ static void ma35d1_asrc_dma_pcm_free(struct snd_pcm *pcm)
 	}
 }
 
-
+#if 0 /* CWWeng 2022.10.17 : in ma35d1-i2s.c, uses ma35d1_i2s_component for devm_snd_soc_register_component() */
 struct snd_soc_component_driver ma35d1_asrc_component = {
 	.name		= DRV_NAME,
 	.ops		= &ma35d1_asrc_dma_pcm_ops,
@@ -144,7 +144,7 @@ struct snd_soc_component_driver ma35d1_asrc_component = {
 	.pcm_free	= ma35d1_asrc_dma_pcm_free,
 };
 EXPORT_SYMBOL_GPL(ma35d1_asrc_component);
-
+#endif
 
 static const struct snd_dmaengine_pcm_config ma35d1_dmaengine_pcm_config = {
 	.pcm_hardware = &ma35d1_pcm_hardware,

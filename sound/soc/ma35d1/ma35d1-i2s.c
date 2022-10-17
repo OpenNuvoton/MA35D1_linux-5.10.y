@@ -302,7 +302,7 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 
 	dev_set_drvdata(&pdev->dev, ma35d1_audio);
 
-	ret = devm_snd_soc_register_component(&pdev->dev, &ma35d1_asrc_component,
+	ret = devm_snd_soc_register_component(&pdev->dev, &ma35d1_i2s_component,
 	                                      &ma35d1_i2s_dai, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register ASoC DAI\n");
