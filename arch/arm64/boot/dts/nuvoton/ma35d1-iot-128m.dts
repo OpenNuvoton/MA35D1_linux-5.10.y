@@ -225,17 +225,17 @@
 };
 
 &i2s0 {
-	status = "disabled";
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2s0>;
 };
 
 &i2s_pcm {
-	status = "disabled";
+	status = "okay";
 };
 
 &sound {
-	status = "disabled";
+	status = "okay";
 };
 
 &qspi0 {
