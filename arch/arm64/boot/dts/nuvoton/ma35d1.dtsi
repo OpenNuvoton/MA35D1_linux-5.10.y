@@ -390,6 +390,7 @@
 		clock-names = "hsusbh0_gate";
 		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>;
+		oc-active-level = <0>;    /* 1: active-high; 0: active low */
 		status = "okay";
 	};
 
@@ -400,6 +401,7 @@
 		clock-names = "hsusbh1_gate";
 		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
+		oc-active-level = <0>;    /* 1: active-high; 0: active low */
 		status = "okay";
 	};
 

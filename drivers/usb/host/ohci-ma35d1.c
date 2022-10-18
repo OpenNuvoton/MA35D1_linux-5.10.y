@@ -45,26 +45,6 @@ struct ma35d1_ohci_priv {
 	struct clk *clk;
 };
 
-
-static void ohci_ma35d1_start_hc(struct platform_device *pdev)
-{
-	struct usb_hcd *hcd = platform_get_drvdata(pdev);
-	struct ma35d1_ohci_priv *ma35d1_ohci = hcd_to_ma35d1_ohci_priv(hcd);
-	u32   reg;
-
-	ma35d1_ohci->sysregmap = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
-					"nuvoton,sys");
-
-	/* USBPMISCR; HSUSBH0 & HSUSBH1 PHY */
-	regmap_write(ma35d1_ohci->sysregmap, REG_SYS_USBPMISCR, 0x20002);
-
-	/* set UHOVRCURH(SYS_MISCFCR0[12]) 1 => USBH Host over-current detect is high-active */
-	/*                                 0 => USBH Host over-current detect is low-active  */
-	regmap_read(ma35d1_ohci->sysregmap, REG_SYS_MISCFCR0, &reg);
-	regmap_write(ma35d1_ohci->sysregmap, REG_SYS_MISCFCR0, (reg & ~(1<<12)));
-}
-
-
 static int ohci_hcd_ma35d1_probe(struct platform_device *pdev)
 {
 	struct usb_hcd *hcd = 0;
@@ -117,7 +97,6 @@ static int ohci_hcd_ma35d1_probe(struct platform_device *pdev)
 		goto fail_resource;
 	}
 
-	ohci_ma35d1_start_hc(pdev);
 	platform_set_drvdata(pdev, hcd);
 
 	dev_info(&pdev->dev, "at 0x%p, irq %d\n", hcd->regs, hcd->irq);
