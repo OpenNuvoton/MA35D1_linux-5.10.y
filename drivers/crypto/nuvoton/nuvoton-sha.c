@@ -10,13 +10,13 @@
  *
  * Some ideas are from oamp-sha.c and mtk-sha.c drivers.
  */
+#include <linux/dma-mapping.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/of.h>
 #include <linux/tee_drv.h>
 #include <linux/crypto.h>
-#include <linux/cryptohash.h>
 #include <linux/spinlock.h>
 #include <linux/scatterlist.h>
 #include <crypto/scatterwalk.h>
@@ -51,6 +51,9 @@ struct nu_sha_drv {
 	spinlock_t lock;
 };
 
+static int  optee_sha_open(struct nu_sha_dev *dd);
+static void optee_sha_close(struct nu_sha_dev *dd);
+
 static struct nu_sha_drv nu_sha = {
 	.dev_list = LIST_HEAD_INIT(nu_sha.dev_list),
 	.lock = __SPIN_LOCK_UNLOCKED(nu_sha.lock),
@@ -78,7 +81,7 @@ static struct nu_sha_dev *nuvoton_sha_find_dev(struct nu_sha_ctx *tctx)
 static inline void nu_write_reg(struct nu_sha_dev *sha_dd, u32 val, u32 reg)
 {
 #ifdef CONFIG_OPTEE
-	if (sha_dd->use_optee == true)
+	if (sha_dd->nu_cdev->use_optee == true)
 		sha_dd->va_shm[reg/4] = val;
 	else
 		writel_relaxed(val, sha_dd->reg_base + reg);
@@ -90,7 +93,7 @@ static inline void nu_write_reg(struct nu_sha_dev *sha_dd, u32 val, u32 reg)
 static inline u32 nu_read_reg(struct nu_sha_dev *sha_dd, u32 reg)
 {
 #ifdef CONFIG_OPTEE
-	if (sha_dd->use_optee == true)
+	if (sha_dd->nu_cdev->use_optee == true)
 		return sha_dd->va_shm[reg/4];
 	else
 		return readl_relaxed(sha_dd->reg_base + reg);
@@ -184,7 +187,7 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	nu_write_reg(dd, ctx->reg_ctl, HMAC_CTL);
 
 #ifdef CONFIG_OPTEE
-	if (dd->use_optee == false)
+	if (dd->nu_cdev->use_optee == false)
 		return -EINPROGRESS;
 
 	/*--------------------------------------------------------------*/
@@ -268,6 +271,7 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	param[1].u.memref.shm = dd->shm_pool;
 	param[1].u.memref.size = CRYPTO_SHM_SIZE;
 	param[1].u.memref.shm_offs = 0;
+
 	err = tee_client_invoke_func(dd->octx, &inv_arg, param);
 	if ((err < 0) || (inv_arg.ret != 0)) {
 		pr_err("PTA_CMD_CRYPTO_SHA_UPDATE err: %x\n", inv_arg.ret);
@@ -471,7 +475,6 @@ static void nuvoton_sha_sg_to_dma_buffer(struct ahash_request *req,
 		tctx->bufcnt += copy_len;
 		ctx->req_len -= copy_len;
 		ctx->sg_off += copy_len;
-		// req->nbytes -= copy_len;
 
 		if (ctx->sg_off >= ctx->sg->length) {
 			ctx->sg = sg_next(ctx->sg);
@@ -696,7 +699,34 @@ static int nuvoton_sha_cra_init_alg(struct crypto_tfm *tfm,
 
 static int nuvoton_sha_cra_init(struct crypto_tfm *tfm)
 {
+#ifdef CONFIG_OPTEE
+	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
+	struct nu_sha_dev *dd = nuvoton_sha_find_dev(tctx);
+
+	dd = nuvoton_sha_find_dev(tctx);
+	if (!dd)
+		return -ENODEV;
+
+	if (dd->nu_cdev->use_optee) {
+		if (optee_sha_open(dd) != 0)
+			return -ENODEV;
+	}
+#endif
 	return nuvoton_sha_cra_init_alg(tfm, NULL);
+}
+
+static void nuvoton_sha_cra_exit(struct crypto_tfm *tfm)
+{
+#ifdef CONFIG_OPTEE
+	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
+	struct nu_sha_dev *dd = nuvoton_sha_find_dev(tctx);
+
+	dd = nuvoton_sha_find_dev(tctx);
+	if (dd) {
+		if (dd->nu_cdev->use_optee)
+			optee_sha_close(dd);
+	}
+#endif
 }
 
 static struct ahash_alg  nuvoton_sha_algs[] = {
@@ -720,6 +750,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -742,6 +773,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -764,6 +796,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -786,6 +819,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -808,6 +842,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -831,6 +866,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -854,6 +890,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -877,6 +914,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -900,6 +938,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -923,6 +962,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -945,6 +985,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -967,6 +1008,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -989,6 +1031,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 };
@@ -1014,6 +1057,7 @@ static struct ahash_alg  nuvoton_sha3_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -1036,6 +1080,7 @@ static struct ahash_alg  nuvoton_sha3_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -1058,6 +1103,7 @@ static struct ahash_alg  nuvoton_sha3_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 {
@@ -1080,6 +1126,7 @@ static struct ahash_alg  nuvoton_sha3_algs[] = {
 		.cra_alignmask		= 0xf,
 		.cra_module		= THIS_MODULE,
 		.cra_init		= nuvoton_sha_cra_init,
+		.cra_exit		= nuvoton_sha_cra_exit,
 	}
 },
 };
@@ -1122,6 +1169,9 @@ static int  optee_sha_open(struct nu_sha_dev *dd)
 	struct tee_ioctl_open_session_arg sess_arg;
 	int   err;
 
+	err = nuvoton_crypto_optee_init(dd->nu_cdev);
+	if (err)
+		return err;
 	/*
 	 * Open SHA context with TEE driver
 	 */
@@ -1137,7 +1187,7 @@ static int  optee_sha_open(struct nu_sha_dev *dd)
 	 * Open SHA session with Crypto Trusted App
 	 */
 	memset(&sess_arg, 0, sizeof(sess_arg));
-	memcpy(sess_arg.uuid, dd->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
+	memcpy(sess_arg.uuid, dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
 	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
 	sess_arg.num_params = 0;
 
@@ -1180,28 +1230,20 @@ static void optee_sha_close(struct nu_sha_dev *dd)
 	tee_shm_free(dd->shm_pool);
 	tee_client_close_session(dd->octx, dd->session_id);
 	tee_client_close_context(dd->octx);
+	dd->octx = NULL;
 }
 #endif
 
 int nuvoton_sha_probe(struct device *dev,
-		      struct nuvoton_crypto_dev *nu_cryp_dev)
+		      struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
 	int   i, j, err = 0;
 
 	sha_dd->dev = dev;
+	sha_dd->nu_cdev = nu_cryp_dev;
 	sha_dd->reg_base = nu_cryp_dev->reg_base;
-	sha_dd->use_optee = false;
-#ifdef CONFIG_OPTEE
-	sha_dd->use_optee = nu_cryp_dev->use_optee;
-	sha_dd->tee_cdev = nu_cryp_dev->tee_cdev;
-
-	if (sha_dd->use_optee) {
-		if (optee_sha_open(sha_dd) != 0)
-			return -ENODEV;
-	}
-#endif
-
+	sha_dd->octx = NULL;
 
 	INIT_LIST_HEAD(&sha_dd->list);
 	spin_lock_init(&sha_dd->lock);
@@ -1223,7 +1265,7 @@ int nuvoton_sha_probe(struct device *dev,
 			goto err_register;
 	}
 
-	if (sha_dd->use_optee == false) {
+	if (nu_cryp_dev->use_optee == false) {
 		for (i = 0; i < ARRAY_SIZE(nuvoton_sha3_algs); i++) {
 			err = crypto_register_ahash(&nuvoton_sha3_algs[i]);
 			if (err)
@@ -1251,7 +1293,7 @@ err_register:
 }
 
 int nuvoton_sha_remove(struct device *dev,
-		       struct nuvoton_crypto_dev *nu_cryp_dev)
+		       struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
 	int	i;
@@ -1270,7 +1312,7 @@ int nuvoton_sha_remove(struct device *dev,
 	tasklet_kill(&sha_dd->queue_task);
 
 #ifdef CONFIG_OPTEE
-	if (sha_dd->use_optee)
+	if (nu_cryp_dev->use_optee)
 		optee_sha_close(sha_dd);
 #endif
 	return 0;

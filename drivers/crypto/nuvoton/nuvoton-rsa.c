@@ -9,6 +9,7 @@
  * the Free Software Foundation;version 2 of the License.
  *
  */
+#include <linux/dma-mapping.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
@@ -17,7 +18,6 @@
 #include <linux/io.h>
 #include <linux/clk.h>
 #include <linux/crypto.h>
-#include <linux/cryptohash.h>
 #include <linux/spinlock.h>
 #include <linux/scatterlist.h>
 #include <linux/fs.h>
@@ -33,6 +33,7 @@
 
 #include "nuvoton-crypto.h"
 
+static int  optee_rsa_open(struct nu_rsa_dev *dd);
 static struct nu_rsa_dev  *__rsa_dd;
 
 struct nu_rsa_drv {
@@ -67,26 +68,18 @@ static struct nu_rsa_dev *nuvoton_rsa_find_dev(struct nu_rsa_ctx *ctx)
 
 static inline void nu_write_reg(struct nu_rsa_dev *rsa_dd, u32 val, u32 reg)
 {
-#ifdef CONFIG_OPTEE
-	if (rsa_dd->use_optee == true)
+	if (rsa_dd->nu_cdev->use_optee == true)
 		rsa_dd->va_shm[reg/4] = val;
 	else
 		writel_relaxed(val, rsa_dd->reg_base + reg);
-#else
-	writel_relaxed(val, rsa_dd->reg_base + reg);
-#endif
 }
 
 static inline u32 nu_read_reg(struct nu_rsa_dev *rsa_dd, u32 reg)
 {
-#ifdef CONFIG_OPTEE
-	if (rsa_dd->use_optee == true)
+	if (rsa_dd->nu_cdev->use_optee == true)
 		return rsa_dd->va_shm[reg/4];
 	else
 		return readl_relaxed(rsa_dd->reg_base + reg);
-#else
-	return readl_relaxed(rsa_dd->reg_base + reg);
-#endif
 }
 
 static int check_key_length(u8 *input, int keysz)
@@ -122,7 +115,7 @@ int nu_rsa_hex_to_reg(u8 *input, int keylen, int rsa_bit_len, u32 *reg)
 	memset(buff, 0, sizeof(buff));
 
 	/* remove leading 0x00's */
-	for (key = input; (*key == 0x00); key++)
+	for (key = input; ((*key == 0x00) && (keylen > 0)); key++)
 		keylen--;
 
 	if (keylen > rsa_byte_len)
@@ -190,11 +183,13 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 	u32	keyleng;
 	int	len, err;
 	unsigned long   timeout;
-#ifdef CONFIG_OPTEE
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
-#endif
 
+	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
+		if (optee_rsa_open(dd) != 0)
+			return -ENODEV;
+	}
 	ctx->dd = dd;
 	keyleng = ctx->rsa_bit_len/1024 - 1;
 
@@ -243,7 +238,7 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 	nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
 			RSA_CTL_START, RSA_CTL);
 
-	if (dd->use_optee == false) {
+	if (dd->nu_cdev->use_optee == false) {
 		timeout = jiffies + msecs_to_jiffies(2000);
 		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
 			if (time_after(jiffies, timeout)) {
@@ -253,7 +248,6 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 			}
 		}
 	} else {
-#ifdef CONFIG_OPTEE
 		/*
 		 *  Invoke OP-TEE Crypto PTA to run RSA
 		 */
@@ -278,7 +272,6 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 				inv_arg.ret);
 			return -EINVAL;
 		}
-#endif
 	}
 
 	dma_unmap_single(dd->dev, ctx->dma_buff,
@@ -302,11 +295,13 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 	u32	keyleng;
 	int	err, len;
 	unsigned long   timeout;
-#ifdef CONFIG_OPTEE
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
-#endif
 
+	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
+		if (optee_rsa_open(dd) != 0)
+			return -ENODEV;
+	}
 	ctx->dd = dd;
 	keyleng = (ctx->rsa_bit_len - 1024) / 1024;
 
@@ -354,7 +349,7 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 	nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
 			RSA_CTL_START, RSA_CTL);
 
-	if (dd->use_optee == false) {
+	if (dd->nu_cdev->use_optee == false) {
 		timeout = jiffies + msecs_to_jiffies(2000);
 		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
 			if (time_after(jiffies, timeout)) {
@@ -364,7 +359,6 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 			}
 		}
 	} else {
-#ifdef CONFIG_OPTEE
 		/*
 		 *  Invoke OP-TEE Crypto PTA to run RSA
 		 */
@@ -389,7 +383,6 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 				inv_arg.ret);
 			return -EINVAL;
 		}
-#endif
 	}
 
 	dma_unmap_single(dd->dev, ctx->dma_buff, RSA_BUFF_SIZE,
@@ -511,12 +504,14 @@ static struct akcipher_alg  nuvoton_rsa = {
 	},
 };
 
-#ifdef CONFIG_OPTEE
 static int  optee_rsa_open(struct nu_rsa_dev *dd)
 {
 	struct tee_ioctl_open_session_arg sess_arg;
 	int   err;
 
+	err = nuvoton_crypto_optee_init(dd->nu_cdev);
+	if (err)
+		return err;
 	/*
 	 * Open RSA context with TEE driver
 	 */
@@ -532,7 +527,7 @@ static int  optee_rsa_open(struct nu_rsa_dev *dd)
 	 * Open RSA session with Crypto Trusted App
 	 */
 	memset(&sess_arg, 0, sizeof(sess_arg));
-	memcpy(sess_arg.uuid, dd->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
+	memcpy(sess_arg.uuid, dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
 	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
 	sess_arg.num_params = 0;
 
@@ -575,13 +570,13 @@ static void optee_rsa_close(struct nu_rsa_dev *dd)
 	tee_shm_free(dd->shm_pool);
 	tee_client_close_session(dd->octx, dd->session_id);
 	tee_client_close_context(dd->octx);
+	dd->octx = NULL;
 }
-#endif
 
 static int nvt_rsa_ioctl_set_register(struct nu_rsa_ctx *rsa_ctx,
 				      int offs, unsigned long arg)
 {
-	int   sz;
+	int   ret, sz;
 	u8    kbuf[520];
 
 	memset(kbuf, 0, sizeof(kbuf));
@@ -593,9 +588,10 @@ static int nvt_rsa_ioctl_set_register(struct nu_rsa_ctx *rsa_ctx,
 		return -EINVAL;
 
 	memset(&rsa_ctx->buffer[offs], 0, NU_RSA_MAX_BYTE_LEN);
-	return nu_rsa_hex_to_reg((u8 *)&kbuf[2], sz,
+	ret = nu_rsa_hex_to_reg((u8 *)&kbuf[2], sz,
 				rsa_ctx->rsa_bit_len,
 				(u32 *)&rsa_ctx->buffer[offs]);
+	return ret;
 }
 
 static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
@@ -606,6 +602,9 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 	u8	m[NU_RSA_MAX_BYTE_LEN];
 	struct nu_rsa_ctx  *rsa_ctx = filp->private_data;
 	unsigned long   timeout;
+	int err;
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
 
 	if (!rsa_ctx)
 		return -EIO;
@@ -667,12 +666,45 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 		nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
 				RSA_CTL_START, RSA_CTL);
 
-		timeout = jiffies + msecs_to_jiffies(2000);
-		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
-			if (time_after(jiffies, timeout)) {
-				pr_err("RSA_IOC_RUN time-out!\n");
-				return -EIO;
+		if (dd->nu_cdev->use_optee == false) {
+			timeout = jiffies + msecs_to_jiffies(2000);
+			while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
+				if (time_after(jiffies, timeout)) {
+					pr_err("RSA decrypt time-out!\n");
+					return -EIO;
+					break;
+				}
 			}
+		} else {
+			/*
+		 	*  Invoke OP-TEE Crypto PTA to run RSA
+		 	*/
+			memset(&inv_arg, 0, sizeof(inv_arg));
+			memset(&param, 0, sizeof(param));
+
+			/* Invoke PTA_CMD_CRYPTO_RSA_RUN function of Trusted App */
+			inv_arg.func = PTA_CMD_CRYPTO_RSA_RUN;
+			inv_arg.session = dd->session_id;
+			inv_arg.num_params = 4;
+
+			/* Fill invoke cmd params */
+			param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+
+			param[1].u.memref.shm = dd->shm_pool;
+			param[1].u.memref.size = CRYPTO_SHM_SIZE;
+			param[1].u.memref.shm_offs = 0;
+
+			memcpy(&(dd->va_shm[0x1000/4]), rsa_ctx->buffer, RSA_BUFF_SIZE);
+			memset(&(dd->va_shm[0x3000/4]), 0, 0x200);
+			err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+			if ((err < 0) || (inv_arg.ret != 0)) {
+				pr_err("PTA_CMD_CRYPTO_RSA_RUN err: %x\n",
+					inv_arg.ret);
+				dma_unmap_single(dd->dev, rsa_ctx->dma_buff,
+						 RSA_BUFF_SIZE, DMA_BIDIRECTIONAL);
+				return -EINVAL;
+			}
+			memcpy((u32 *)&rsa_ctx->buffer[ANS_OFF], &(dd->va_shm[0x3000/4]), 0x200);
 		}
 
 		dma_unmap_single(dd->dev, rsa_ctx->dma_buff,
@@ -700,6 +732,10 @@ static int nvt_rsa_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	rsa_ctx->dd = __rsa_dd;
 	file->private_data = rsa_ctx;
+	if ((__rsa_dd->nu_cdev->use_optee) && (__rsa_dd->octx == NULL)) {
+		if (optee_rsa_open(__rsa_dd) != 0)
+			return -ENODEV;
+	}
 	return 0;
 }
 
@@ -710,7 +746,7 @@ static int nvt_rsa_close(struct inode *inode, struct file *file)
 	rsa_ctx = file->private_data;
 	if (!rsa_ctx)
 		return -EIO;
-	kzfree(rsa_ctx);
+	kfree(rsa_ctx);
 	return 0;
 }
 
@@ -728,23 +764,17 @@ static struct miscdevice nvt_rsa_dev = {
 };
 
 int nuvoton_rsa_probe(struct device *dev,
-		      struct nuvoton_crypto_dev *nu_cryp_dev)
+		      struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_rsa_dev  *rsa_dd = &nu_cryp_dev->rsa_dd;
 	int   err = 0;
 
 	__rsa_dd = rsa_dd;
 	rsa_dd->dev = dev;
+	rsa_dd->nu_cdev = nu_cryp_dev;
 	rsa_dd->reg_base = nu_cryp_dev->reg_base;
-	rsa_dd->use_optee = false;
-#ifdef CONFIG_OPTEE
-	rsa_dd->use_optee = nu_cryp_dev->use_optee;
-	rsa_dd->tee_cdev = nu_cryp_dev->tee_cdev;
-	if (rsa_dd->use_optee) {
-		if (optee_rsa_open(rsa_dd) != 0)
-			return -ENODEV;
-	}
-#endif
+	rsa_dd->octx = NULL;
+
 	spin_lock(&nu_rsa.lock);
 	list_add_tail(&rsa_dd->list, &nu_rsa.dev_list);
 	spin_unlock(&nu_rsa.lock);
@@ -770,7 +800,7 @@ err_out:
 }
 
 int nuvoton_rsa_remove(struct device *dev,
-		       struct nuvoton_crypto_dev *nu_cryp_dev)
+		       struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_rsa_dev  *rsa_dd = &nu_cryp_dev->rsa_dd;
 
@@ -786,10 +816,8 @@ int nuvoton_rsa_remove(struct device *dev,
 	list_del(&rsa_dd->list);
 	spin_unlock(&nu_rsa.lock);
 
-#ifdef CONFIG_OPTEE
-	if (rsa_dd->use_optee)
+	if (nu_cryp_dev->use_optee)
 		optee_rsa_close(rsa_dd);
-#endif
 	return 0;
 }
 

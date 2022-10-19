@@ -321,6 +321,8 @@
 #define HMAC_KEY_BUFF_SIZE	(1024)
 #define AES_KS_KEYLEN		17
 
+struct nu_crypto_dev;
+
 /*-------------------------------------------------------------------------*/
 /*   AES                                                                   */
 /*-------------------------------------------------------------------------*/
@@ -350,6 +352,7 @@ struct nu_aes_ctx {
 struct nu_aes_dev {
 	struct list_head	list;
 	struct device		*dev;
+	struct nu_crypto_dev	*nu_cdev;
 	void __iomem		*reg_base;
 	u32			flags;
 
@@ -382,8 +385,6 @@ struct nu_aes_dev {
 	/*
 	 * for optee client driver
 	 */
-	bool			use_optee;
-	struct tee_client_device *tee_cdev;
 	struct tee_context	*octx;
 	u32			session_id;         /* optee session */
 	struct tee_shm		*shm_pool;
@@ -428,6 +429,7 @@ struct nu_sha_reqctx {
 struct nu_sha_dev {
 	struct list_head	list;
 	struct device		*dev;
+	struct nu_crypto_dev	*nu_cdev;
 	void __iomem		*reg_base;
 	u32			flags;
 
@@ -442,8 +444,6 @@ struct nu_sha_dev {
 	/*
 	 * for optee client driver
 	 */
-	bool			use_optee;
-	struct tee_client_device *tee_cdev;
 	struct tee_context	*octx;
 	u32			session_id;  /* optee session */
 	struct tee_shm		*shm_pool;
@@ -459,9 +459,9 @@ struct nu_sha_dev {
 #define NU_ECC_MAX_LEN		(76)    /* 571/8 + 1 + 4 */
 
 enum {
-	CURVE_P_192  = 0x01,   /* ECC_CURVE_NIST_P192 is 0x0001 */
-	CURVE_P_256  = 0x02,   /* ECC_CURVE_NIST_P256 is 0x0002 */
-	CURVE_P_224  = 0x03,
+	CURVE_P_192  = 0x01,
+	CURVE_P_224  = 0x02,
+	CURVE_P_256  = 0x03,
 	CURVE_P_384  = 0x04,
 	CURVE_P_521  = 0x05,
 	CURVE_K_163  = 0x11,
@@ -519,14 +519,13 @@ struct nu_ecc_ctx {
 struct nu_ecc_dev {
 	struct list_head	list;
 	struct device		*dev;
+	struct nu_crypto_dev	*nu_cdev;
 	void __iomem		*reg_base;
 	spinlock_t		lock;
 
 	/*
 	 * for optee client driver
 	 */
-	bool			use_optee;
-	struct tee_client_device *tee_cdev;
 	struct tee_context	*octx;
 	u32			session_id;  /* optee session */
 	struct tee_shm		*shm_pool;
@@ -551,14 +550,14 @@ struct nu_ecc_dev {
 #define D_OFF			(RSA_REG_RAM_SIZE*2)
 #define P_OFF			(RSA_REG_RAM_SIZE*3)
 #define Q_OFF			(RSA_REG_RAM_SIZE*4)
-#define ANS_OFF			(RSA_REG_RAM_SIZE*5)
-#define MADR0_OFF		(RSA_REG_RAM_SIZE*6)
-#define MADR1_OFF		(RSA_REG_RAM_SIZE*7)
-#define MADR2_OFF		(RSA_REG_RAM_SIZE*8)
-#define MADR3_OFF		(RSA_REG_RAM_SIZE*9)
-#define MADR4_OFF		(RSA_REG_RAM_SIZE*10)
-#define MADR5_OFF		(RSA_REG_RAM_SIZE*11)
-#define MADR6_OFF		(RSA_REG_RAM_SIZE*12)
+#define MADR0_OFF		(RSA_REG_RAM_SIZE*5)
+#define MADR1_OFF		(RSA_REG_RAM_SIZE*6)
+#define MADR2_OFF		(RSA_REG_RAM_SIZE*7)
+#define MADR3_OFF		(RSA_REG_RAM_SIZE*8)
+#define MADR4_OFF		(RSA_REG_RAM_SIZE*9)
+#define MADR5_OFF		(RSA_REG_RAM_SIZE*10)
+#define MADR6_OFF		(RSA_REG_RAM_SIZE*11)
+#define ANS_OFF			(RSA_REG_RAM_SIZE*12)
 
 struct nu_rsa_ctx {
 	struct nu_rsa_dev  *dd;
@@ -576,20 +575,19 @@ struct nu_rsa_ctx {
 struct nu_rsa_dev {
 	struct list_head	list;
 	struct device		*dev;
+	struct nu_crypto_dev	*nu_cdev;
 	void __iomem		*reg_base;
 
 	/*
 	 * for optee client driver
 	 */
-	bool			use_optee;
-	struct tee_client_device *tee_cdev;
 	struct tee_context	*octx;
 	u32			session_id;  /* optee session */
 	struct tee_shm		*shm_pool;
 	u32			*va_shm;
 };
 
-struct nuvoton_crypto_dev {
+struct nu_crypto_dev {
 	struct device           *dev;
 	bool                    use_optee;
 	struct tee_client_device *tee_cdev;
@@ -623,7 +621,7 @@ struct nuvoton_crypto_dev {
 /*-------------------------------------------------------------------------*/
 /*   OP-TEE                                                                */
 /*-------------------------------------------------------------------------*/
-#define CRYPTO_SHM_SIZE		(0x1000)
+#define CRYPTO_SHM_SIZE		(0x4000)
 
 #define TEE_ERROR_CRYPTO_BUSY		0x00000001
 #define TEE_ERROR_CRYPTO_FAIL		0x00000002
@@ -789,29 +787,31 @@ static inline int optee_ctx_match(struct tee_ioctl_version_data *ver,
 		return 0;
 }
 
+extern int nuvoton_crypto_optee_init(struct nu_crypto_dev *nu_cryp_dev);
+
 extern int nuvoton_prng_probe(struct device *dev, void __iomem *reg_base,
 				unsigned long *data);
 extern int nuvoton_prng_remove(struct device *dev, unsigned long data);
 
 extern int nuvoton_aes_probe(struct device *dev,
-				struct nuvoton_crypto_dev *nu_cryp_dev);
+				struct nu_crypto_dev *nu_cryp_dev);
 extern int nuvoton_aes_remove(struct device *dev,
-				struct nuvoton_crypto_dev *nu_cryp_dev);
+				struct nu_crypto_dev *nu_cryp_dev);
 
 extern int nuvoton_sha_probe(struct device *dev,
-				struct nuvoton_crypto_dev *nu_cryp_dev);
+				struct nu_crypto_dev *nu_cryp_dev);
 extern int nuvoton_sha_remove(struct device *dev,
-				struct nuvoton_crypto_dev *nu_cryp_dev);
+				struct nu_crypto_dev *nu_cryp_dev);
 
 extern int nuvoton_ecc_probe(struct device *dev,
-				struct nuvoton_crypto_dev *nu_cryp_dev);
+				struct nu_crypto_dev *nu_cryp_dev);
 extern int nuvoton_ecc_remove(struct device *dev,
-				struct nuvoton_crypto_dev *nu_cryp_dev);
+				struct nu_crypto_dev *nu_cryp_dev);
 
 extern int nuvoton_rsa_probe(struct device *dev,
-				struct nuvoton_crypto_dev *nu_cryp_dev);
+				struct nu_crypto_dev *nu_cryp_dev);
 extern int nuvoton_rsa_remove(struct device *dev,
-				struct nuvoton_crypto_dev *nu_cryp_dev);
+				struct nu_crypto_dev *nu_cryp_dev);
 
 /* functions in crypto/ecc.c */
 extern int ecc_gen_privkey(unsigned int curve_id, unsigned int ndigits,

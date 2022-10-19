@@ -25,12 +25,13 @@
 
 #include "nuvoton-crypto.h"
 
-static struct nuvoton_crypto_dev  *nvt_crypto_dev;
+static struct nu_crypto_dev *_nuvoton_crypto_device;
 
 #ifdef CONFIG_OPTEE
 static int optee_crypto_probe(struct device *dev)
 {
-	struct tee_client_device *tee_cdev = to_tee_client_device(dev);
+	struct nu_crypto_dev *nu_cryp_dev;
+	struct tee_client_device *tee_cdev; // = to_tee_client_device(dev);
 	struct tee_context  *ctx;
 	u32	session_id;
 	struct tee_ioctl_invoke_arg inv_arg;
@@ -38,10 +39,10 @@ static int optee_crypto_probe(struct device *dev)
 	struct tee_param param[4];
 	int  ret;
 
-	if (nvt_crypto_dev == NULL)
-		return -ENODEV;
+	nu_cryp_dev = _nuvoton_crypto_device;
 
-	nvt_crypto_dev->tee_cdev = tee_cdev;
+	tee_cdev = to_tee_client_device(dev);
+	nu_cryp_dev->tee_cdev = tee_cdev;
 
 	/*
 	 * Open context with TEE driver
@@ -108,12 +109,29 @@ static struct tee_client_driver optee_crypto_driver = {
 		.remove		= optee_crypto_remove,
 	},
 };
+
+int nuvoton_crypto_optee_init(struct nu_crypto_dev *nu_cryp_dev)
+{
+	int err;
+
+	if (nu_cryp_dev->tee_cdev != NULL)
+		return 0; /* already inited */
+
+	pr_info("Register MA35D1 Crypto optee client driver.\n");
+	err = driver_register(&optee_crypto_driver.driver);
+	if (err) {
+		pr_err("Failed to register crypto optee driver!\n");
+		return err;
+	}
+	return 0;
+}
+
 #endif  /* CONFIG_OPTEE */
 
 static irqreturn_t nuvoton_crypto_irq(int irq, void *data)
 {
-	struct nuvoton_crypto_dev  *nu_cryp_dev =
-					(struct nuvoton_crypto_dev *)data;
+	struct nu_crypto_dev  *nu_cryp_dev =
+					(struct nu_crypto_dev *)data;
 	struct nu_aes_dev  *aes_dd = &nu_cryp_dev->aes_dd;
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
 	u32  status, aes_sts, ret = IRQ_NONE;
@@ -142,7 +160,7 @@ static irqreturn_t nuvoton_crypto_irq(int irq, void *data)
 static int nuvoton_crypto_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct nuvoton_crypto_dev  *nu_cryp_dev;
+	struct nu_crypto_dev *nu_cryp_dev;
 	struct resource *res;
 	int   irq;
 	const char  *str;
@@ -150,34 +168,22 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 
 	/* MA35D1 crypto engine clock should be enabled by firmware. */
 
-	nu_cryp_dev = devm_kzalloc(&pdev->dev, sizeof(*nu_cryp_dev),
+	nu_cryp_dev = devm_kzalloc(dev, sizeof(*nu_cryp_dev),
 				GFP_KERNEL);
 	if (!nu_cryp_dev)
 		return -ENOMEM;
-	memset(nu_cryp_dev, 0, sizeof(*nu_cryp_dev));
 
-	nvt_crypto_dev = nu_cryp_dev;
-
-	platform_set_drvdata(pdev, nu_cryp_dev);
+	dev_set_drvdata(dev, nu_cryp_dev);
+	_nuvoton_crypto_device = nu_cryp_dev;
 
 	nu_cryp_dev->use_optee = false;
-
 #ifdef CONFIG_OPTEE
 	if (!of_property_read_string(dev->of_node, "optee_nuvoton", &str)) {
 		if (!strcmp("yes", str))
 			nu_cryp_dev->use_optee = true;
 	}
 #endif
-	if (nu_cryp_dev->use_optee) {
-#ifdef CONFIG_OPTEE
-		pr_info("Register MA35D1 Crypto optee client driver.\n");
-		err = driver_register(&optee_crypto_driver.driver);
-		if (err) {
-			pr_err("Failed to register crypto optee driver!\n");
-			return err;
-		}
-#endif
-	} else {
+	if (!nu_cryp_dev->use_optee) {
 		/*
 		 *  Get register base
 		 */
@@ -233,7 +239,8 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 		if (!strcmp("yes", str))
 			nu_cryp_dev->ecc_ioctl = true;
 	}
-	if (nu_cryp_dev->use_optee == false) {
+	if ((nu_cryp_dev->use_optee == false) ||
+	    (nu_cryp_dev->ecc_ioctl == true)) {
 		err = nuvoton_ecc_probe(dev, nu_cryp_dev);
 		if (err)
 			dev_err(dev, "failed to init ECC!\n");
@@ -246,7 +253,8 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 		if (!strcmp("yes", str))
 			nu_cryp_dev->rsa_ioctl = true;
 	}
-	if (nu_cryp_dev->use_optee == false) {
+	if ((nu_cryp_dev->use_optee == false) ||
+	    (nu_cryp_dev->rsa_ioctl == true)) {
 		err = nuvoton_rsa_probe(dev, nu_cryp_dev);
 		if (err)
 			dev_err(dev, "failed to init RSA!\n");
@@ -257,9 +265,10 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 
 static int nuvoton_crypto_remove(struct platform_device *pdev)
 {
-	struct nuvoton_crypto_dev *nu_cryp_dev;
+	struct device *dev = &pdev->dev;
+	struct nu_crypto_dev *nu_cryp_dev;
 
-	nu_cryp_dev = platform_get_drvdata(pdev);
+	nu_cryp_dev = dev_get_drvdata(dev);
 	if (!nu_cryp_dev)
 		return -ENODEV;
 
@@ -276,7 +285,7 @@ static int nuvoton_crypto_remove(struct platform_device *pdev)
 #ifdef CONFIG_CRYPTO_RSA
 	nuvoton_rsa_remove(&pdev->dev, nu_cryp_dev);
 #endif
-
+	devm_kfree(dev, nu_cryp_dev);
 	return 0;
 }
 
