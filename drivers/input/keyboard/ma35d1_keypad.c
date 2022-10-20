@@ -121,7 +121,7 @@ static void ma35d1_keypad_scan_matrix(struct ma35d1_keypad *keypad, unsigned int
 	__raw_writel(KeyEvent[0], (keypad->mmio_base + KPI_KPE0));
 	__raw_writel(KeyEvent[1], (keypad->mmio_base + KPI_KPE1));
 	__raw_writel(KeyEvent[2], (keypad->mmio_base + KPI_KRE0));
-	__raw_writel(KeyEvent[3], (keypad->mmio_base + KPI_KPE1));
+	__raw_writel(KeyEvent[3], (keypad->mmio_base + KPI_KRE1));
 
 	for(j = 0; j < 4; j++){
 		if(KeyEvent[j] != 0){
@@ -201,6 +201,7 @@ static int ma35d1_keypad_probe(struct platform_device *pdev)
 	struct resource *res;
 	int irq;
 	int error = 0;
+	struct clk *clk;
 
 	keypad = devm_kzalloc(&pdev->dev, sizeof(*keypad), GFP_KERNEL);
 
@@ -242,7 +243,15 @@ static int ma35d1_keypad_probe(struct platform_device *pdev)
 	input_dev->dev.parent = &pdev->dev;
 
 	/* Enable clock */
-
+	clk = of_clk_get(pdev->dev.of_node, 0);
+	if (IS_ERR(clk)) {
+		error = PTR_ERR(clk);
+		dev_err(&pdev->dev, "failed to get core clk: %d\n", error);
+		return -ENOENT;
+	}
+	error = clk_prepare_enable(clk);
+	if (error)
+		return -ENOENT;
 
 	error = matrix_keypad_parse_properties(&pdev->dev, &(keypad->kpi_row), &(keypad->kpi_col));
 	if (error) {

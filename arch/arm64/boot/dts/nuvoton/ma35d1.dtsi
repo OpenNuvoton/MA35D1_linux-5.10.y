@@ -486,6 +486,11 @@
 		reg = <0x0 0x404A0000 0x0 0x10000>;
 		interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
 
+		clocks = <&clk KPI_GATE>;
+
+		assigned-clocks = <&clk KPI_MUX>;
+		assigned-clock-parents = <&clk HXT>;
+
 		keypad,num-rows = <4>;
 		keypad,num-columns = <4>;
 
