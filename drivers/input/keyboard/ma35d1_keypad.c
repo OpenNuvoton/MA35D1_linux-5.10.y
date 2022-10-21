@@ -133,12 +133,11 @@ static void ma35d1_keypad_scan_matrix(struct ma35d1_keypad *keypad, unsigned int
 
 			for (i=0; i<32; i++){
 				if(KeyEvent[j] & (1<<i)){
-					code = MATRIX_SCAN_CODE( ((i << 3) + row_add), (i & 0x7), row_shift);
+					code = MATRIX_SCAN_CODE( ((i/8) + row_add), (i % 8), row_shift);
 					key = keymap[code];
 
 					input_event(input_dev, EV_MSC, MSC_SCAN, code);
 					input_report_key(input_dev, key, press_key);
-					input_sync(input_dev);
 				}
 			}
 		}
@@ -154,6 +153,8 @@ static irqreturn_t ma35d1_keypad_irq_handler(int irq, void *dev_id)
 
 	if (kstatus & (PKEY_INT|RKEY_INT)){
 		ma35d1_keypad_scan_matrix(keypad, kstatus);
+
+		input_sync(keypad->input_dev);
 	}
 	else{
 		if(kstatus & PDWAKE)
