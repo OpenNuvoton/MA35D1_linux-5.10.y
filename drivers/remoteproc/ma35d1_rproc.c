@@ -26,7 +26,7 @@
 #include <linux/regmap.h>
 #include <linux/remoteproc.h>
 #include <linux/reset.h>
-#include "remoteproc_internal.h" 
+#include "remoteproc_internal.h"
 
 enum ma35d1_rproc_messages {
 	RPROC_ECHO_REPLY	= 0xFF000000,
@@ -36,8 +36,6 @@ enum ma35d1_rproc_messages {
 struct ma35d1_rproc {
 	struct device           *dev;
 	struct rproc            *rproc;
-	struct mbox_chan        *channel;
-	struct mbox_client      mbox_client1;
 	struct reset_control    *m4_rst;
 	void   __iomem          *da_to_va_addr_1;
 	void   __iomem          *da_to_va_addr_2;
@@ -49,44 +47,11 @@ struct ma35d1_rproc {
 	uint32_t ddr_addr;
 };
 
-static void ma35d1_rx_callback(struct mbox_client *cl, void *msg)
-{
-	struct ma35d1_rproc *nproc = container_of(cl, struct ma35d1_rproc, mbox_client1);
-	struct device *dev = nproc->rproc->dev.parent;
-	const char *name = nproc->rproc->name;
-	u32 *data = (u32 *)msg;
-
-	switch (*data) {
-		case RPROC_ECHO_REPLY:
-			dev_info(dev, "received echo reply from %s\n", name);
-		break;
-
-		default:
-			/* msg contains the index of the triggered vring */
-			if (rproc_vq_interrupt(nproc->rproc, *data) == IRQ_NONE)
-				dev_dbg(dev, "no message was found in vqid %d\n", *data);
-	}
-}
-
 static int ma35d1_rproc_start(struct rproc *rproc)
 {
 	struct ma35d1_rproc *nproc = rproc->priv;
-	struct device *dev = rproc->dev.parent;
 
 	reset_control_deassert(nproc->m4_rst);
-
-	nproc->mbox_client1.dev          = dev;
-	nproc->mbox_client1.rx_callback  = ma35d1_rx_callback;
-	nproc->mbox_client1.tx_done	 = NULL;
-	nproc->mbox_client1.tx_block	 = false;
-	nproc->mbox_client1.knows_txdone = false;
-	nproc->mbox_client1.tx_tout	 = 1;
-
-	nproc->channel = mbox_request_channel(&nproc->mbox_client1, 0);
-	if (IS_ERR(nproc->channel)) {
-		dev_err(dev, "mbox_request_channel failed: %ld\n", PTR_ERR(nproc->channel));
-		return -EBUSY;
-	}
 
 	return 0;
 }
@@ -99,21 +64,7 @@ static int ma35d1_rproc_stop(struct rproc *rproc)
 
 	reset_control_assert(nproc->m4_rst);
 
-	if(nproc->channel)
-		mbox_free_channel(nproc->channel);
-
 	return 0;
-}
-
-static void ma35d1_rproc_kick(struct rproc *rproc, int vqid)
-{
-	struct ma35d1_rproc *nproc = rproc->priv;
-	struct device *dev = rproc->dev.parent;
-	int ret;
-
-	ret = mbox_send_message(nproc->channel, (void *)&vqid);
-	if (ret < 0)
-		dev_err(dev, "failed to send mailbox message, status = %d\n", ret);
 }
 
 static void *ma35d1_m4_rproc_da_to_va(struct rproc *rproc, u64 da, size_t len)
@@ -271,7 +222,6 @@ static int ma35d1_rproc_parse_fw(struct rproc *rproc, const struct firmware *fw)
 static struct rproc_ops ma35d1_rproc_ops = {
 	.start		= ma35d1_rproc_start,
 	.stop		= ma35d1_rproc_stop,
-	.kick		= ma35d1_rproc_kick,
 	.da_to_va	= ma35d1_m4_rproc_da_to_va,
 	.load           = ma35d1_rproc_elf_load_segments,
 	.parse_fw	= ma35d1_rproc_parse_fw,

@@ -396,17 +396,10 @@ static struct platform_driver ma35d1_rpmsg_driver = {
 };
 module_platform_driver(ma35d1_rpmsg_driver);
 
-static int __init ma35d1_rpmsg_dev_init(void)
-{
-	return platform_driver_register(&ma35d1_rpmsg_driver);
-}
-
 static void __exit ma35d1_rpmsg_dev_exit(void)
 {
 	platform_driver_unregister(&ma35d1_rpmsg_driver);
 }
-
-module_init(ma35d1_rpmsg_dev_init);
 module_exit(ma35d1_rpmsg_dev_exit);
 
 
