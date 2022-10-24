@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/serial/serial.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: NVT MA35D1 Serial Communication Interface
+
+maintainers:
+  - Rob Herring <robh@kernel.org>
+  - Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+
+allOf:
+  - $ref: rs485.yaml
+
+properties:
+  compatible:
+    const: nuvoton,ma35d1-uart
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  clocks:
+    maxItems: 1
+
+  port-number:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Select the port number of uart0~uart17 as 0~17
+
+  pdma-enable:
+    enum: [ 0, 1 ]
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - clocks
+  - port-number
+  - pdma-enable
+
+examples:
+  - |
+	uart1: serial@40710000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <00x0 0x40700000 0x0 0x10000>;
+		interrupts = <GIC_SPI 59 IRQ_TYPE_EDGE_RISING>;
+		clocks = <&clk uart0_gate>;
+		port-number = <0>;
+		pdma-enable = <0>;
+	};
