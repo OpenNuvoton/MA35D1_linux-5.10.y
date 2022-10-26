@@ -170,10 +170,14 @@ static int ma35d1_i2s_probe(struct snd_soc_dai *dai)
 	/* Init DMA data */
 	ma35d1_audio->dma_params_rx.addr = ma35d1_audio->phyaddr + I2S_RXFIFO;
 	ma35d1_audio->dma_params_rx.addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-	ma35d1_audio->dma_params_rx.slave_id = ma35d1_audio->pdma_reqsel_rx;
+	ma35d1_audio->pcfg_rx.reqsel = ma35d1_audio->pdma_reqsel_rx;
+	ma35d1_audio->dma_params_rx.peripheral_config = &ma35d1_audio->pcfg_rx;
+	ma35d1_audio->dma_params_rx.peripheral_size = sizeof(ma35d1_audio->pcfg_rx);
 	ma35d1_audio->dma_params_tx.addr = ma35d1_audio->phyaddr + I2S_TXFIFO;
 	ma35d1_audio->dma_params_tx.addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-	ma35d1_audio->dma_params_tx.slave_id = ma35d1_audio->pdma_reqsel_tx;
+	ma35d1_audio->pcfg_tx.reqsel = ma35d1_audio->pdma_reqsel_tx;
+	ma35d1_audio->dma_params_tx.peripheral_config = &ma35d1_audio->pcfg_tx;
+	ma35d1_audio->dma_params_tx.peripheral_size = sizeof(ma35d1_audio->pcfg_tx);
 
 	snd_soc_dai_init_dma_data(dai, &ma35d1_audio->dma_params_tx,
 	                          &ma35d1_audio->dma_params_rx);

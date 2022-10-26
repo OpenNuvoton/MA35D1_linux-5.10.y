@@ -13,6 +13,7 @@
 
 #include <linux/gpio/consumer.h>
 #include <sound/dmaengine_pcm.h>
+#include <linux/platform_data/dma-ma35d1.h>
 #include <linux/io.h>
 
 #define IN	0
@@ -147,6 +148,8 @@ struct ma35d1_audio {
 	struct snd_dmaengine_dai_dma_data *dma_data;
 	unsigned int pdma_reqsel_tx;
 	unsigned int pdma_reqsel_rx;
+	struct ma35d1_peripheral pcfg_tx;
+	struct ma35d1_peripheral pcfg_rx;
 	unsigned int phyaddr;
 	struct gpio_desc *pwdn_gpio;
 

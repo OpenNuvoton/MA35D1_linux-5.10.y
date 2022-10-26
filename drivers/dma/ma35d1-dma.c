@@ -1,87 +1,66 @@
 // SPDX-License-Identifier: GPL-2.0+
-//
-// drivers/dma/ma35d1-dma.c
-//
-// This file contains a driver for the Nuvoton MA35D1 DMA engine
-// found on MA35D1
-//
-// Copyright (C) 2020 Nuvoton Technology Corp.
+/*
+ * This file contains a driver for the Nuvoton MA35D1 DMA engine
+ * found on MA35D1
+ *
+ * Copyright (C) 2022 Nuvoton Technology Corp.
+ */
 
-#include <linux/clk.h>
+#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
+#include <linux/err.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
-#include <linux/dmaengine.h>
+#include <linux/list.h>
 #include <linux/module.h>
-#include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
-
-#include <linux/platform_data/dma-ma35d1.h>
-#include <linux/of.h>
+#include <linux/spinlock.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/of_dma.h>
+#include <linux/bitops.h>
+#include <linux/clk.h>
+#include <linux/platform_data/dma-ma35d1.h>
+
 #include "dmaengine.h"
+#include "virt-dma.h"
 
 /* PDMA registers */
-#define DSCT_CTL 0x000
-#define PDMA_TXTYPE_Pos	(2)
-#define PDMA_TXTYPE_Msk	(0x1ul << PDMA_TXTYPE_Pos)
-#define PDMA_SAINC_Pos	(8)
-#define PDMA_SAINC_Msk	(0x3ul << PDMA_SAINC_Pos)
-#define PDMA_DAINC_Pos	(10)
-#define PDMA_DAINC_Msk	(0x3ul << PDMA_DAINC_Pos)
-#define PDMA_TXWIDTH_Pos (12)
-#define PDMA_TXWIDTH_Msk (0x3ul << PDMA_TXWIDTH_Pos)
+#define PDMA_OFFSET_CHAN_SIZE		0x10
+#define PDMA_DSCT_CTL			0x0
+#define   PDMA_OP_STOP			0x0
+#define   PDMA_OP_BASIC		0x1
+#define   PDMA_OP_SCATTER		0x2
+#define   PDMA_OP_MSK			0x3
+#define   PDMA_TXTYPE			(1<<2)
+#define   PDMA_TBINTDIS		(1<<7)
+#define   PDMA_SAFIX			(3<<8)
+#define   PDMA_DAFIX			(3<<10)
+#define   PDMA_TXWIDTH_1_BYTE		(0<<12)
+#define   PDMA_TXWIDTH_2_BYTES	(1<<12)
+#define   PDMA_TXWIDTH_4_BYTES	(2<<12)
+#define   PDMA_TXCNT(cnt)		((cnt)<<16)
+#define   PDMA_GET_TXCNT(ctrl)	((ctrl>>16)&0xffff)
+#define PDMA_DSCT_SA			0x004
+#define PDMA_DSCT_DA			0x008
+#define PDMA_DSCT_NEXT			0x00c
+#define PDMA_CHCTL			0x400
+#define PDMA_PAUSE			0x404
+#define PDMA_SWREQ			0x408
+#define PDMA_INTEN			0x418
+#define PDMA_INTSTS			0x41C
+#define PDMA_TDSTS			0x424
+#define PDMA_TOUTEN			0x434
+#define PDMA_TOUTIEN			0x438
+#define PDMA_TOC			0x440
+#define PDMA_CHRST			0x460
+#define PDMA_TOUTPSC			0x470
+#define PDMA_TOUTPSC1			0x474
+#define PDMA_REQSEL			0x480
 
-#define PDMA_OP_Msk 0x3
-#define PDMA_OP_STOP 0x0
-#define PDMA_OP_BASIC 0x1
-#define	PDMA_OP_SCATTER	0x2
-#define PDMA_TXCNT_Pos 16
-#define PDMA_TXCNT_Msk (0xFFFFul<<PDMA_TXCNT_Pos)
-
-#define DSCT_SA 0x004
-#define DSCT_DA	0x008
-#define DSCT_NEXT 0x00c
-#define PDMA_CHCTL 0x400
-#define PDMA_PAUSE 0x404
-#define PDMA_SWREQ 0x408
-#define PDMA_INTEN 0x418
-#define PDMA_INTSTS 0x41C
-#define PDMA_TDSTS 0x424
-#define PDMA_TOUTEN 0x434
-#define PDMA_TOUTIEN 0x438
-#define PDMA_TOC 0x440
-#define PDMA_CHRST 0x460
-#define PDMA_TOUTPSC 0x470
-#define PDMA_TOUTPSC1 0x474
-#define PDMA_REQSEL 0x480
-
-#define EN_HW_SG
-//#define EN_PDMA_DEBUG
-#ifdef EN_PDMA_DEBUG
-#define ENTRY()	pr_info("Enter...%s()\n", __func__)
-#define LEAVE()	pr_info("Leave...%s()\n", __func__)
-#else
-#define ENTRY()
-#define LEAVE()
-#endif
-
-#ifdef EN_PDMA_DEBUG
-#define DMA_DEBUG(fmt, arg...) pr_info(fmt, ##arg)
-#define DMA_DEBUG2(fmt, arg...) pr_info(fmt, ##arg)
-#else
-#define DMA_DEBUG(fmt, arg...)
-#define DMA_DEBUG2(fmt, arg...)
-#endif
-
-#define DMA_CHANNELS		10
-#define DMA_MAX_CHAN_DESCRIPTORS	32
-#define DMA_MAX_CHAN_BYTES		0x10000
-
-struct ma35d1_dma_engine;
-static int ma35d1_dma_slave_config_write(struct dma_chan *chan,
-					  enum dma_transfer_direction dir,
-					  struct dma_slave_config *config);
+#define PDMA_MAX_CHANS			10
+#define PDMA_MAX_CHAN_BYTES		0x10000
 
 struct ma35d1_sg {
 	u32 ctl;
@@ -90,967 +69,331 @@ struct ma35d1_sg {
 	u32 next;
 };
 
-/**
- * struct ma35d1_dma_desc - ma35d1 specific transaction descriptor
- * @src_addr: source address of the transaction
- * @dst_addr: destination address of the transaction
- * @size: size of the transaction (in bytes)
- * @complete: this descriptor is completed
- * @txd: dmaengine API descriptor
- * @tx_list: list of linked descriptors
- * @node: link used for putting this into a channel queue
- */
-struct ma35d1_dma_desc {
-	u32 src_addr;
-	u32 dst_addr;
-	size_t size;
-	bool complete;
-	struct dma_async_tx_descriptor txd;
-	struct list_head tx_list;
-	struct list_head node;
-	struct ma35d1_dma_config config;
-	u32 ctl;
-	u32 dir;
+struct ma35d1_desc {
+	enum dma_transfer_direction dma_dir;
+	bool cyclic;
+	unsigned int sglen;
+	struct virt_dma_desc vd;
+	uint32_t ctl;
+	struct ma35d1_peripheral pcfg;
+	unsigned int sg_addr;
+	struct ma35d1_sg sg[];
 };
 
-/**
- * struct ma35d1_dma_chan - an ma35d1 DMA channel
- * @chan: dmaengine API channel
- * @edma: pointer to to the engine device
- * @regs: memory mapped registers
- * @irq: interrupt number of the channel
- * @clk: clock used by this channel
- * @tasklet: channel specific tasklet used for callbacks
- * @lock: lock protecting the fields following
- * @flags: flags for the channel
- * @buffer: which buffer to use next (0/1)
- * @active: flattened chain of descriptors currently being processed
- * @queue: pending descriptors which are handled next
- * @free_list: list of free descriptors which can be used
- * @runtime_addr: This is set via .device_config before slave operation is
- *                prepared
- * @runtime_ctrl: runtime values for the control register.
- *
- * As ma35d1 DMA controller doesn't support real chained DMA descriptors
- * we will have slightly different scheme here: @active points to a head of
- * flattened DMA descriptor chain.
- *
- * @queue holds pending transactions. These are linked through the first
- * descriptor in the chain. When a descriptor is moved to the active queue,
- * the first and chained descriptors are flattened into a single list.
- *
- * @chan.private holds pointer to &struct ma35d1_dma_data which contains
- * necessary channel configuration information.
- * For memcpy channels this must
- * be %NULL.
- */
-#ifdef EN_HW_SG
-#define SG_LEN 64
-#endif
-struct ma35d1_dma_chan {
+struct ma35d1_chan {
 	struct device *dev;
-	struct dma_chan chan;
-	const struct ma35d1_dma_engine *edma;
-	void __iomem *regs;
-	int irq;
-	u32 ch;
-	struct clk *clk;
-	struct tasklet_struct tasklet;
-	/* protects the fields following */
-	spinlock_t lock;
-	unsigned long flags;
-	/* Channel is configured for cyclic transfers */
-#define MA35D1_DMA_IS_CYCLIC		1
-
-	struct list_head active;
-	struct list_head queue;
-	struct list_head free_list;
+	struct virt_dma_chan vc;
+	void __iomem *base;
+	struct ma35d1_desc *desc;
+	struct dma_slave_config cfg;
+	bool allocated;
+	bool error;
+	int ch_num;
+	unsigned int remain;
 	u32 runtime_addr;
 	u32 runtime_ctrl;
-	struct dma_slave_config slave_config;
-
-#ifdef EN_HW_SG
-	u64 sg_addr;
-	u64 sg_base[SG_LEN];
-#endif
+	u32 runtime_width;
 };
 
-/**
- * struct ma35d1_dma_engine - the ma35d1 DMA engine instance
- * @dma_dev: holds the dmaengine device
- * @m2m: is this an M2M or M2P device
- * @hw_setup: method which sets the channel up for operation
- * @hw_shutdown: shuts the channel down and flushes whatever is left
- * @hw_submit: pushes active descriptor(s) to the hardware
- * @hw_interrupt: handle the interrupt
- * @num_channels: number of channels for this instance
- * @channels: array of channels
- *
- */
-struct ma35d1_dma_engine {
-	struct ma35d1_dma_platform_data *pdata;
-	struct dma_device dma_dev;
-
-	void (*hw_synchronize)(struct ma35d1_dma_chan *edmac);
-	void (*hw_shutdown)(struct ma35d1_dma_chan *edmac);
-	void (*hw_submit)(struct ma35d1_dma_chan *edmac);
-	int (*hw_interrupt)(struct ma35d1_dma_chan *edmac);
-#define INTERRUPT_UNKNOWN	0
-#define INTERRUPT_DONE		1
-#define INTERRUPT_NEXT_BUFFER	2
-#define INTERRUPT_TIMEOUT       3
-
-	size_t num_channels;
-	struct ma35d1_dma_chan channels[];
+struct ma35d1_dmadev {
+	struct dma_device ddev;
+	struct ma35d1_chan channels[PDMA_MAX_CHANS];
+	unsigned int irq;
+	int nr_chans;
 };
 
-static void ma35d1_pdma_edmac_write(struct ma35d1_dma_chan *edmac,
-				     unsigned int reg, u32 value)
+static struct device *chan2dev(struct dma_chan *chan)
 {
-	__raw_writel(value, edmac->regs + reg);
+	return &chan->dev->device;
 }
 
-static u32 ma35d1_pdma_edmac_read(struct ma35d1_dma_chan *edmac,
-				   unsigned int reg)
+static inline struct ma35d1_chan *to_ma35d1_dma_chan(struct dma_chan *c)
 {
-	return __raw_readl(edmac->regs + reg);
+	return container_of(c, struct ma35d1_chan, vc.chan);
 }
 
-static inline struct device *chan2dev(struct ma35d1_dma_chan *edmac)
+static inline struct ma35d1_desc *to_ma35d1_dma_desc(struct dma_async_tx_descriptor *t)
 {
-	return &edmac->chan.dev->device;
+	return container_of(t, struct ma35d1_desc, vd.tx);
 }
 
-static struct ma35d1_dma_chan *to_ma35d1_dma_chan(struct dma_chan *chan)
+static void ma35d1_dma_desc_free(struct virt_dma_desc *vd)
 {
-	return container_of(chan, struct ma35d1_dma_chan, chan);
+	kfree(container_of(vd, struct ma35d1_desc, vd));
 }
 
-void ma35d1_set_transfer_mode(struct ma35d1_dma_chan *edmac,
-			       uint32_t u32Peripheral)
+static int ma35d1_terminate_all(struct dma_chan *chan)
 {
-	ma35d1_pdma_edmac_write(edmac, PDMA_REQSEL + (4 * (edmac->ch / 4)),
-		(ma35d1_pdma_edmac_read(edmac, PDMA_REQSEL +
-		(4 * (edmac->ch / 4))) & ~(0xFF << ((edmac->ch & 0x3) * 8))) |
-		(u32Peripheral << ((edmac->ch & 0x3) * 8)));
-}
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+	unsigned long flags;
+	LIST_HEAD(head);
+	u32 val;
 
-/**
- * ma35d1_dma_set_active - set new active descriptor chain
- * @edmac: channel
- * @desc: head of the new active descriptor chain
- *
- * Sets @desc to be the head of the new active descriptor chain.
- * This is the chain which is processed next.
- * The active list must be empty before calling
- * this function.
- *
- * Called with @edmac->lock held and interrupts disabled.
- */
-static void ma35d1_dma_set_active(struct ma35d1_dma_chan *edmac,
-				   struct ma35d1_dma_desc *desc)
-{
-	ENTRY();
-	BUG_ON(!list_empty(&edmac->active));
-	list_add_tail(&desc->node, &edmac->active);
+	dev_dbg(chan2dev(chan), "%s: ch=%p\n", __func__, ch);
 
-	/* Flatten the @desc->tx_list chain into @edmac->active list */
-	while (!list_empty(&desc->tx_list)) {
-		struct ma35d1_dma_desc *d = list_first_entry(&desc->tx_list,
-							      struct
-							      ma35d1_dma_desc,
-							      node);
-		/*
-		 * We copy the callback parameters from the first descriptor
-		 * to all the chained descriptors. This way we can call the
-		 * callback without having to find out the first descriptor in
-		 * the chain. Useful for cyclic transfers.
-		 */
-		d->txd.callback = desc->txd.callback;
-		d->txd.callback_param = desc->txd.callback_param;
-		list_move_tail(&d->node, &edmac->active);
+	spin_lock_irqsave(&ch->vc.lock, flags);
+
+	if (ch->desc) {
+		ma35d1_dma_desc_free(&ch->desc->vd);
+		ch->desc = NULL;
 	}
 
-	LEAVE();
+	val = readl(ch->base + PDMA_CHCTL) & ~(1 << ch->ch_num);
+	writel(val, ch->base + PDMA_CHCTL);
+
+	vchan_get_all_descriptors(&ch->vc, &head);
+	spin_unlock_irqrestore(&ch->vc.lock, flags);
+	vchan_dma_desc_free_list(&ch->vc, &head);
+
+	return 0;
 }
 
-/* Called with @edmac->lock held and interrupts disabled */
-static struct ma35d1_dma_desc *ma35d1_dma_get_active(
-	struct ma35d1_dma_chan *edmac)
+static void ma35d1_set_dma_timeout(struct ma35d1_chan *ch)
 {
-	ENTRY();
-	return list_first_entry_or_null(&edmac->active,
-					struct ma35d1_dma_desc, node);
-}
+	struct ma35d1_desc *d = ch->desc;
+	u32 val;
 
-/**
- * ma35d1_dma_advance_active - advances to the next active descriptor
- * @edmac: channel
- *
- * Function advances active descriptor to the next in the
- * edmac->active and returns true if
- * we still have descriptors in the chain to process.
- * Otherwise returns %false.
- *
- * When the channel is in cyclic mode always returns %true.
- *
- * Called with @edmac->lock held and interrupts disabled.
- */
-static bool ma35d1_dma_advance_active(struct ma35d1_dma_chan *edmac)
-{
-	struct ma35d1_dma_desc *desc;
-
-	ENTRY();
-	list_rotate_left(&edmac->active);
-
-	if (test_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags))
-		return true;
-
-	desc = ma35d1_dma_get_active(edmac);
-
-	if (!desc)
-		return false;
-
-	/*
-	 * If txd.cookie is set it means that we are back in the first
-	 * descriptor in the chain and hence done with it.
-	 */
-	DMA_DEBUG("cookie=%d\n", desc->txd.cookie);
-	LEAVE();
-	return !desc->txd.cookie;
-}
-
-void ma35d1_dma_set_timeout(struct ma35d1_dma_chan *edmac,
-			     u32 prescaler, u32 counter)
-{
-	struct ma35d1_dma_desc *desc;
-	u32 value;
-
-	ENTRY();
-	desc = ma35d1_dma_get_active(edmac);
-
-	if (!desc) {
-		dev_warn(chan2dev(edmac), "PDMA: empty descriptor list\n");
-		return;
-	}
-
-	if (prescaler == 0 && counter == 0) {
+	if (d->pcfg.timeout_prescaler == 0 && d->pcfg.timeout_counter == 0) {
 		/* Disable time-out funciton */
-		value = ma35d1_pdma_edmac_read(edmac,
-			PDMA_TOUTIEN) & ~(1 << edmac->ch);
-		ma35d1_pdma_edmac_write(edmac, PDMA_TOUTIEN, value);
+		val = readl(ch->base + PDMA_TOUTIEN);
+		val &= ~(1 << ch->ch_num);
+		writel(val, ch->base + PDMA_TOUTIEN);
 
-		value = ma35d1_pdma_edmac_read(edmac,
-			PDMA_TOUTEN) & ~(1 << edmac->ch);
-		ma35d1_pdma_edmac_write(edmac, PDMA_TOUTEN, value);
+		val = readl(ch->base + PDMA_TOUTEN);
+		val &= ~(1 << ch->ch_num);
+		writel(val, ch->base + PDMA_TOUTEN);
 		return;
 	}
 
-	if (edmac->ch <= 7) {
-		value = ma35d1_pdma_edmac_read(edmac,
-			PDMA_TOUTPSC) & ~(0x7 << (4 * edmac->ch));
-		ma35d1_pdma_edmac_write(edmac, PDMA_TOUTPSC, value);
+	if (ch->ch_num <= 7) {
+		val = readl(ch->base + PDMA_TOUTPSC);
+		val &= ~(0x7 << (4 * ch->ch_num));
+		writel(val, ch->base + PDMA_TOUTPSC);
 
-		value = ma35d1_pdma_edmac_read(edmac,
-			PDMA_TOUTPSC) | ((prescaler & 0x7) << (4 * edmac->ch));
-		ma35d1_pdma_edmac_write(edmac, PDMA_TOUTPSC, value);
+		val = readl(ch->base + PDMA_TOUTPSC);
+		val |= ((d->pcfg.timeout_prescaler & 0x7) << (4 * ch->ch_num));
+		writel(val, ch->base + PDMA_TOUTPSC);
 
 	} else {
-		value = ma35d1_pdma_edmac_read(edmac, PDMA_TOUTPSC1)
-		    & ~(0x7 << (4 * (edmac->ch - 8)));
-		ma35d1_pdma_edmac_write(edmac, PDMA_TOUTPSC1, value);
+		val = readl(ch->base + PDMA_TOUTPSC1);
+		val &= ~(0x7 << (4 * (ch->ch_num - 8)));
+		writel(val, ch->base + PDMA_TOUTPSC1);
 
-		value = ma35d1_pdma_edmac_read(edmac, PDMA_TOUTPSC1)
-		    | ((prescaler & 0x7) << (4 * (edmac->ch - 8)));
-		ma35d1_pdma_edmac_write(edmac, PDMA_TOUTPSC1, value);
+		val = readl(ch->base + PDMA_TOUTPSC1);
+		val |=
+		    ((d->pcfg.timeout_counter & 0x7) << (4 * (ch->ch_num - 8)));
+		writel(val, ch->base + PDMA_TOUTPSC1);
 	}
 
-	value = ma35d1_pdma_edmac_read(edmac,
-		(4 * (edmac->ch / 2))) &
-		~(0xffff << (16 * (edmac->ch % 2)));
-	ma35d1_pdma_edmac_write(edmac,
-		PDMA_TOC + (4 * (edmac->ch / 2)), value);
+	val = readl(ch->base + (4 * (ch->ch_num / 2)));
+	val &= ~(0xffff << (16 * (ch->ch_num % 2)));
+	writel(val, ch->base + PDMA_TOC + (4 * (ch->ch_num / 2)));
 
-	value = ma35d1_pdma_edmac_read(edmac,
-		(4 * (edmac->ch / 2))) |
-		((counter & 0xffff) << (16 * (edmac->ch % 2)));
-	ma35d1_pdma_edmac_write(edmac,
-		PDMA_TOC + (4 * (edmac->ch / 2)), value);
+	val = readl(ch->base + (4 * (ch->ch_num / 2)));
+	val |=
+	    ((d->pcfg.timeout_prescaler & 0xffff) << (16 * (ch->ch_num % 2)));
+	writel(val, ch->base + PDMA_TOC + (4 * (ch->ch_num / 2)));
 
 	/* Enable time-out funciton */
-	value = ma35d1_pdma_edmac_read(edmac, PDMA_TOUTEN) | (1 << edmac->ch);
-	ma35d1_pdma_edmac_write(edmac, PDMA_TOUTEN, value);
+	val = readl(ch->base + PDMA_TOUTEN);
+	val |= (1 << ch->ch_num);
+	writel(val, ch->base + PDMA_TOUTEN);
 
 	/* Enable time-out interrupt */
-	value = ma35d1_pdma_edmac_read(edmac, PDMA_TOUTIEN) | (1 << edmac->ch);
-	ma35d1_pdma_edmac_write(edmac, PDMA_TOUTIEN, value);
-	LEAVE();
+	val = readl(ch->base + PDMA_TOUTIEN);
+	val |= (1 << ch->ch_num);
+	writel(val, ch->base + PDMA_TOUTIEN);
 }
 
-static void hw_shutdown(struct ma35d1_dma_chan *edmac)
+static void ma35d1_set_transfer_params(struct ma35d1_chan *ch, int reqsel)
 {
-	u32 value;
+	u32 sel, reg;
 
-	ENTRY();
-	value = ma35d1_pdma_edmac_read(edmac, PDMA_CHCTL) & ~(1 << edmac->ch);
-	ma35d1_pdma_edmac_write(edmac, PDMA_CHCTL, value);
-	LEAVE();
+	reg = PDMA_REQSEL + (4 * (ch->ch_num / 4));
+	sel = readl(ch->base + reg);
+	sel &= ~(0xFF << ((ch->ch_num & 0x3) * 8));
+	sel |= (reqsel << ((ch->ch_num & 0x3) * 8));
+	writel(sel, ch->base + reg);
 }
 
-static void fill_desc(struct ma35d1_dma_chan *edmac)
+static void ma35d1_set_channel_params(struct ma35d1_chan *ch)
 {
-	struct ma35d1_dma_desc *desc;
-	u32 reg, value;
-	int width = 1;
+	u32 reg, val;
 
-	ENTRY();
-	desc = ma35d1_dma_get_active(edmac);
-
-	if (!desc) {
-		dev_warn(chan2dev(edmac), "PDMA: empty descriptor list\n");
-		return;
-	}
-	DMA_DEBUG("edmac->runtime_ctrl=0x%08x\n", edmac->runtime_ctrl);
-	DMA_DEBUG("PDMA ch%02d CTL=0x%08x\n", edmac->ch,
-		  ma35d1_pdma_edmac_read(edmac, edmac->ch * 16));
-	DMA_DEBUG("desc->ctl=0x%08x\n", desc->ctl);
-
-	if ((ma35d1_pdma_edmac_read(edmac, edmac->ch * 16) & 0x3) != 0) {
-		reg = ma35d1_pdma_edmac_read(edmac, PDMA_CHCTL);
-		ma35d1_pdma_edmac_write(edmac, edmac->ch * 16, 0);
-
-		value = ma35d1_pdma_edmac_read(edmac,
-						PDMA_CHRST) | 1 << (edmac->ch);
-		ma35d1_pdma_edmac_write(edmac, PDMA_CHRST, value);
-		ma35d1_pdma_edmac_write(edmac, PDMA_CHCTL,
-					 reg | (1 << edmac->ch));
+	if ((readl(ch->base + ch->ch_num * 16) & 0x3) != 0) {
+		reg = readl(ch->base + PDMA_CHCTL);
+		writel(0, ch->base + ch->ch_num * 16);
+		val = readl(ch->base + PDMA_CHRST) | 1 << (ch->ch_num);
+		writel(val, ch->base + PDMA_CHRST);
+		writel(reg | (1 << ch->ch_num), ch->base + PDMA_CHCTL);
 
 	} else {
-		ma35d1_pdma_edmac_write(edmac, edmac->ch * 16, 0);
-
-		value = ma35d1_pdma_edmac_read(edmac,
-						PDMA_CHCTL) | (1 << edmac->ch);
-		ma35d1_pdma_edmac_write(edmac, PDMA_CHCTL, value);
+		writel(0, ch->base + ch->ch_num * 16);
+		val = readl(ch->base + PDMA_CHCTL) | (1 << ch->ch_num);
+		writel(val, ch->base + PDMA_CHCTL);
 	}
-
-	value = ma35d1_pdma_edmac_read(edmac, PDMA_INTEN) | (1 << edmac->ch);
-	ma35d1_pdma_edmac_write(edmac, PDMA_INTEN, value);
-	ma35d1_set_transfer_mode(edmac, desc->config.reqsel);
-
-	if (test_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags))
-	{
-		if(desc->dir == DMA_MEM_TO_DEV)
-				width = edmac->slave_config.dst_addr_width;
-		else
-				width = edmac->slave_config.src_addr_width;
-	}
-
-#ifdef EN_HW_SG
-	if (test_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags))
-	{
-		struct ma35d1_sg *p_sg;
-		int cnt=1;
-		u32 start_addr,end_addr;
-
-		if(desc->dir == DMA_MEM_TO_DEV)
-			start_addr =  desc->src_addr;
-		else
-			start_addr =  desc->dst_addr;
-		ma35d1_pdma_edmac_write(edmac, (edmac->ch * 16) + 0xc, (u32)edmac->sg_addr);
-		p_sg=(struct ma35d1_sg *)edmac->sg_base;
-
-		do{
-			p_sg->ctl = (edmac->runtime_ctrl | (((desc->size/width) - 1UL) << PDMA_TXCNT_Pos) | PDMA_OP_SCATTER);
-			p_sg->src = desc->src_addr;
-			p_sg->dst = desc->dst_addr;
-			p_sg->next = (u32)edmac->sg_addr+(cnt*16);
-			cnt++;
-			DMA_DEBUG2("ctl 0x%08x, src 0x%08x, dst 0x%08x, next 0x%08x\n",p_sg->ctl,p_sg->src,p_sg->dst,p_sg->next);
-
-			ma35d1_dma_advance_active(edmac);
-			desc = ma35d1_dma_get_active(edmac);
-
-			if(desc->dir == DMA_MEM_TO_DEV)
-				end_addr =  desc->src_addr;
-			else
-				end_addr =  desc->dst_addr;
-			p_sg++;
-		}while(start_addr!=end_addr);
-		(--p_sg)->next=(u32)edmac->sg_addr;
-		dma_sync_single_for_cpu(edmac->dev, (u32)edmac->sg_addr, SG_LEN, DMA_FROM_DEVICE);
-	}else{
-#endif
-		value = ma35d1_pdma_edmac_read(edmac,
-			(edmac->ch * 16)) |
-			(edmac->runtime_ctrl | ((desc->size/width - 1UL) << PDMA_TXCNT_Pos));
-		ma35d1_pdma_edmac_write(edmac, (edmac->ch * 16), value);
-		ma35d1_pdma_edmac_write(edmac, (edmac->ch * 16) + 4, desc->src_addr);
-		ma35d1_pdma_edmac_write(edmac, (edmac->ch * 16) + 8, desc->dst_addr);
-#ifdef EN_HW_SG
-	}
-#endif
-
-	DMA_DEBUG2("===============pdma=============\n");
-	DMA_DEBUG2("pdma->DSCT[%d].CTL=0x%08x\n", edmac->ch,
-		   ma35d1_pdma_edmac_read(edmac, edmac->ch * 16));
-	DMA_DEBUG2("pdma->DSCT[%d].SA=0x%08x\n", edmac->ch,
-		   ma35d1_pdma_edmac_read(edmac, (edmac->ch * 16) + 4));
-	DMA_DEBUG2("pdma->DSCT[%d].DA=0x%08x\n", edmac->ch,
-		   ma35d1_pdma_edmac_read(edmac, (edmac->ch * 16) + 8));
-	DMA_DEBUG2("pdma->CHCTL=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_CHCTL));
-	DMA_DEBUG2("pdma->INTEN=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_INTEN));
-	DMA_DEBUG2("pdma->INTSTS=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_INTSTS));
-	DMA_DEBUG2("pdma->TDSTS=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_TDSTS));
-	DMA_DEBUG2("pdma->REQSEL=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_REQSEL));
-	DMA_DEBUG2("===============================\n");
-	LEAVE();
+	val = readl(ch->base + PDMA_INTEN) | (1 << ch->ch_num);
+	writel(val, ch->base + PDMA_INTEN);
 }
 
-static void hw_submit(struct ma35d1_dma_chan *edmac)
+static int ma35d1_slave_config(struct dma_chan *chan,
+			       struct dma_slave_config *cfg)
 {
-	struct ma35d1_dma_desc *desc;
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+	enum dma_slave_buswidth width;
+	u32 addr, ctrl;
 
-	ENTRY();
-	fill_desc(edmac);
-	desc = ma35d1_dma_get_active(edmac);
-	ma35d1_dma_set_timeout(edmac,
-	desc->config.timeout_prescaler,desc->config.timeout_counter);
-
-#ifdef EN_HW_SG
-	if (!test_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags))
-#endif
-		ma35d1_pdma_edmac_write(edmac, edmac->ch * 16,
-			(ma35d1_pdma_edmac_read(edmac,
-			edmac->ch * 16) & ~PDMA_OP_Msk) | PDMA_OP_BASIC);
-#ifdef EN_HW_SG
-	else{
-		ma35d1_pdma_edmac_write(edmac, edmac->ch * 16,
-			(ma35d1_pdma_edmac_read(edmac,
-			edmac->ch * 16) & ~PDMA_OP_Msk) | PDMA_OP_SCATTER);
-	}
-#endif
-
-	if (desc->config.reqsel == 0)
-		ma35d1_pdma_edmac_write(edmac, PDMA_SWREQ, 1 << edmac->ch);
-
-	DMA_DEBUG2("===============pdma=============\n");
-	DMA_DEBUG2("pdma->DSCT[%d].CTL=0x%08x\n", edmac->ch,
-		   ma35d1_pdma_edmac_read(edmac, edmac->ch * 16));
-	DMA_DEBUG2("pdma->DSCT[%d].SA=0x%08x\n", edmac->ch,
-		   ma35d1_pdma_edmac_read(edmac, (edmac->ch * 16) + 4));
-	DMA_DEBUG2("pdma->DSCT[%d].DA=0x%08x\n", edmac->ch,
-		   ma35d1_pdma_edmac_read(edmac, (edmac->ch * 16) + 8));
-	DMA_DEBUG2("pdma->CHCTL=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_CHCTL));
-	DMA_DEBUG2("pdma->INTEN=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_INTEN));
-	DMA_DEBUG2("pdma->INTSTS=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_INTSTS));
-	DMA_DEBUG2("pdma->TDSTS=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_TDSTS));
-	DMA_DEBUG2("pdma->REQSEL=0x%08x\n",
-		   ma35d1_pdma_edmac_read(edmac, PDMA_REQSEL));
-	DMA_DEBUG2("===============================\n");
-	LEAVE();
-}
-
-static int hw_interrupt(struct ma35d1_dma_chan *edmac)
-{
-	ENTRY();
-	if (ma35d1_dma_advance_active(edmac)) {
-		struct ma35d1_dma_desc *desc;
-
-		fill_desc(edmac);
-		desc = ma35d1_dma_get_active(edmac);
-		ma35d1_pdma_edmac_write(edmac, edmac->ch * 16,
-			(ma35d1_pdma_edmac_read(edmac,
-			edmac->ch * 16) & ~PDMA_OP_Msk) | PDMA_OP_BASIC);
-
-		if (desc->config.reqsel == 0)
-			ma35d1_pdma_edmac_write(edmac, PDMA_SWREQ,
-						 1 << (edmac->ch));
-
-		return INTERRUPT_NEXT_BUFFER;
+	ch->cfg = *cfg;
+	if (ch->cfg.direction == DMA_MEM_TO_DEV) {
+		ctrl = PDMA_DAFIX | PDMA_TXTYPE;
+		width = ch->cfg.dst_addr_width;
+		addr = ch->cfg.dst_addr;
+	} else {
+		ctrl = PDMA_SAFIX | PDMA_TXTYPE;
+		width = ch->cfg.src_addr_width;
+		addr = ch->cfg.src_addr;
 	}
 
-	LEAVE();
-	return INTERRUPT_DONE;
-}
-
-/*
- * DMA engine API implementation
- */
-
-static struct ma35d1_dma_desc *ma35d1_dma_desc_get(
-	struct ma35d1_dma_chan *edmac)
-{
-	struct ma35d1_dma_desc *desc, *_desc;
-	struct ma35d1_dma_desc *ret = NULL;
-	unsigned long flags;
-
-	ENTRY();
-	spin_lock_irqsave(&edmac->lock, flags);
-	list_for_each_entry_safe(desc, _desc, &edmac->free_list, node) {
-		if (async_tx_test_ack(&desc->txd)) {
-			list_del_init(&desc->node);
-			/* Re-initialize the descriptor */
-			desc->src_addr = 0;
-			desc->dst_addr = 0;
-			desc->size = 0;
-			desc->complete = false;
-			desc->txd.cookie = 0;
-			desc->txd.callback = NULL;
-			desc->txd.callback_param = NULL;
-			ret = desc;
-			break;
-		}
-	}
-	spin_unlock_irqrestore(&edmac->lock, flags);
-	LEAVE();
-	return ret;
-}
-
-static void ma35d1_dma_desc_put(struct ma35d1_dma_chan *edmac,
-				 struct ma35d1_dma_desc *desc)
-{
-	if (desc) {
-		unsigned long flags;
-
-		spin_lock_irqsave(&edmac->lock, flags);
-		list_splice_init(&desc->tx_list, &edmac->free_list);
-		list_add(&desc->node, &edmac->free_list);
-		spin_unlock_irqrestore(&edmac->lock, flags);
-	}
-}
-
-/**
- * ma35d1_dma_advance_work - start processing the next pending transaction
- * @edmac: channel
- *
- * If we have pending transactions queued and we are currently idling, this
- * function takes the next queued transaction from the @edmac->queue and
- * pushes it to the hardware for execution.
- */
-static void ma35d1_dma_advance_work(struct ma35d1_dma_chan *edmac)
-{
-	struct ma35d1_dma_desc *new;
-	unsigned long flags;
-
-	ENTRY();
-	spin_lock_irqsave(&edmac->lock, flags);
-
-	if (!list_empty(&edmac->active) || list_empty(&edmac->queue)) {
-		spin_unlock_irqrestore(&edmac->lock, flags);
-		return;
-	}
-
-	/* Take the next descriptor from the pending queue */
-	new = list_first_entry(&edmac->queue, struct ma35d1_dma_desc, node);
-	list_del_init(&new->node);
-	ma35d1_dma_set_active(edmac, new);
-	DMA_DEBUG2("hw_submit(edmac)\n");
-	/* Push it to the hardware */
-	edmac->edma->hw_submit(edmac);
-	spin_unlock_irqrestore(&edmac->lock, flags);
-	LEAVE();
-}
-
-static void ma35d1_dma_tasklet(unsigned long data)
-{
-	struct ma35d1_dma_chan *edmac = (struct ma35d1_dma_chan *)data;
-	struct ma35d1_dma_desc *desc, *d;
-	struct dmaengine_desc_callback cb;
-	LIST_HEAD(list);
-
-	ENTRY();
-	memset(&cb, 0, sizeof(cb));
-	spin_lock_irq(&edmac->lock);
-	/*
-	 * If dma_terminate_all() was called before we get to run, the active
-	 * list has become empty. If that happens we aren't supposed to do
-	 * anything more than call ma35d1_dma_advance_work().
-	 */
-	desc = ma35d1_dma_get_active(edmac);
-
-	if (desc) {
-		if (desc->complete) {
-			DMA_DEBUG("desc->complete ==> OK\n");
-
-			/* mark descriptor complete for non cyclic case only */
-			if (!test_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags)) {
-				DMA_DEBUG("if (!test_bit(MA35D1_\n");
-				dma_cookie_complete(&desc->txd);
-			}
-
-			list_splice_init(&edmac->active, &list);
-		}
-
-		DMA_DEBUG("dmaengine_desc_get_callback\n");
-		dmaengine_desc_get_callback(&desc->txd, &cb);
-	}
-
-	spin_unlock_irq(&edmac->lock);
-	/* Pick up the next descriptor from the queue */
-	ma35d1_dma_advance_work(edmac);
-	/* Now we can release all the chained descriptors */
-	list_for_each_entry_safe(desc, d, &list, node) {
-		dma_descriptor_unmap(&desc->txd);
-		ma35d1_dma_desc_put(edmac, desc);
-	}
-	dmaengine_desc_callback_invoke(&cb, NULL);
-	LEAVE();
-}
-
-void ma35d1_dma_edmac_interrupt(struct ma35d1_dma_chan *edmac,
-	int status)
-{
-	struct ma35d1_dma_desc *desc = NULL;
-	struct ma35d1_dma_done *done = NULL;
-
-	ENTRY();
-	desc = ma35d1_dma_get_active(edmac);
-
-	if (!desc) {
-		dev_warn(chan2dev(edmac),
-			 "got interrupt while active list is empty\n");
-		LEAVE();
-		return;
-	}
-
-	if (status == INTERRUPT_TIMEOUT) {
-		done = (struct ma35d1_dma_done *)desc->txd.callback_param;
-
-		if (done != NULL) {
-			done->done = 0;
-			done->timeout = 1;
-			done->remain = (ma35d1_pdma_edmac_read(edmac,
-				edmac->ch * 16) &
-				PDMA_TXCNT_Msk) >> PDMA_TXCNT_Pos;
-		}
-
-		tasklet_schedule(&edmac->tasklet);
-		return;
-	}
-
-#ifdef EN_HW_SG
-	if (test_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags)){
-			struct dmaengine_desc_callback cb;
-			memset(&cb, 0, sizeof(cb));
-			dmaengine_desc_get_callback(&desc->txd, &cb);
-			dmaengine_desc_callback_invoke(&cb, NULL);
-			ma35d1_dma_advance_active(edmac);
-			return;
-	}
-#endif
-
-	switch (edmac->edma->hw_interrupt(edmac)) {
-	case INTERRUPT_DONE:
-		DMA_DEBUG2("INTERRUPT_DONE\n");
-		desc->complete = true;
-		done = (struct ma35d1_dma_done *)desc->txd.callback_param;
-
-		if (done != NULL) {
-			done->done = 1;
-			done->timeout = 0;
-			done->remain = 0;
-		}
-
-		tasklet_schedule(&edmac->tasklet);
+	switch (width) {
+	case DMA_SLAVE_BUSWIDTH_1_BYTE:
+		ctrl |= PDMA_TXWIDTH_1_BYTE;
+		ch->runtime_width = 1;
 		break;
-
-	case INTERRUPT_NEXT_BUFFER:
-		DMA_DEBUG2("INTERRUPT_NEXT_BUFFER\n");
-
-		if (test_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags))
-			tasklet_schedule(&edmac->tasklet);
-
+	case DMA_SLAVE_BUSWIDTH_2_BYTES:
+		ctrl |= PDMA_TXWIDTH_2_BYTES;
+		ch->runtime_width = 2;
 		break;
-
+	case DMA_SLAVE_BUSWIDTH_4_BYTES:
+		ctrl |= PDMA_TXWIDTH_4_BYTES;
+		ch->runtime_width = 4;
+		break;
 	default:
-		dev_warn(chan2dev(edmac), "unknown interrupt!\n");
-		break;
+		return -EINVAL;
 	}
-
-	LEAVE();
+	ch->runtime_addr = addr;
+	ch->runtime_ctrl = ctrl;
+	return 0;
 }
 
-static irqreturn_t ma35d1_dma_interrupt(int irq, void *dev_id)
-{
-	int i;
-	u32 value;
-	struct ma35d1_dma_engine *edma = dev_id;
-	unsigned int pdma_int_status =
-	    ma35d1_pdma_edmac_read(&edma->channels[0],
-				    PDMA_INTSTS);
-	unsigned int pdma_status = ma35d1_pdma_edmac_read(&edma->channels[0],
-							   PDMA_TDSTS);
-	irqreturn_t ret = IRQ_HANDLED;
-
-	ENTRY();
-	DMA_DEBUG2("irqreturn_t\n");
-	DMA_DEBUG2("PDMA->INTSTS=0x%08x,PDMA->TDSTS=0x%08x\n",
-		   pdma_int_status, pdma_status);
-
-	for (i = (edma->num_channels - 1); i >= 0; i--) {
-		if (pdma_status & (1 << (edma->channels[i].ch))) {
-			ma35d1_pdma_edmac_write(&edma->channels[0], PDMA_TDSTS,
-						 (1 << (edma->channels[i].ch)));
-			ma35d1_dma_edmac_interrupt(&edma->channels[i],
-						    INTERRUPT_DONE);
-		}
-
-		if (pdma_int_status & (1 << (edma->channels[i].ch + 8))) {
-			DMA_DEBUG2("PDMA INTERRUPT_TIMEOUT id=%d",
-				   edma->channels[i].ch);
-			ma35d1_dma_edmac_interrupt(&edma->channels[i],
-						    INTERRUPT_TIMEOUT);
-			value = (ma35d1_pdma_edmac_read
-				 (&edma->channels[i],
-				  PDMA_TOUTEN) & ~(1 << (edma->channels
-							 [i].ch)));
-			ma35d1_pdma_edmac_write(&edma->channels[i],
-						 PDMA_TOUTEN, value);
-			ma35d1_pdma_edmac_write(&edma->channels[i],
-						 PDMA_INTSTS,
-						 (1 <<
-						  (edma->channels[i].ch + 8)));
-		}
-	}
-
-	LEAVE();
-	return ret;
-}
-
-/**
- * ma35d1_dma_tx_submit - set the prepared descriptor(s) to be executed
- * @tx: descriptor to be executed
- *
- * Function will execute given descriptor on the hardware or
- * if the hardware is busy, queue the descriptor to be executed later on.
- * Returns cookie which can be used to poll the status of the descriptor.
- */
-static dma_cookie_t ma35d1_dma_tx_submit(
-	struct dma_async_tx_descriptor *tx)
-{
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(tx->chan);
-	struct ma35d1_dma_desc *desc;
-	dma_cookie_t cookie;
-	unsigned long flags;
-
-	ENTRY();
-	spin_lock_irqsave(&edmac->lock, flags);
-	cookie = dma_cookie_assign(tx);
-	DMA_DEBUG("cookie=%d\n", cookie);
-	desc = container_of(tx, struct ma35d1_dma_desc, txd);
-
-	/*
-	 * If nothing is currently prosessed, we push this descriptor
-	 * directly to the hardware. Otherwise we put the descriptor
-	 * to the pending queue.
-	 */
-	if (list_empty(&edmac->active)) {
-		ma35d1_dma_set_active(edmac, desc);
-		edmac->edma->hw_submit(edmac);
-
-	} else {
-		list_add_tail(&desc->node, &edmac->queue);
-	}
-
-	spin_unlock_irqrestore(&edmac->lock, flags);
-	LEAVE();
-	return cookie;
-}
-
-static int ma35d1_dma_alloc_chan_resources(struct dma_chan *chan)
-{
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
-	int i;
-
-	ENTRY();
-	spin_lock_irq(&edmac->lock);
-	dma_cookie_init(&edmac->chan);
-	spin_unlock_irq(&edmac->lock);
-
-	for (i = 0; i < DMA_MAX_CHAN_DESCRIPTORS; i++) {
-		struct ma35d1_dma_desc *desc;
-
-		desc = kzalloc(sizeof(*desc), GFP_KERNEL);
-		if (!desc)
-			break;
-		INIT_LIST_HEAD(&desc->tx_list);
-		dma_async_tx_descriptor_init(&desc->txd, chan);
-		desc->txd.flags = DMA_CTRL_ACK;
-		desc->txd.tx_submit = ma35d1_dma_tx_submit;
-		ma35d1_dma_desc_put(edmac, desc);
-	}
-
-	DMA_DEBUG("return %d\n", i);
-	LEAVE();
-	return i;
-}
-
-static void ma35d1_dma_free_chan_resources(struct dma_chan *chan)
-{
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
-	struct ma35d1_dma_desc *desc, *d;
-	unsigned long flags;
-	LIST_HEAD(list);
-
-	ENTRY();
-	BUG_ON(!list_empty(&edmac->queue));
-	spin_lock_irqsave(&edmac->lock, flags);
-	edmac->edma->hw_shutdown(edmac);
-	edmac->runtime_addr = 0;
-	edmac->runtime_ctrl = 0;
-	list_splice_init(&edmac->free_list, &list);
-	spin_unlock_irqrestore(&edmac->lock, flags);
-	list_for_each_entry_safe(desc, d, &list, node)
-		kfree(desc);
-	LEAVE();
-}
-
-static struct dma_async_tx_descriptor *ma35d1_dma_prep_dma_memcpy(
+static struct dma_async_tx_descriptor *ma35d1_prep_dma_memcpy(
 	struct dma_chan *chan,
-	dma_addr_t dest,
+	dma_addr_t dst,
 	dma_addr_t src,
 	size_t len,
-	unsigned long flags)
+	unsigned long tx_flags)
 {
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
-	struct ma35d1_dma_desc *desc, *first;
-	size_t bytes, offset;
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+	struct ma35d1_desc *d;
+	unsigned int sg_len;
+	size_t bytes, tlen;
+	int i;
 
-	ENTRY();
-	first = NULL;
-	for (offset = 0; offset < len; offset += bytes) {
-		desc = ma35d1_dma_desc_get(edmac);
+	sg_len = 1 + len / PDMA_MAX_CHAN_BYTES;
+	d = kzalloc(struct_size(d, sg, max_t(size_t, sg_len, 4)), GFP_ATOMIC);
+	if (!d)
+		return NULL;
 
-		if (!desc) {
-			dev_warn(chan2dev(edmac), "couldn't get descriptor\n");
-			goto fail;
-		}
+	d->pcfg.reqsel = 0;
+	ma35d1_set_channel_params(ch);
+	ma35d1_set_transfer_params(ch, d->pcfg.reqsel);
+	d->sg_addr =
+	    dma_map_single(ch->dev, d->sg, sizeof(struct ma35d1_sg) * sg_len,
+			   DMA_TO_DEVICE);
+	writel(d->sg_addr,
+	       ch->base + (ch->ch_num * PDMA_OFFSET_CHAN_SIZE) +
+	       PDMA_DSCT_NEXT);
 
-		bytes = min_t(size_t, len - offset, DMA_MAX_CHAN_BYTES);
-		desc->src_addr = src + offset;
-		desc->dst_addr = dest + offset;
-		desc->size = bytes;
-		desc->config.reqsel = 0;
-		desc->config.en_sc = 0;
-		desc->dir = DMA_MEM_TO_MEM;
-		edmac->runtime_ctrl = 0;
-
-		if (!first)
-			first = desc;
-
-		else
-			list_add_tail(&desc->node, &first->tx_list);
+	for (i = 0; i < sg_len; i++) {
+		bytes = min_t(size_t, len, PDMA_MAX_CHAN_BYTES);
+		d->sg[i].src = src;
+		d->sg[i].dst = dst;
+		tlen = rounddown(len, bytes);
+		d->sg[i].ctl = PDMA_TXCNT(tlen - 1UL) | PDMA_OP_SCATTER;
+		src += tlen;
+		dst += tlen;
+		len -= tlen;
+		d->sg[i].next = d->sg_addr + (16 * (i + 1) + 4);
 	}
-
-	first->txd.cookie = -EBUSY;
-	first->txd.flags = flags;
-	LEAVE();
-	return &first->txd;
-fail:
-	ma35d1_dma_desc_put(edmac, first);
-	LEAVE();
-	return NULL;
+	dma_sync_single_for_cpu(ch->dev, d->sg_addr, sizeof(*d->sg),
+				DMA_FROM_DEVICE);
+	d->sglen = sg_len;
+	d->sg[d->sglen - 1].ctl &= ~(PDMA_OP_MSK | PDMA_TBINTDIS);
+	d->sg[d->sglen - 1].ctl |= PDMA_OP_BASIC;
+	d->dma_dir = DMA_MEM_TO_MEM;
+	d->cyclic = false;
+	return vchan_tx_prep(&ch->vc, &d->vd, tx_flags);
 }
 
-static struct dma_async_tx_descriptor *ma35d1_dma_prep_slave_sg(
+static struct dma_async_tx_descriptor *ma35d1_prep_slave_sg(
 	struct dma_chan *chan,
 	struct scatterlist *sgl,
 	unsigned int sg_len,
 	enum dma_transfer_direction dir,
-	unsigned long flags,
+	unsigned long tx_flags,
 	void *context)
 {
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
-	struct ma35d1_dma_desc *desc, *first;
-	struct scatterlist *sg;
-	struct ma35d1_dma_data *data;
-	int i;
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+	struct ma35d1_desc *d;
+	struct scatterlist *sgent;
+	unsigned int i;
 
-	ENTRY();
-	{
-		struct ma35d1_dma_desc *d;
-		LIST_HEAD(list);
-
-		list_splice_init(&edmac->active, &list);
-		/* Now we can release all the chained descriptors */
-		list_for_each_entry_safe(desc, d, &list, node) {
-			desc->txd.flags = DMA_CTRL_ACK;
-			ma35d1_dma_desc_put(edmac, desc);
-		}
-	}
-
-	data =(struct ma35d1_dma_data *)chan->private;
-	if (test_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags)) {
-		dev_warn(chan2dev(edmac),
-			 "channel is already used for cyclic transfers\n");
+	if (!is_slave_direction(dir)) {
+		dev_err(chan2dev(chan), "%s: invalid DMA direction\n",
+			__func__);
 		return NULL;
 	}
 
-	ma35d1_dma_slave_config_write(chan, dir, &edmac->slave_config);
-	first = NULL;
-	for_each_sg(sgl, sg, sg_len, i) {
-		size_t len = sg_dma_len(sg);
+	d = kzalloc(struct_size(d, sg, sg_len), GFP_ATOMIC);
+	if (!d)
+		return NULL;
 
-		if (len > DMA_MAX_CHAN_BYTES) {
-			dev_warn(chan2dev(edmac), "too big transfer size %zu\n",
-				 len);
-			goto fail;
-		}
+	if (ch->cfg.peripheral_size != sizeof(struct ma35d1_peripheral)) {
+		dev_err(chan2dev(chan),
+			"Invalid peripheral size %zu, expected %zu\n",
+			ch->cfg.peripheral_size,
+			sizeof(struct ma35d1_peripheral));
+		return NULL;
+	}
 
-		desc = ma35d1_dma_desc_get(edmac);
-
-		if (!desc) {
-			dev_warn(chan2dev(edmac), "couldn't get descriptor\n");
-			goto fail;
-		}
-
+	memcpy(&d->pcfg, ch->cfg.peripheral_config, ch->cfg.peripheral_size);
+	ma35d1_set_channel_params(ch);
+	ma35d1_set_transfer_params(ch, d->pcfg.reqsel);
+	d->sg_addr = (u32) dma_map_single(ch->dev,
+					  (void *)(d->sg),
+					  sizeof(struct ma35d1_sg) * sg_len,
+					  DMA_BIDIRECTIONAL);
+	writel(d->sg_addr,
+	       ch->base + (ch->ch_num * PDMA_OFFSET_CHAN_SIZE) +
+	       PDMA_DSCT_NEXT);
+	for_each_sg(sgl, sgent, sg_len, i) {
+		d->sg[i].ctl =
+		    (ch->runtime_ctrl |
+		     PDMA_TXCNT(sg_dma_len(sgent) -
+				1UL) | PDMA_TBINTDIS | PDMA_OP_SCATTER);
 		if (dir == DMA_MEM_TO_DEV) {
-			desc->src_addr = sg_dma_address(sg);
-			desc->dst_addr = edmac->runtime_addr;
-			desc->dir = DMA_MEM_TO_DEV;
+			d->sg[i].src = sg_dma_address(sgent);
+			d->sg[i].dst = ch->runtime_addr;
+			d->dma_dir = DMA_MEM_TO_DEV;
 
 		} else {
-			desc->src_addr = edmac->runtime_addr;
-			desc->dst_addr = sg_dma_address(sg);
-			desc->dir = DMA_DEV_TO_MEM;
+			d->sg[i].src = ch->runtime_addr;
+			d->sg[i].dst = sg_dma_address(sgent);
+			d->dma_dir = DMA_DEV_TO_MEM;
 		}
-
-		desc->size = len;
-		desc->config.reqsel = edmac->slave_config.slave_id;
-		if(data!=NULL) {
-			desc->config.timeout_counter=data->timeout_counter;
-			desc->config.timeout_prescaler=data->timeout_prescaler;
-		}else {
-			desc->config.timeout_counter = 0;
-			desc->config.timeout_prescaler = 0;
-		}
-
-		if (!first)
-			first = desc;
-
-		else
-			list_add_tail(&desc->node, &first->tx_list);
+		d->sg[i].next = d->sg_addr + (PDMA_OFFSET_CHAN_SIZE * (i + 1));
 	}
-	first->txd.cookie = -EBUSY;
-	first->txd.flags = flags;
-	LEAVE();
-	return &first->txd;
-fail:
-	ma35d1_dma_desc_put(edmac, first);
-	LEAVE();
-	return NULL;
+	d->sglen = sg_len;
+	d->sg[d->sglen - 1].ctl &= ~(PDMA_OP_MSK | PDMA_TBINTDIS);
+	d->sg[d->sglen - 1].ctl |= PDMA_OP_BASIC;
+	dma_sync_single_for_cpu(ch->dev, d->sg_addr, sizeof(*d->sg) * d->sglen,
+				DMA_FROM_DEVICE);
+	d->cyclic = false;
+	ch->error = 0;
+
+	return vchan_tx_prep(&ch->vc, &d->vd, tx_flags);
 }
 
-static struct dma_async_tx_descriptor *ma35d1_dma_prep_dma_cyclic(
+static struct dma_async_tx_descriptor *ma35d1_prep_dma_cyclic(
 	struct dma_chan *chan,
 	dma_addr_t dma_addr,
 	size_t buf_len,
@@ -1058,380 +401,381 @@ static struct dma_async_tx_descriptor *ma35d1_dma_prep_dma_cyclic(
 	enum dma_transfer_direction dir,
 	unsigned long flags)
 {
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
-	struct ma35d1_dma_desc *desc, *first;
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+	struct ma35d1_desc *d;
+	unsigned int i, sg_len;
 	size_t offset = 0;
-	struct ma35d1_dma_data *data;
 
-	ENTRY();
-	if (test_and_set_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags)) {
-		dev_warn(chan2dev(edmac),
-			 "channel is already used for cyclic transfers\n");
-		return NULL;
-	}
-
-	if (period_len > DMA_MAX_CHAN_BYTES) {
-		dev_warn(chan2dev(edmac), "too big period length %zu\n",
+	if (period_len > PDMA_MAX_CHAN_BYTES) {
+		dev_warn(chan2dev(chan), "too big period length %zu\n",
 			 period_len);
 		return NULL;
 	}
 
-	ma35d1_dma_slave_config_write(chan, dir, &edmac->slave_config);
+	sg_len = buf_len / period_len;
+	d = kzalloc(struct_size(d, sg, sg_len), GFP_ATOMIC);
+	if (!d)
+		return NULL;
+
+	memcpy(&d->pcfg, ch->cfg.peripheral_config, ch->cfg.peripheral_size);
+	ma35d1_set_channel_params(ch);
+	ma35d1_set_transfer_params(ch, d->pcfg.reqsel);
+	d->sg_addr = (u32) dma_map_single(ch->dev,
+					  (void *)(d->sg),
+					  sizeof(struct ma35d1_sg) * sg_len,
+					  DMA_BIDIRECTIONAL);
+
+	writel(d->sg_addr,
+	       ch->base + (ch->ch_num * PDMA_OFFSET_CHAN_SIZE) +
+	       PDMA_DSCT_NEXT);
 	/* Split the buffer into period size chunks */
-	first = NULL;
-
-	for (offset = 0; offset < buf_len; offset += period_len) {
-		desc = ma35d1_dma_desc_get(edmac);
-
-		if (!desc) {
-			dev_warn(chan2dev(edmac), "couldn't get descriptor\n");
-			goto fail;
-		}
-
+	for (offset = 0, i = 0; offset < buf_len; offset += period_len, i++) {
+		d->sg[i].ctl = (ch->runtime_ctrl |
+		     PDMA_TXCNT((period_len/ch->runtime_width)-1) |
+		     PDMA_OP_SCATTER);
 		if (dir == DMA_MEM_TO_DEV) {
-			desc->src_addr = dma_addr + offset;
-			desc->dst_addr = edmac->runtime_addr;
-			desc->dir = DMA_MEM_TO_DEV;
+			d->sg[i].src = dma_addr + offset;
+			d->sg[i].dst = ch->runtime_addr;
+			d->dma_dir = DMA_MEM_TO_DEV;
 
 		} else {
-			desc->src_addr = edmac->runtime_addr;
-			desc->dst_addr = dma_addr + offset;
-			desc->dir = DMA_DEV_TO_MEM;
+			d->sg[i].src = ch->runtime_addr;
+			d->sg[i].dst = dma_addr + offset;
+			d->dma_dir = DMA_DEV_TO_MEM;
 		}
-
-		data =(struct ma35d1_dma_data *)chan->private;
-		desc->size = period_len;
-
-		desc->config.reqsel = edmac->slave_config.slave_id;
-		if(data!=NULL) {
-			desc->config.timeout_counter=data->timeout_counter;
-			desc->config.timeout_prescaler=data->timeout_prescaler;
-		}else {
-			desc->config.timeout_counter = 0;
-			desc->config.timeout_prescaler = 0;
-		}
-
-		if (!first)
-			first = desc;
-
-		else
-			list_add_tail(&desc->node, &first->tx_list);
+		d->sg[i].next = d->sg_addr + (PDMA_OFFSET_CHAN_SIZE * (i + 1));
 	}
-
-	first->txd.cookie = -EBUSY;
-	LEAVE();
-	return &first->txd;
-fail:
-	ma35d1_dma_desc_put(edmac, first);
-	LEAVE();
-	return NULL;
+	d->sglen = sg_len;
+	d->sg[d->sglen - 1].next = d->sg_addr;
+	dma_sync_single_for_cpu(ch->dev, d->sg_addr, sizeof(*d->sg) * d->sglen,
+				DMA_FROM_DEVICE);
+	d->cyclic = true;
+	ch->error = 0;
+	return vchan_tx_prep(&ch->vc, &d->vd, flags);
 }
 
-static void ma35d1_dma_synchronize(struct dma_chan *chan)
+static struct dma_chan *ma35d1_of_xlate(struct of_phandle_args *dma_spec,
+					struct of_dma *of)
 {
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
+	struct ma35d1_dmadev *edma = of->of_dma_data;
+	unsigned int request;
 
-	ENTRY();
-	if (edmac->edma->hw_synchronize)
-		edmac->edma->hw_synchronize(edmac);
+	if (dma_spec->args_count != 1)
+		return NULL;
 
-	LEAVE();
+	request = dma_spec->args[0];
+	if (request >= edma->nr_chans)
+		return NULL;
+
+	return dma_get_slave_channel(&(edma->channels[request].vc.chan));
 }
 
-static int ma35d1_dma_terminate_all(struct dma_chan *chan)
+static int ma35d1_alloc_chan_resources(struct dma_chan *chan)
 {
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
-	struct ma35d1_dma_desc *desc, *_d;
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+
+	dev_dbg(chan2dev(chan), "%s: allocating channel #%u\n",
+		__func__, ch->ch_num);
+	ch->allocated = 1;
+
+	return 0;
+}
+
+static void ma35d1_free_chan_resources(struct dma_chan *chan)
+{
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+
+	vchan_free_chan_resources(&ch->vc);
+	dev_dbg(chan2dev(chan), "%s: freeing channel #%u\n",
+		__func__, ch->ch_num);
+	ch->allocated = 0;
+}
+
+static void ma35d1_start_dma(struct ma35d1_chan *ch)
+{
+	struct ma35d1_desc *d = ch->desc;
+	u32 ctrl;
+	void __iomem *ch_base;
+
+	ch_base = ch->base + (ch->ch_num * PDMA_OFFSET_CHAN_SIZE);
+	if (d->sglen == 1) {
+		writel(d->sg[0].ctl, ch_base + PDMA_DSCT_CTL);
+		writel(d->sg[0].src, ch_base + PDMA_DSCT_SA);
+		writel(d->sg[0].dst, ch_base + PDMA_DSCT_DA);
+		ctrl = readl(ch_base + PDMA_DSCT_CTL);
+		ctrl |= PDMA_OP_BASIC;
+		writel(ctrl, ch_base + PDMA_DSCT_CTL);
+
+		/* Memory to memory mode , when reqsel is equal to 0 */
+		if (d->pcfg.reqsel == 0)
+			writel((1 << ch->ch_num), ch->base + PDMA_SWREQ);
+	} else {
+		/* scatter gather mode */
+		ctrl = readl(ch_base + PDMA_DSCT_CTL);
+		ctrl = (ctrl & ~PDMA_OP_MSK) | PDMA_OP_SCATTER;
+		writel(ctrl, ch_base + PDMA_DSCT_CTL);
+	}
+}
+
+static void ma35d1_dma_start_sg(struct ma35d1_chan *ch)
+{
+	ma35d1_set_dma_timeout(ch);
+	ma35d1_start_dma(ch);
+}
+
+static void ma35d1_dma_start_desc(struct dma_chan *chan)
+{
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+	struct virt_dma_desc *vd;
+
+	vd = vchan_next_desc(&ch->vc);
+	if (!vd) {
+		ch->desc = NULL;
+		return;
+	}
+	list_del(&vd->node);
+	ch->desc = to_ma35d1_dma_desc(&vd->tx);
+	ma35d1_dma_start_sg(ch);
+
+}
+
+static void ma35d1_issue_pending(struct dma_chan *chan)
+{
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
 	unsigned long flags;
-	LIST_HEAD(list);
 
-	ENTRY();
-	spin_lock_irqsave(&edmac->lock, flags);
-	/* First we disable and flush the DMA channel */
-	edmac->edma->hw_shutdown(edmac);
-	clear_bit(MA35D1_DMA_IS_CYCLIC, &edmac->flags);
-	list_splice_init(&edmac->active, &list);
-	list_splice_init(&edmac->queue, &list);
-	spin_unlock_irqrestore(&edmac->lock, flags);
-
-	list_for_each_entry_safe(desc, _d, &list, node)
-		ma35d1_dma_desc_put(edmac, desc);
-
-	return 0;
+	spin_lock_irqsave(&ch->vc.lock, flags);
+	if (vchan_issue_pending(&ch->vc) && !ch->desc)
+		ma35d1_dma_start_desc(chan);
+	spin_unlock_irqrestore(&ch->vc.lock, flags);
 }
 
-static int ma35d1_dma_slave_config(struct dma_chan *chan,
-				    struct dma_slave_config *config)
+static enum dma_status ma35d1_tx_status(struct dma_chan *chan,
+					dma_cookie_t cookie,
+					struct dma_tx_state *txstate)
 {
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
 
-	ENTRY();
-	memcpy(&edmac->slave_config, config, sizeof(*config));
-	LEAVE();
-	return 0;
-}
-
-static int ma35d1_dma_slave_config_write(struct dma_chan *chan,
-					  enum dma_transfer_direction dir,
-					  struct dma_slave_config *config)
-{
-	struct ma35d1_dma_chan *edmac = to_ma35d1_dma_chan(chan);
-	enum dma_slave_buswidth width;
+	struct ma35d1_chan *ch = to_ma35d1_dma_chan(chan);
+	enum dma_status ret;
 	unsigned long flags;
-	u32 addr, ctrl;
 
-	ENTRY();
-	switch (dir) {
-	case DMA_DEV_TO_MEM:
-		ctrl = PDMA_SAINC_Msk | PDMA_TXTYPE_Msk;
-		width = config->src_addr_width;
-		addr = config->src_addr;
-		break;
+	ret = dma_cookie_status(chan, cookie, txstate);
+	spin_lock_irqsave(&ch->vc.lock, flags);
+	if (likely(ret != DMA_ERROR))
+		dma_set_residue(txstate, ch->remain);
+	spin_unlock_irqrestore(&ch->vc.lock, flags);
 
-	case DMA_MEM_TO_DEV:
-		ctrl = PDMA_DAINC_Msk | PDMA_TXTYPE_Msk;
-		width = config->dst_addr_width;
-		addr = config->dst_addr;
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	switch (width) {
-	case DMA_SLAVE_BUSWIDTH_1_BYTE:
-		ctrl |= 0 << PDMA_TXWIDTH_Pos;
-		break;
-
-	case DMA_SLAVE_BUSWIDTH_2_BYTES:
-		ctrl |= 1 << PDMA_TXWIDTH_Pos;
-		break;
-
-	case DMA_SLAVE_BUSWIDTH_4_BYTES:
-		ctrl |= 2 << PDMA_TXWIDTH_Pos;
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	spin_lock_irqsave(&edmac->lock, flags);
-	edmac->runtime_addr = addr;
-	edmac->runtime_ctrl = ctrl;
-	spin_unlock_irqrestore(&edmac->lock, flags);
-	LEAVE();
-	return 0;
-}
-
-/**
- * ma35d1_dma_tx_status - check if a transaction is completed
- * @chan: channel
- * @cookie: transaction specific cookie
- * @state: state of the transaction is stored here if given
- *
- * This function can be used to query state of a given transaction.
- */
-static enum dma_status ma35d1_dma_tx_status(struct dma_chan *chan,
-					     dma_cookie_t cookie,
-					     struct dma_tx_state *state)
-{
-	ENTRY();
-	DMA_DEBUG("cookie=%d\n", cookie);
-	LEAVE();
-	return dma_cookie_status(chan, cookie, state);
-}
-
-/**
- * ma35d1_dma_issue_pending - push pending transactions to the hardware
- * @chan: channel
- *
- * When this function is called, all pending transactions are pushed to the
- * hardware and executed.
- */
-static void ma35d1_dma_issue_pending(struct dma_chan *chan)
-{
-	ENTRY();
-	ma35d1_dma_advance_work(to_ma35d1_dma_chan(chan));
-	LEAVE();
-}
-
-static struct dma_chan *ma35d1_dma_of_xlate(struct of_phandle_args *dma_spec,
-                struct of_dma *of)
-{
-	struct ma35d1_dma_engine *edma = of->of_dma_data;
-        unsigned int request;
-
-        if (dma_spec->args_count != 1)
-                return NULL;
-
-        request = dma_spec->args[0];
-        if (request >= edma->pdata->num_channels)
-                return NULL;
-
-        return dma_get_slave_channel(&(edma->channels[request].chan));
-}
-
-
-static int ma35d1_dma_probe(struct platform_device *pdev)
-{
-	struct ma35d1_dma_platform_data *pdata;
-	struct ma35d1_dma_engine *edma;
-	struct dma_device *dma_dev;
-	size_t edma_size;
-	struct resource *res;
-	int ret, i;
-	struct clk *pdma_clk;
-	int err;
-
-	pdma_clk = of_clk_get(pdev->dev.of_node, 0);
-	if (IS_ERR(pdma_clk)) {
-		err = PTR_ERR(pdma_clk);
-		dev_err(&pdev->dev, "failed to get core clk: %d\n", err);
-		return -ENOENT;
-	}
-	err = clk_prepare_enable(pdma_clk);
-	if (err)
-		return -ENOENT;
-
-	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
-
-	if (ret)
-		return ret;
-
-	/* Allocate a new DMAC and its Channels */
-	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
-
-	if (!pdata)
-		return -ENOMEM;
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	pdata->base = devm_ioremap_resource(&pdev->dev, res);
-
-	if (IS_ERR(pdata->base))
-		return PTR_ERR(pdata->base);
-
-	pdata->irq = platform_get_irq(pdev, 0);
-
-	if (pdata->irq < 0)
-		return pdata->irq;
-
-	pdata->num_channels = DMA_CHANNELS;
-	pdata->channels = devm_kcalloc(&pdev->dev,
-		pdata->num_channels, sizeof(struct ma35d1_dma_chan_data),
-		GFP_KERNEL);
-	edma_size = pdata->num_channels * sizeof(struct ma35d1_dma_chan);
-	edma = devm_kzalloc(&pdev->dev, sizeof(*edma) + edma_size, GFP_KERNEL);
-
-	if (!edma) {
-		DMA_DEBUG("MA35D1 GDMA -ENOMEM\n");
-		return -ENOMEM;
-	}
-
-	dma_dev = &edma->dma_dev;
-	edma->num_channels = pdata->num_channels;
-	INIT_LIST_HEAD(&dma_dev->channels);
-
-	for (i = 0; i < pdata->num_channels; i++) {
-		struct ma35d1_dma_chan *edmac = &edma->channels[i];
-
-		edmac->dev = &pdev->dev;
-		edmac->ch = i;
-		edmac->chan.device = dma_dev;
-		edmac->regs = pdata->base;
-		edmac->irq = pdata->irq;
-		edmac->edma = edma;
-		#ifdef EN_HW_SG
-		edmac->sg_addr = (u32)dma_map_single(edmac->dev,(void *)(edmac->sg_base),SG_LEN, DMA_BIDIRECTIONAL);
-		#endif
-		spin_lock_init(&edmac->lock);
-		INIT_LIST_HEAD(&edmac->active);
-		INIT_LIST_HEAD(&edmac->queue);
-		INIT_LIST_HEAD(&edmac->free_list);
-		tasklet_init(&edmac->tasklet, ma35d1_dma_tasklet,
-			     (unsigned long)edmac);
-		list_add_tail(&edmac->chan.device_node, &dma_dev->channels);
-	}
-
-	ret = devm_request_irq(&pdev->dev, pdata->irq,
-			       ma35d1_dma_interrupt, 0, pdev->name, edma);
-
-	if (ret) {
-		dev_warn(&pdev->dev, "Can't register IRQ for DMA\n");
-		return ret;
-	}
-
-	dma_cap_zero(dma_dev->cap_mask);
-	dma_cap_set(DMA_SLAVE, dma_dev->cap_mask);
-	dma_cap_set(DMA_CYCLIC, dma_dev->cap_mask);
-	dma_dev->directions = BIT(DMA_MEM_TO_DEV) | BIT(DMA_DEV_TO_MEM) |
-                BIT(DMA_MEM_TO_MEM);
-	dma_dev->dev = &pdev->dev;
-	dma_dev->device_alloc_chan_resources = ma35d1_dma_alloc_chan_resources;
-	dma_dev->device_free_chan_resources = ma35d1_dma_free_chan_resources;
-	dma_dev->device_prep_slave_sg = ma35d1_dma_prep_slave_sg;
-	dma_dev->device_prep_dma_cyclic = ma35d1_dma_prep_dma_cyclic;
-	dma_dev->device_config = ma35d1_dma_slave_config;
-	dma_dev->device_synchronize = ma35d1_dma_synchronize;
-	dma_dev->device_terminate_all = ma35d1_dma_terminate_all;
-	dma_dev->device_issue_pending = ma35d1_dma_issue_pending;
-	dma_dev->device_tx_status = ma35d1_dma_tx_status;
-	dma_set_max_seg_size(dma_dev->dev, DMA_MAX_CHAN_BYTES);
-	dma_cap_set(DMA_MEMCPY, dma_dev->cap_mask);
-	dma_dev->device_prep_dma_memcpy = ma35d1_dma_prep_dma_memcpy;
-	edma->hw_shutdown = hw_shutdown;
-	edma->hw_submit = hw_submit;
-	edma->hw_interrupt = hw_interrupt;
-	edma->pdata = pdata;
-	dma_cap_set(DMA_PRIVATE, dma_dev->cap_mask);
-	platform_set_drvdata(pdev, edma);
-	ret = dma_async_device_register(dma_dev);
-
-	if (unlikely(ret))
-		dev_info(dma_dev->dev, "ma35d1 DMA not ready\n");
-	else
-		dev_info(dma_dev->dev, "ma35d1 DMA ready\n");
-
-	ret = of_dma_controller_register(pdev->dev.of_node,
-                                         ma35d1_dma_of_xlate, edma);
-        if (ret < 0) {
-                dev_err(&pdev->dev,
-                        "MA35D1 DMA DMA OF registration failed %d\n", ret);
-                goto err_unregister;
-        }
-	return 0;
-
-err_unregister:
-	dma_async_device_unregister(dma_dev);
-	clk_disable_unprepare(pdma_clk);
 	return ret;
 }
 
-static int ma35d1_dma_remove(struct platform_device *pdev)
+static irqreturn_t ma35d1_dma_interrupt(int irq, void *devid)
 {
-	struct ma35d1_dma_engine *edma = platform_get_drvdata(pdev);
-	struct dma_device *dma_dev;
+	int i;
+	u32 val;
+	struct ma35d1_dmadev *dmadev = devid;
+	unsigned int intsts, tdsts;
+	struct ma35d1_chan *ch = &dmadev->channels[dmadev->nr_chans - 1];
 
-	dma_dev = &edma->dma_dev;
-	dma_async_device_unregister(dma_dev);
+	intsts = readl(ch->base + PDMA_INTSTS);
+	tdsts = readl(ch->base + PDMA_TDSTS);
+	for (i = (dmadev->nr_chans - 1); i >= 0; i--, ch--) {
+		/* Transfer done interrupt */
+		if (tdsts & (1 << i)) {
+			writel((1 << i), ch->base + PDMA_TDSTS);
+			if (ch->desc) {
+				ch->remain = 0;
+				spin_lock(&ch->vc.lock);
+				if (!ch->desc->cyclic) {
+					vchan_cookie_complete(&ch->desc->vd);
+					ma35d1_dma_start_desc(&ch->vc.chan);
+				} else
+					vchan_cyclic_callback(&ch->desc->vd);
+				spin_unlock(&ch->vc.lock);
+			}
+		}
+
+		/* Timeout interrupt */
+		if (intsts & (1 << (i + 8))) {
+			spin_lock(&ch->vc.lock);
+			val =
+			    readl(ch->base +
+				  ch->ch_num * PDMA_OFFSET_CHAN_SIZE);
+			ch->remain = PDMA_GET_TXCNT(val);
+			val = readl(ch->base + PDMA_TOUTEN);
+			val &= ~(1 << i);
+			writel(val, ch->base + PDMA_TOUTEN);
+			writel(1 << (i + 8), ch->base + PDMA_INTSTS);
+			vchan_cookie_complete(&ch->desc->vd);
+			ma35d1_dma_start_desc(&ch->vc.chan);
+			spin_unlock(&ch->vc.lock);
+		}
+
+		/* Abort interrupt */
+		if (intsts & 0x1) {
+			writel(0x1, ch->base + PDMA_TDSTS);
+			ch->error = 1;
+		}
+
+	}
+	return IRQ_HANDLED;
+}
+
+static void ma35d1_dma_release(struct dma_device *dma_dev)
+{
+	struct ma35d1_dmadev *edma =
+		container_of(dma_dev, struct ma35d1_dmadev, ddev);
+
+	put_device(edma->ddev.dev);
+	kfree(edma);
+}
+
+static int ma35d1_probe(struct platform_device *pdev)
+{
+	struct clk *pdma_clk;
+	struct device *dev = &pdev->dev;
+	struct device_node *node = dev->of_node;
+	struct resource *res;
+	void __iomem *dma_base_addr;
+	int ret, i, nr_chans;
+	unsigned int irq;
+	struct ma35d1_chan *ch;
+	struct ma35d1_dmadev *edma;
+
+	pdma_clk = of_clk_get(pdev->dev.of_node, 0);
+	if (IS_ERR(pdma_clk)) {
+		ret = PTR_ERR(pdma_clk);
+		dev_err(&pdev->dev, "failed to get core clk: %d\n", ret);
+		return -ENOENT;
+	}
+	ret = clk_prepare_enable(pdma_clk);
+	if (ret)
+		return -ENOENT;
+
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+	if (ret)
+		return ret;
+
+	edma = devm_kzalloc(dev, sizeof(*edma), GFP_KERNEL);
+	if (!edma)
+		return -ENOMEM;
+
+	irq = platform_get_irq(pdev, 0);
+	if (!irq) {
+		dev_err(dev, "no IRQ resource\n");
+		return -EINVAL;
+	}
+
+	if (of_property_read_u32(pdev->dev.of_node, "dma-channels", &nr_chans))
+		return -EINVAL;
+	if (nr_chans > PDMA_MAX_CHANS)
+		nr_chans = PDMA_MAX_CHANS;
+	edma->nr_chans = nr_chans;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	dma_base_addr = devm_ioremap_resource(dev, res);
+	if (IS_ERR(dma_base_addr))
+		return PTR_ERR(dma_base_addr);
+
+	dma_cap_zero(edma->ddev.cap_mask);
+	dma_cap_set(DMA_SLAVE, edma->ddev.cap_mask);
+	dma_cap_set(DMA_PRIVATE, edma->ddev.cap_mask);
+	dma_cap_set(DMA_MEMCPY, edma->ddev.cap_mask);
+	dma_cap_set(DMA_CYCLIC, edma->ddev.cap_mask);
+	edma->ddev.device_prep_dma_memcpy = ma35d1_prep_dma_memcpy;
+	edma->ddev.device_prep_slave_sg = ma35d1_prep_slave_sg;
+	edma->ddev.device_prep_dma_cyclic = ma35d1_prep_dma_cyclic;
+	edma->ddev.device_alloc_chan_resources = ma35d1_alloc_chan_resources;
+	edma->ddev.device_free_chan_resources = ma35d1_free_chan_resources;
+	edma->ddev.device_issue_pending = ma35d1_issue_pending;
+	edma->ddev.device_tx_status = ma35d1_tx_status;
+	edma->ddev.device_config = ma35d1_slave_config;
+	edma->ddev.device_terminate_all = ma35d1_terminate_all;
+	edma->ddev.device_release = ma35d1_dma_release;
+	edma->ddev.dev = dev;
+	edma->ddev.src_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_4_BYTES) |
+	    BIT(DMA_SLAVE_BUSWIDTH_2_BYTES) | BIT(DMA_SLAVE_BUSWIDTH_1_BYTE);
+	edma->ddev.dst_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_4_BYTES) |
+	    BIT(DMA_SLAVE_BUSWIDTH_2_BYTES) | BIT(DMA_SLAVE_BUSWIDTH_1_BYTE);
+	edma->ddev.directions = BIT(DMA_MEM_TO_DEV) | BIT(DMA_DEV_TO_MEM) |
+	    BIT(DMA_MEM_TO_MEM);
+	INIT_LIST_HEAD(&edma->ddev.channels);
+	ch = &edma->channels[0];
+	for (i = 0; i < nr_chans; i++, ch++) {
+		ch->dev = &pdev->dev;
+		ch->ch_num = i;
+		ch->base = dma_base_addr;
+		ch->allocated = 0;
+
+		ch->vc.desc_free = ma35d1_dma_desc_free;
+		vchan_init(&ch->vc, &edma->ddev);
+		dev_dbg(dev, "%s: chs[%d]: ch->ch_num=%u ch->base=%p\n",
+			__func__, i, ch->ch_num, ch->base);
+	}
+
+	platform_set_drvdata(pdev, edma);
+
+	ret = devm_request_irq(dev, irq, ma35d1_dma_interrupt, 0,
+			       pdev->name, edma);
+	if (ret) {
+		dev_err(dev, "devm_request_irq failed\n");
+		return ret;
+	}
+	edma->irq = irq;
+
+	ret = dma_async_device_register(&edma->ddev);
+	if (ret) {
+		dev_err(dev, "dma_async_device_register failed\n");
+		return ret;
+	}
+
+	ret = of_dma_controller_register(node, ma35d1_of_xlate, edma);
+	if (ret) {
+		dev_err(dev, "of_dma_controller_register failed\n");
+		dma_async_device_unregister(&edma->ddev);
+		return ret;
+	}
+
+	dev_dbg(dev, "%s: IRQ=%u\n", __func__, irq);
 	return 0;
 }
 
-static const struct of_device_id ma35d1_dma_of_match[] = {
-	{.compatible = "nuvoton,ma35d1-pdma"},
-	{},
+static int ma35d1_remove(struct platform_device *pdev)
+{
+	struct ma35d1_dmadev *m = platform_get_drvdata(pdev);
+
+	devm_free_irq(&pdev->dev, m->irq, m);
+
+	dma_async_device_unregister(&m->ddev);
+
+	if (pdev->dev.of_node)
+		of_dma_controller_free(pdev->dev.of_node);
+
+	return 0;
+}
+
+static const struct of_device_id ma35d1_dma_match[] = {
+	{.compatible = "nuvoton,ma35d1-dma" },
+	{ }
 };
 
-static struct platform_driver ma35d1_dma_driver = {
-	.probe = ma35d1_dma_probe,
-	.remove = ma35d1_dma_remove,
+MODULE_DEVICE_TABLE(of, ma35d1_dma_match);
+
+static struct platform_driver ma35d1_driver = {
+	.probe = ma35d1_probe,
+	.remove = ma35d1_remove,
 	.driver = {
 		   .name = "ma35d1-dma",
-		   .owner = THIS_MODULE,
-		   .of_match_table = of_match_ptr(ma35d1_dma_of_match),
-		   },
+		   .of_match_table = ma35d1_dma_match,
+		    },
 };
 
-module_platform_driver(ma35d1_dma_driver);
+static int ma35d1_init(void)
+{
+	return platform_driver_register(&ma35d1_driver);
+}
 
-MODULE_DESCRIPTION("ma35d1 DMA driver");
+subsys_initcall(ma35d1_init);
+
+MODULE_AUTHOR("Shan-Chun Hung <schung@nuvoton.com>");
+MODULE_DESCRIPTION("Nuvoton MA35D1 DMA controller driver");
 MODULE_LICENSE("GPL v2");

@@ -28,19 +28,20 @@
 
 #define NVT_MUX_MASK	0xF
 
-#define GPIO_PORT_NUM 14
-#define GPIO_OFFSET 0x10
+#define GPIO_PORT_NUM	14
+#define GPIO_OFFSET	0x10
 
-#define GPIO_MODE 0x0
-#define GPIO_DOUT 0x4
-#define GPIO_PIN 0x8
-#define GPIO_INTSRC 0x20
-#define GPIO_SMTEN 0x24
-#define GPIO_SLEWCTL 0x28
-#define GPIO_SPW 0x2c
-#define GPIO_PUSEL 0x30
-#define GPIO_DS 0x38
-#define GPIO_UDS 0x3C
+#define GPIO_MODE	0x00
+#define GPIO_DINOFF	0x04
+#define GPIO_DOUT	0x08
+#define GPIO_PIN	0x10
+#define GPIO_INTSRC	0x20
+#define GPIO_SMTEN	0x24
+#define GPIO_SLEWCTL	0x28
+#define GPIO_SPW	0x2c
+#define GPIO_PUSEL	0x30
+#define GPIO_DS		0x38
+#define GPIO_UDS	0x3C
 
 /*!< Input Mode */
 #define GPIO_MODE_INPUT 0x0UL
@@ -57,7 +58,8 @@
 #define GPIO_PUSEL_PULL_UP 0x1UL
 /*!< GPIO PUSEL setting for Pull-down Mode */
 #define GPIO_PUSEL_PULL_DOWN 0x2UL
-#define GPIO_PUSEL_MASK 0x3UL	/*!< GPIO PUSEL Mask */
+/*!< GPIO PUSEL Mask */
+#define GPIO_PUSEL_MASK 0x3UL
 
 /*!< Generate the MODE mode setting for each pin  */
 #define GPIO_SET_MODE(pin, mode) ((mode) << ((pin)<<1))
@@ -246,9 +248,10 @@ static int nvt_pinctrl_dt_node_to_map_func(struct pinctrl_dev *pctldev,
 }
 
 static void nvt_dt_free_map(struct pinctrl_dev *pctldev,
-                                    struct pinctrl_map *map, unsigned num_maps)
+			     struct pinctrl_map *map,
+			     unsigned int num_maps)
 {
-	devm_kfree(pctldev->dev,map);
+	devm_kfree(pctldev->dev, map);
 }
 
 
@@ -310,7 +313,7 @@ static int nvt_pinmux_set_mux(struct pinctrl_dev *pctldev,
 	return 0;
 }
 
-struct pinmux_ops nvt_pmx_ops = {
+const struct pinmux_ops nvt_pmx_ops = {
 	.get_functions_count = nvt_pinmux_get_func_count,
 	.get_function_name = nvt_pinmux_get_func_name,
 	.get_function_groups = nvt_pinmux_get_func_groups,
@@ -359,13 +362,18 @@ static int nvt_gpio_core_direction_out(struct gpio_chip *gc,
 	unsigned int value;
 	struct nvt_pin_bank *bank = gpiochip_get_data(gc);
 	void __iomem *base = bank->reg_base;
+
+	value = __raw_readl(base + GPIO_DOUT);
+	if (val)
+		__raw_writel(value|(1<<gpio_num), base + GPIO_DOUT);
+	else
+		__raw_writel(value&~(1<<gpio_num), base + GPIO_DOUT);
 	spin_lock_irqsave(&bank->lock, flags);
 	value = __raw_readl(base + GPIO_MODE);
 	value &= ~GPIO_SET_MODE(gpio_num, GPIO_MODE_QUASI);
 	value |= GPIO_SET_MODE(gpio_num, GPIO_MODE_OUTPUT);
 	__raw_writel(value, base + GPIO_MODE);
 	spin_unlock_irqrestore(&bank->lock, flags);
-	nvt_gpio_core_set(gc, gpio_num, val);
 	return 0;
 }
 
@@ -713,8 +721,8 @@ static int nvt_pinconf_set_output(struct nvt_pinctrl *npctl,
 	int port_num, group_num;
 	unsigned int value;
 	void __iomem *base;
-	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 
+	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
 	value = __raw_readl(base + GPIO_MODE);
 	value &= ~GPIO_SET_MODE(port_num, GPIO_MODE_QUASI);
@@ -858,15 +866,16 @@ static int nvt_pinconf_set_slew_rate(struct nvt_pinctrl *npctl,
 }
 
 static int nvt_pinconf_set_power_source(struct nvt_pinctrl *npctl,
-                                          unsigned int pin_id, int src)
+					  unsigned int pin_id,
+					  int src)
 {
 	int port_num, group_num;
 	unsigned int value;
 	void __iomem *base;
-	int v=0;
+	int v = 0;
 
-	if(src!=1800)
-		v=1;
+	if (src != 1800)
+		v = 1;
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
 	value = __raw_readl(base + GPIO_SPW);
@@ -877,7 +886,7 @@ static int nvt_pinconf_set_power_source(struct nvt_pinctrl *npctl,
 }
 
 static int nvt_pinconf_get_power_source(struct nvt_pinctrl *npctl,
-                                          unsigned int pin_id)
+					  unsigned int pin_id)
 {
 	int port_num, group_num;
 	unsigned int value;
@@ -886,7 +895,7 @@ static int nvt_pinconf_get_power_source(struct nvt_pinctrl *npctl,
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
 	value = __raw_readl(base + GPIO_SPW);
-	if((value>>port_num)&0x1)
+	if ((value>>port_num)&0x1)
 		return 3300;
 	else
 		return 1800;
@@ -904,7 +913,7 @@ static int nvt_pinconf_get_drive_strength(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	if(port_num>8) {
+	if (port_num > 8) {
 		value = __raw_readl(base + GPIO_DS);
 		*strength = (value>>(port_num*4))&0x7;
 	} else {
@@ -926,7 +935,7 @@ static int nvt_pinconf_set_drive_strength(struct nvt_pinctrl *npctl,
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
 
-	if(port_num<8) {
+	if (port_num < 8) {
 		value = __raw_readl(base + GPIO_DS);
 		value = value & ~(0x7<<(port_num*4));
 		value = value | ((strength&0x7)<<(port_num*4));
@@ -1051,7 +1060,7 @@ static int nvt_pinctrl_parse_groups(struct device_node *np,
 	/* Initialise group */
 	grp->name = np->name;
 	/*
-	 * the binding format is nuvoton,pins = <bank pin pin-function>,
+	 * the binding format is nuvoton,pins = <bank pin-mfp pin-function>,
 	 * do sanity check and calculate pins number
 	 */
 	list = of_get_property(np, "nuvoton,pins", &size);

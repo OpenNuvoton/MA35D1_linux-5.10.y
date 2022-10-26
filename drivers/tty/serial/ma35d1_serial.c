@@ -227,7 +227,7 @@ static void ma35d1_Tx_dma_callback(void *arg)
 
 static void set_pdma_flag(struct uart_ma35d1_port *p, int id)
 {
-		p->uart_pdma_enable_flag = 1;
+	p->uart_pdma_enable_flag = 1;
 	p->PDMA_UARTx_RX = UART_PDMA_RX_ID[id];
 	p->PDMA_UARTx_TX = UART_PDMA_TX_ID[id];
 }
@@ -295,12 +295,10 @@ void ma35d1_uart_cal_pdma_time_out(struct uart_ma35d1_port *p, unsigned int baud
 
 static void ma35d1_prepare_RX_dma(struct uart_ma35d1_port *p)
 {
-	struct ma35d1_dma_config;
 	struct ma35d1_ip_rx_dma *pdma_rx = &(p->dma_rx);
-	struct ma35d1_dma_data data;
+	struct ma35d1_peripheral pcfg;
 	int ret;
 	int sg_loop, sg_size, sg_addr;
-	dma_cookie_t cookie;
 
 	serial_out(p, UART_REG_IER, (serial_in(p, UART_REG_IER)&~ RXPDMAEN));
 
@@ -325,11 +323,12 @@ static void ma35d1_prepare_RX_dma(struct uart_ma35d1_port *p)
 	pdma_rx->slave_config.src_maxburst = 1;
 	pdma_rx->slave_config.direction = DMA_DEV_TO_MEM;
 	pdma_rx->slave_config.device_fc = false;
-	pdma_rx->slave_config.slave_id = p->PDMA_UARTx_RX;
 
-	data.timeout_prescaler = p->pdma_time_out_prescaler;
-	data.timeout_counter = p->pdma_time_out_count;
-	pdma_rx->chan_rx->private = (void *)&data;
+	pcfg.reqsel = p->PDMA_UARTx_RX;
+	pcfg.timeout_prescaler =  p->pdma_time_out_prescaler;
+	pcfg.timeout_counter =p->pdma_time_out_count;
+	pdma_rx->slave_config.peripheral_config = &pcfg;
+	pdma_rx->slave_config.peripheral_size = sizeof(pcfg);
 
 	dmaengine_slave_config(pdma_rx->chan_rx,&(pdma_rx->slave_config));
 
@@ -352,21 +351,16 @@ static void ma35d1_prepare_RX_dma(struct uart_ma35d1_port *p)
 	p->dma_Rx_done.callback_param = p;
 	p->dma_Rx_done.timeout = 0;
 	pdma_rx->rxdesc->callback_param = &(p->dma_Rx_done);
-	cookie = pdma_rx->rxdesc->tx_submit(pdma_rx->rxdesc);
-	if (dma_submit_error(cookie)) {
-		dev_err(p->port.dev, "rx dma_submit_error.\n");
-		return;
-	}
+	dmaengine_submit(pdma_rx->rxdesc);
+	dma_async_issue_pending(pdma_rx->chan_rx);
 }
 
 static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p)
 {
-	struct ma35d1_dma_config dma_ctx;
 	struct ma35d1_ip_tx_dma *pdma_tx = &(p->dma_tx);
-	struct ma35d1_dma_data data;
+	struct ma35d1_peripheral pcfg;
 	int ret;
 
-	dma_cookie_t cookie;
 	struct circ_buf *xmit = &p->port.state->xmit;
 
 	if(p->src_mem_p.size == 0) {
@@ -402,15 +396,16 @@ static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p)
 	pdma_tx->slave_config.direction = DMA_MEM_TO_DEV;
 	pdma_tx->slave_config.slave_id = p->PDMA_UARTx_TX;
 
-	data.timeout_prescaler = 0;
-	data.timeout_counter = 0;
-	pdma_tx->chan_tx->private = (void *)&data;
+	pcfg.reqsel = p->PDMA_UARTx_TX;
+	pcfg.timeout_prescaler =  0;
+	pcfg.timeout_counter =0;
+	pdma_tx->slave_config.peripheral_config = &pcfg;
+	pdma_tx->slave_config.peripheral_size = sizeof(pcfg);
 
 	dmaengine_slave_config(pdma_tx->chan_tx,&(pdma_tx->slave_config));
 	sg_init_table(pdma_tx->sgtx, 1);
 	pdma_tx->sgtx[0].dma_address =p->src_mem_p.phy_addr;
 	pdma_tx->sgtx[0].dma_length = p->tx_dma_len;
-	dma_ctx.en_sc = 0;
 
 	pdma_tx->txdesc = dmaengine_prep_slave_sg(pdma_tx->chan_tx, pdma_tx->sgtx, 1, DMA_TO_DEVICE, DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 
@@ -422,12 +417,8 @@ static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p)
 	pdma_tx->txdesc->callback = ma35d1_Tx_dma_callback;
 	p->dma_Tx_done.callback_param = p;
 	pdma_tx->txdesc->callback_param = &(p->dma_Tx_done);
-
-	cookie = pdma_tx->txdesc->tx_submit(pdma_tx->txdesc);
-	if (dma_submit_error(cookie)) {
-		dev_err(p->port.dev, "dma_submit_error.\n");
-		return;
-	}
+	dmaengine_submit(pdma_tx->txdesc);
+	dma_async_issue_pending(pdma_tx->chan_tx);
 }
 
 static void rs485_start_rx(struct uart_ma35d1_port *port)

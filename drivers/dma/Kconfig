@@ -262,6 +262,7 @@ config MA35D1_DMA
 	tristate "MA35D1 DMA support"
 	depends on ARCH_MA35D1
 	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
 	help
 	  Support the MA35D1 DMA engine. This engine is integrated into
 	  NUVOTON MA35D1 chips.

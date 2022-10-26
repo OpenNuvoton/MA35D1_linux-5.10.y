@@ -391,7 +391,7 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 	unsigned int    non_align_len = 0;
 
 	struct ma35d1_ip_dma *pdma = &hw->dma;
-	dma_cookie_t    cookie;
+	struct ma35d1_peripheral pcfg;
 
 	__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
 	while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {}
@@ -478,7 +478,9 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 				pdma->sgrx.dma_length = (len - non_align_len) >> 2; /* divide 4 */
 
 				pdma->slave_config.direction = DMA_DEV_TO_MEM;
-				pdma->slave_config.slave_id = hw->pdata->pdma_reqsel_rx;
+				pcfg.reqsel = hw->pdata->pdma_reqsel_rx;
+				pdma->slave_config.peripheral_config = &pcfg;
+				pdma->slave_config.peripheral_size = sizeof(pcfg);
 				dmaengine_slave_config(pdma->chan_rx, &(pdma->slave_config));
 
 
@@ -505,12 +507,8 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 				hw->dma_slave_done.done = false;
 				pdma->rxdesc->callback = ma35d1_slave_dma_callback;
 				pdma->rxdesc->callback_param = hw;
-
-				cookie = pdma->rxdesc->tx_submit(pdma->rxdesc);
-				if (dma_submit_error(cookie)) {
-					dev_err(hw->dev, "rx cookie=%d\n",cookie);
-					BUG();
-				}
+				dmaengine_submit(pdma->rxdesc);
+				dma_async_issue_pending(pdma->chan_rx);
 			} /* rxbuf */
 
 			if (txbuf) {
@@ -521,7 +519,9 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 				pdma->sgtx.dma_length = len - non_align_len;
 
 				pdma->slave_config.direction = DMA_MEM_TO_DEV;
-				pdma->slave_config.slave_id = hw->pdata->pdma_reqsel_tx;
+				pcfg.reqsel = hw->pdata->pdma_reqsel_tx;
+				pdma->slave_config.peripheral_config = &pcfg;
+				pdma->slave_config.peripheral_size = sizeof(pcfg);
 				dmaengine_slave_config(pdma->chan_tx, &(pdma->slave_config));
 
 				/* Map t->tx_buf to physical address including non-alignment part */
@@ -547,13 +547,8 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 
 				pdma->txdesc->callback = ma35d1_slave_dma_callback;
 				pdma->txdesc->callback_param = hw;
-
-
-				cookie = pdma->txdesc->tx_submit(pdma->txdesc);
-				if (dma_submit_error(cookie)) {
-					dev_err(hw->dev, "tx cookie=%d\n",cookie);
-					BUG();
-				}
+				dmaengine_submit(pdma->txdesc);
+				dma_async_issue_pending(pdma->chan_tx);
 			} /* txbuf */
 
 			/* MA35D1 QSPI/SPI limitation, reset SPI TXFIFO write pointer and
