@@ -229,7 +229,7 @@ static struct rproc_ops ma35d1_rproc_ops = {
 };
 
 static const struct of_device_id ma35d1_rproc_match[] = {
-	{ .compatible = "nuvoton, ma35d1-rproc" },
+	{ .compatible = "nuvoton,ma35d1-rproc" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, ma35d1_rproc_match);
