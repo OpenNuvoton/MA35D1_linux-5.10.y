@@ -1126,46 +1126,42 @@
 	};
 
 	pdma0: pdma@40080000 {
-		compatible = "nuvoton,ma35d1-pdma";
+		compatible = "nuvoton,ma35d1-dma";
 		reg = <0x0 0x40080000 0x0 0x2000>;
 		interrupts = <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk PDMA0_GATE>;
 		#dma-cells = <1>;
-		#dma-channels = <10>;
-		#dma-requests = <32>;
+		dma-channels = <10>;
 		status = "okay";
 	};
 
 	pdma1: pdma@40090000 {
-		compatible = "nuvoton,ma35d1-pdma";
+		compatible = "nuvoton,ma35d1-dma";
 		reg = <0x0 0x40090000 0x0 0x2000>;
 		interrupts = <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk PDMA1_GATE>;
 		#dma-cells = <1>;
-		#dma-channels = <10>;
-		#dma-requests = <32>;
+		dma-channels = <10>;
 		status = "okay";
 	};
 
 	pdma2: pdma@400A0000 {
-		compatible = "nuvoton,ma35d1-pdma";
+		compatible = "nuvoton,ma35d1-dma";
 		reg = <0x0 0x400A0000 0x0 0x2000>;
 		interrupts = <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk PDMA2_GATE>;
 		#dma-cells = <1>;
-		#dma-channels = <10>;
-		#dma-requests = <32>;
+		dma-channels = <10>;
 		status = "disabled";
 	};
 
 	pdma3: pdma@400B0000 {
-		compatible = "nuvoton,ma35d1-pdma";
+		compatible = "nuvoton,ma35d1-dma";
 		reg = <0x0 0x400B0000 0x0 0x2000>;
 		interrupts = <GIC_SPI 46 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk PDMA3_GATE>;
 		#dma-cells = <1>;
-		#dma-channels = <10>;
-		#dma-requests = <32>;
+		dma-channels = <10>;
 		status = "disabled";
 	};
 
