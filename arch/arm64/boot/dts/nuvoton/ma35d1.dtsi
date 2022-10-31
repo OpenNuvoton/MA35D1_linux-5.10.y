@@ -108,7 +108,7 @@
 			no-map;
 		};
 		vc8k_buf: vc8k_buf@0 {
-			reg = <0x0 0x8B000000 0x0 0x1800000>; /* 24MiB */
+			reg = <0x0 0x8A800000 0x0 0x2000000>; /* 32MiB */
 			no-map;
 		};
 		rproc_buf: rproc_buf@0 {
@@ -448,8 +448,8 @@
 		reg = <0x0 0x40300000 0x0 0x1000>;
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
 		optee_nuvoton = "yes";
-		rsa_ioctl = "no";           /* yes: RSA via ioctl, no: RSA via akcipher   */
-		ecc_ioctl = "no";           /* yes: ECC via ioctl, no: ECDH via akcipher */
+		rsa_ioctl = "yes";           /* yes: RSA via ioctl, no: RSA via akcipher   */
+		ecc_ioctl = "yes";           /* yes: ECC via ioctl, no: ECDH via akcipher */
 		status = "okay";
 	};
 

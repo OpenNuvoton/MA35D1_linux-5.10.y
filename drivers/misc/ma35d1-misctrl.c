@@ -24,13 +24,17 @@
 #include <linux/of.h>
 #include <soc/nuvoton/ma35d1_sip.h>
 
-#define CPU_FREQUENCY_700M  0x1001
-#define CPU_FREQUENCY_500M  0x1002
-#define CPU_FREQUENCY_1000M 0x1003
-
-#define CPU_1000MHZ   1
-#define CPU_700MHZ    2
-#define CPU_500MHZ    3
+#define SET_CPU_FREQ_500M	0x1005
+#define SET_CPU_FREQ_800M	0x1008
+#define SET_CPU_FREQ_1000M	0x1010
+#define GET_PMIC_VOLT		0x1101
+#define SET_PMIC_VOLT		0x1102
+#define SET_EPLL_DIV_BY_2	0x1202
+#define SET_EPLL_DIV_BY_4	0x1204
+#define SET_EPLL_DIV_BY_8	0x1208
+#define SET_EPLL_RESTORE	0x120F
+#define SET_SYS_SPD_LOW		0x1301
+#define SET_SYS_SPD_RESTORE	0x1302
 
 struct ma35d1_misctrl {
 	int minor;
@@ -50,35 +54,68 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 {
 	struct arm_smccc_res res;
 
-	switch(cmd)
-	{
-		case CPU_FREQUENCY_700M:
-
-			arm_smccc_smc(MA35D1_SIP_CPU_CLK, CPU_700MHZ,
-							0, 0, 0, 0, 0, 0, &res);
-
+	switch(cmd) {
+	case SET_CPU_FREQ_500M:
+		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 500, 0, 0, 0, 0,
+			      0, 0, &res);
 		break;
 
-		case CPU_FREQUENCY_500M:
-
-			arm_smccc_smc(MA35D1_SIP_CPU_CLK, CPU_500MHZ,
-							0, 0, 0, 0, 0, 0, &res);
-
+	case SET_CPU_FREQ_800M:
+		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 800, 0, 0, 0, 0,
+			      0, 0, &res);
 		break;
 
-		case CPU_FREQUENCY_1000M:
-
-			arm_smccc_smc(MA35D1_SIP_CPU_CLK, CPU_1000MHZ,
-							0, 0, 0, 0, 0, 0, &res);
-
+	case SET_CPU_FREQ_1000M:
+		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 1000, 0, 0, 0, 0,
+			      0, 0, &res);
 		break;
 
-		default:
+	case GET_PMIC_VOLT:
+		arm_smccc_smc(MA35D1_SIP_PMIC, 0, 0, 0, 0, 0,
+			      0, 0, &res);
+		if (res.a0 != 0)
+			return -EIO;
+		return res.a1;
 
+	case SET_PMIC_VOLT:
+		arm_smccc_smc(MA35D1_SIP_PMIC, arg, 0, 0, 0, 0,
+			      0, 0, &res);
 		break;
+
+	case SET_EPLL_DIV_BY_2:
+		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_2, 0, 0, 0, 0,
+			      0, 0, &res);
+		break;
+
+	case SET_EPLL_DIV_BY_4:
+		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_4, 0, 0, 0, 0,
+			      0, 0, &res);
+		break;
+
+	case SET_EPLL_DIV_BY_8:
+		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_8, 0, 0, 0, 0,
+			      0, 0, &res);
+		break;
+
+	case SET_EPLL_RESTORE:
+		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_RESTORE, 0, 0, 0, 0,
+			      0, 0, &res);
+		break;
+
+	case SET_SYS_SPD_LOW:
+		arm_smccc_smc(MA35D1_SIP_LSPD, 1, 0, 0, 0, 0,
+			      0, 0, &res);
+		break;
+
+	case SET_SYS_SPD_RESTORE:
+		arm_smccc_smc(MA35D1_SIP_LSPD, 0, 0, 0, 0, 0,
+			      0, 0, &res);
+		break;
+
+	default:
+		return -EINVAL;
 	}
-
-	return 0;
+	return res.a0;
 }
 
 struct file_operations misctrl_fops = {
@@ -90,7 +127,7 @@ struct file_operations misctrl_fops = {
 static struct miscdevice misctrl_dev[] = {
 	[0] = {
 		.minor = MISC_DYNAMIC_MINOR,
-		.name  = "misctrl_tsen",
+		.name  = "ma35_misctrl",
 		.fops  = &misctrl_fops,
 	},
 };
