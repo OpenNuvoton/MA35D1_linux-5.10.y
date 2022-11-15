@@ -92,6 +92,8 @@ static int buf_sz = DEFAULT_BUFSIZE;
 module_param(buf_sz, int, 0644);
 MODULE_PARM_DESC(buf_sz, "DMA buffer size");
 
+static int dma_fail = 0; // retry if dma init fail after reboot
+
 #define	STMMAC_RX_COPYBREAK	256
 
 static const u32 default_msg_level = (NETIF_MSG_DRV | NETIF_MSG_PROBE |
@@ -2357,7 +2359,7 @@ static int stmmac_init_dma_engine(struct stmmac_priv *priv)
 	struct stmmac_tx_queue *tx_q;
 	u32 chan = 0;
 	int atds = 0;
-	int ret = 0;
+	int ret = 0, count;
 
 	if (!priv->plat->dma_cfg || !priv->plat->dma_cfg->pbl) {
 		dev_err(priv->device, "Invalid DMA configuration\n");
@@ -2367,8 +2369,12 @@ static int stmmac_init_dma_engine(struct stmmac_priv *priv)
 	if (priv->extend_desc && (priv->mode == STMMAC_RING_MODE))
 		atds = 1;
 
+	count = 5;
+resetRetry:
 	ret = stmmac_reset(priv, priv->ioaddr);
 	if (ret) {
+		if(count--)
+			goto resetRetry;
 		dev_err(priv->device, "Failed to reset the dma\n");
 		return ret;
 	}
@@ -2848,7 +2854,7 @@ static int stmmac_open(struct net_device *dev)
 	int bfsize = 0;
 	u32 chan;
 	int ret;
-
+reopen:
 	ret = pm_runtime_get_sync(priv->device);
 	if (ret < 0) {
 		pm_runtime_put_noidle(priv->device);
@@ -2980,7 +2986,15 @@ dma_desc_error:
 	phylink_disconnect_phy(priv->phylink);
 init_phy_error:
 	pm_runtime_put(priv->device);
-	return ret;
+	
+	if(!dma_fail)
+	{
+		netdev_err(priv->dev, "Auto retry\n");
+		dma_fail = 1;
+		goto reopen;
+	}
+	else
+		return ret;
 }
 
 /**
