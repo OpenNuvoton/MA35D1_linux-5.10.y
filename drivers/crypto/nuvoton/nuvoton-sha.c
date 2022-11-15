@@ -494,7 +494,7 @@ static int nuvoton_sha_update_start(struct nu_sha_dev *dd)
 
 	if (ctx->flags & SHA_FLAGS_KEY_BLK) {
 		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
-		    (dd->req->nbytes == 0)) {
+		    (tctx->bufcnt == 0) && (dd->req->nbytes == 0)) {
 			pr_err("MA35D1 HMAC does not support 0 data length!\n");
 			nuvoton_sha_finish_req(ctx, -EINVAL);
 			return -EINVAL;
@@ -1238,7 +1238,7 @@ int nuvoton_sha_probe(struct device *dev,
 		      struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
-	int   i, j, err = 0;
+	int   i, err = 0;
 
 	sha_dd->dev = dev;
 	sha_dd->nu_cdev = nu_cryp_dev;
@@ -1265,12 +1265,10 @@ int nuvoton_sha_probe(struct device *dev,
 			goto err_register;
 	}
 
-	if (nu_cryp_dev->use_optee == false) {
-		for (i = 0; i < ARRAY_SIZE(nuvoton_sha3_algs); i++) {
-			err = crypto_register_ahash(&nuvoton_sha3_algs[i]);
-			if (err)
-				goto err_register;
-		}
+	for (i = 0; i < ARRAY_SIZE(nuvoton_sha3_algs); i++) {
+		err = crypto_register_ahash(&nuvoton_sha3_algs[i]);
+		if (err)
+			goto err_register;
 	}
 
 	pr_info("MA35D1 Crypto SHA engine enabled.\n");
@@ -1284,8 +1282,11 @@ err_register:
 	tasklet_kill(&sha_dd->queue_task);
 	tasklet_kill(&sha_dd->done_task);
 
-	for (j = 0; j < i; j++)
+	for (i = 0; i < ARRAY_SIZE(nuvoton_sha_algs); i++)
 		crypto_unregister_ahash(&nuvoton_sha_algs[i]);
+
+	for (i = 0; i < ARRAY_SIZE(nuvoton_sha3_algs); i++)
+		crypto_unregister_ahash(&nuvoton_sha3_algs[i]);
 
 	dev_err(dev, "SHA initialization failed. %d\n", err);
 
@@ -1303,6 +1304,9 @@ int nuvoton_sha_remove(struct device *dev,
 
 	for (i = 0; i < ARRAY_SIZE(nuvoton_sha_algs); i++)
 		crypto_unregister_ahash(&nuvoton_sha_algs[i]);
+
+	for (i = 0; i < ARRAY_SIZE(nuvoton_sha3_algs); i++)
+		crypto_unregister_ahash(&nuvoton_sha3_algs[i]);
 
 	spin_lock(&nu_sha.lock);
 	list_del(&sha_dd->list);
