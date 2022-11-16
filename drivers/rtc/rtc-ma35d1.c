@@ -37,7 +37,8 @@
 #define REG_RTC_RIIR    0x2C
 #define REG_RTC_TTR	    0x30
 #define REG_RTC_PWRCTL  0x34
-
+#define REG_RTC_CLKDCTL 0x140
+#define REG_RTC_CDBR    0x144
 
 #define RTCSET          0x01
 #define AERRWENB        0x10000
@@ -45,9 +46,14 @@
 #define AERPOWERON      0xA965
 #define AERPOWEROFF     0x0000
 #define LEAPYEAR        0x0001
+
+/* Interrupt Enable */
 #define TICKENB         0x80
 #define TICKINTENB      0x0002
 #define ALARMINTENB     0x0001
+#define CLKFIEN         0x1000000
+#define CLKSTIEN        0x2000000
+
 #define MODE24          0x0001
 
 struct clk *rtc_clk;
@@ -56,6 +62,8 @@ struct ma35d1_rtc {
 	int irq_num;
 	void __iomem *rtc_reg;
 	struct rtc_device *rtcdev;
+	int LXT_Fail;
+	int LXT_Detect;
 };
 
 struct ma35d1_bcd_time {
@@ -97,7 +105,20 @@ static irqreturn_t ma35d1_rtc_interrupt(int irq, void *_rtc)
 
 	if (rtc_irq & TICKINTENB) {
 		rtc_reg_write(rtc, REG_RTC_RIIR, TICKINTENB);
-		events |= RTC_UF | RTC_IRQF;
+
+		if(rtc->LXT_Fail != 1)
+			events |= RTC_UF | RTC_IRQF;
+	}
+
+	if (rtc_irq & (CLKFIEN | CLKSTIEN)) {
+		if(rtc->LXT_Detect == 1) {
+			rtc->LXT_Fail = 1;
+			dev_err(&rtc->rtcdev->dev, " Detected LXT failed. RTC Stoped !!\n");
+		}
+
+		rtc_reg_write(rtc, REG_RTC_RIER, 
+					(__raw_readl(rtc->rtc_reg + REG_RTC_RIER) &~ (CLKFIEN | CLKSTIEN)));
+		rtc_reg_write(rtc, REG_RTC_RIIR, (CLKFIEN | CLKSTIEN));
 	}
 
 	rtc_update_irq(rtc->rtcdev, 1, events);
@@ -186,6 +207,9 @@ static int ma35d1_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
 	unsigned int timeval, clrval, wdayval;
 
+	if(rtc->LXT_Fail == 1)
+		return -EIO;
+
 	timeval = __raw_readl(rtc->rtc_reg + REG_RTC_TLR);
 	clrval  = __raw_readl(rtc->rtc_reg + REG_RTC_CLR);
 	wdayval = __raw_readl(rtc->rtc_reg + REG_RTC_DWR);
@@ -199,6 +223,9 @@ static int ma35d1_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	struct ma35d1_bcd_time gettm;
 	unsigned long val;
 	int *err;
+
+	if(rtc->LXT_Fail == 1)
+		return -EIO;
 
 	ma35d1_rtc_bin2bcd(dev, tm, &gettm);
 
@@ -317,6 +344,7 @@ static int ma35d1_rtc_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct ma35d1_rtc *ma35d1_rtc;
 	struct clk *clk;
+	u32 val32;
 	int err;
 
 	ma35d1_rtc = devm_kzalloc(&pdev->dev, sizeof(struct ma35d1_rtc), GFP_KERNEL);
@@ -355,6 +383,26 @@ static int ma35d1_rtc_probe(struct platform_device *pdev)
 			ma35d1_rtc_interrupt, IRQF_NO_SUSPEND, "ma35d1rtc", ma35d1_rtc)) {
 		dev_err(&pdev->dev, "ma35d1 RTC request irq failed\n");
 		return -EBUSY;
+	}
+
+	ma35d1_rtc->LXT_Fail = 0;
+
+	if (of_property_read_u32_array(pdev->dev.of_node, "lxt-detect-enable", &val32, 1) != 0) {
+		dev_err(&pdev->dev, "can not get lxt-detect-enable flag !\n");
+		return -EINVAL;
+	}
+
+	if(val32 == 1) {
+		ma35d1_rtc->LXT_Detect = 1;
+		rtc_reg_write(ma35d1_rtc, REG_RTC_CDBR, 0x800080);
+		rtc_reg_write(ma35d1_rtc, REG_RTC_CLKDCTL, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_CLKDCTL) | 0x1));
+		rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) |
+				 TICKINTENB | CLKSTIEN | CLKFIEN));
+	} else {
+		ma35d1_rtc->LXT_Detect = 0;
+		rtc_reg_write(ma35d1_rtc, REG_RTC_CDBR, 0x0);
+		rtc_reg_write(ma35d1_rtc, REG_RTC_CLKDCTL, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_CLKDCTL) &~ 0x1));
+		rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
 	}
 
 	rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
