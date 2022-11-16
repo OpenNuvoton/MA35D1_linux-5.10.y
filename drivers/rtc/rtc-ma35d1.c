@@ -405,8 +405,6 @@ static int ma35d1_rtc_probe(struct platform_device *pdev)
 		rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
 	}
 
-	rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
-
 	device_init_wakeup(&pdev->dev, true);
 
 	return 0;
