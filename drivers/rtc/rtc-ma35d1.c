@@ -113,7 +113,6 @@ static irqreturn_t ma35d1_rtc_interrupt(int irq, void *_rtc)
 	if (rtc_irq & (CLKFIEN | CLKSTIEN)) {
 		if(rtc->LXT_Detect == 1) {
 			rtc->LXT_Fail = 1;
-			dev_err(&rtc->rtcdev->dev, " Detected LXT failed. RTC Stoped !!\n");
 		}
 
 		rtc_reg_write(rtc, REG_RTC_RIER, 
@@ -206,8 +205,9 @@ static int ma35d1_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
 	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
 	unsigned int timeval, clrval, wdayval;
+	unsigned int rtc_irq = __raw_readl(rtc->rtc_reg + REG_RTC_RIIR);
 
-	if(rtc->LXT_Fail == 1)
+	if((rtc->LXT_Fail == 1) || (rtc_irq & (CLKFIEN | CLKSTIEN)))
 		return -EIO;
 
 	timeval = __raw_readl(rtc->rtc_reg + REG_RTC_TLR);
@@ -223,8 +223,9 @@ static int ma35d1_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	struct ma35d1_bcd_time gettm;
 	unsigned long val;
 	int *err;
+	unsigned int rtc_irq = __raw_readl(rtc->rtc_reg + REG_RTC_RIIR);
 
-	if(rtc->LXT_Fail == 1)
+	if((rtc->LXT_Fail == 1) || (rtc_irq & (CLKFIEN | CLKSTIEN)))
 		return -EIO;
 
 	ma35d1_rtc_bin2bcd(dev, tm, &gettm);
