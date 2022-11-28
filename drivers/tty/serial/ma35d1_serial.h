@@ -63,6 +63,7 @@
 #define TOUT_IF		0x00000010
 #define THRE_INT	0x00000200
 #define HWRLS_IF	0x00040000
+#define PTO_IF		0x00100000
 #define HWBUFE_IF	0x00200000
 
 #define UART_REG_TOR	0x20
@@ -128,6 +129,7 @@ struct ma35d1_ip_rx_dma {
 	struct scatterlist      sgrx[64];
 	struct dma_async_tx_descriptor  *rxdesc;
 	struct dma_slave_config slave_config;
+	dma_cookie_t cookie;
 };
 
 struct ma35d1_ip_tx_dma {
@@ -135,6 +137,7 @@ struct ma35d1_ip_tx_dma {
 	struct scatterlist      sgtx[64];
 	struct dma_async_tx_descriptor  *txdesc;
 	struct dma_slave_config slave_config;
+	dma_cookie_t cookie;
 };
 
 #endif // __MA35D1_SERIAL_H__
