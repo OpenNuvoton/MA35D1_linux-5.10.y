@@ -439,10 +439,7 @@
 		fb_width = <1024>;
 		fb_height = <600>;
 		fb_fmt = "RGB888";   /* RGB888, RGB565, or YUV420P */
-		vid_max_width = <1920>;
-		vid_max_height = <1080>;
-		vid_max_instance = <1>;
-		vid_refbuf_cnt = <6>;
+		use_dev_coherent = <1>;
 		status = "okay";
 	};
 
