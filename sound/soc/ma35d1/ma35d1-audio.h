@@ -160,7 +160,6 @@ extern struct ma35d1_audio *ma35d1_i2s_data;
 int ma35d1_dma_create(struct ma35d1_audio *ma35d1_audio);
 int ma35d1_dma_destroy(struct ma35d1_audio *ma35d1_audio);
 
-extern struct snd_soc_component_driver ma35d1_asrc_component;
 #define DRV_NAME "ma35d1-dai"
 
 #endif /*end _MA35D1_AUDIO_H */

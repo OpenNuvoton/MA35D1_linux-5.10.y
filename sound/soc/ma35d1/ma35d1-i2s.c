@@ -361,3 +361,4 @@ module_platform_driver(ma35d1_i2s_driver);
 MODULE_DESCRIPTION("MA35D1 IIS SoC driver!");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:ma35d1-i2s");
+

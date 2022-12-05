@@ -451,11 +451,13 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 
 		} else { //Long length transfer by PDMA
 			int pdma_en = 0;
-			__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
-				while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {}
 
-			non_rx_align_len = 0 ;
-			non_tx_align_len = 0 ;
+			__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
+			while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR)
+				;
+
+			non_rx_align_len = 0;
+			non_tx_align_len = 0;
 			/* Transfer the rest data starting at alignment address by PDMA */
 			if (rxbuf) {
 
@@ -464,7 +466,7 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 				pdma->slave_config.src_addr = (hw->phyaddr + REG_RX);
 
 				if (((len % 4) == 0) && (((unsigned long)rxbuf % 4) == 0) &&
-						((txbuf==NULL) || (((unsigned long)txbuf % 4) == 0))) {
+					((txbuf == NULL) || (((unsigned long)txbuf % 4) == 0))) {
 					pdma->slave_config.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 					pdma->sgrx.dma_length = (len - non_rx_align_len) >> 2; /* divide 4 */
 					__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK))
@@ -514,7 +516,7 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 				sg_init_table(&pdma->sgtx, 1);
 				pdma->slave_config.dst_addr = (hw->phyaddr + REG_TX);
 				if (((len % 4) == 0) && (((unsigned long)txbuf % 4) == 0) &&
-						((rxbuf==NULL) || (((unsigned long)rxbuf % 4) == 0))) {
+					((rxbuf == NULL) || (((unsigned long)rxbuf % 4) == 0))) {
 					pdma->slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 					pdma->sgrx.dma_length = (len - non_tx_align_len) >> 2; /* divide 4 */
 					__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK))
@@ -572,17 +574,17 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 			if (txbuf)
 				pdma_en |= TXPDMAEN;
 
-			__raw_writel(UNITIF,hw->regs + REG_STATUS);
+			__raw_writel(UNITIF, hw->regs + REG_STATUS);
 			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) | (pdma_en),
 						hw->regs + REG_PDMACTL); //Enable SPIx PDMA
 
-			if(txbuf) {
+			if (txbuf) {
 				wait_event_interruptible(hw->slave_txdone, (hw->slave_txdone_state != 0));
-				hw->slave_txdone_state=0;
+				hw->slave_txdone_state = 0;
 			}
-			if(rxbuf) {
+			if (rxbuf) {
 				wait_event_interruptible(hw->slave_rxdone, (hw->slave_rxdone_state != 0));
-				hw->slave_rxdone_state=0;
+				hw->slave_rxdone_state = 0;
 			}
 
 			while (__raw_readl(hw->regs + REG_STATUS) & BUSY); //wait busy
@@ -912,11 +914,11 @@ static int nuvoton_spi_probe(struct platform_device *pdev)
 		dma_cap_set(DMA_SLAVE, mask);
 		dma_cap_set(DMA_PRIVATE, mask);
 
-		/* Initailize wiat queue head as  __WAIT_QUEUE_HEAD_INITIALIZER() */
+		/* Initailize wait queue head as  __WAIT_QUEUE_HEAD_INITIALIZER() */
 		nuvoton->slave_txdone.lock           = __SPIN_LOCK_UNLOCKED(nuvoton->slave_txdone.lock);
 		nuvoton->slave_txdone.head.next       = &(nuvoton->slave_txdone).head;
 		nuvoton->slave_txdone.head.prev       = &(nuvoton->slave_txdone).head;
-	
+
 		nuvoton->slave_rxdone.lock           = __SPIN_LOCK_UNLOCKED(nuvoton->slave_rxdone.lock);
 		nuvoton->slave_rxdone.head.next       = &(nuvoton->slave_rxdone).head;
 		nuvoton->slave_rxdone.head.prev       = &(nuvoton->slave_rxdone).head;
