@@ -151,3 +151,4 @@ module_platform_driver(ma35d1_audio_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("MA35D1 Series ASoC audio support");
+

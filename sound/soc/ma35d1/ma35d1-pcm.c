@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2020 Nuvoton technology corporation.
+ * Copyright (c) 2022 Nuvoton technology corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,6 @@
 #include "ma35d1-audio.h"
 
 #define MA35D1_DMABUF_SIZE	(64 * 1024)
-
-extern struct ma35d1_audio *ma35d1_i2s_data;
 
 static const struct snd_pcm_hardware ma35d1_pcm_hardware = {
 	.info           = SNDRV_PCM_INFO_INTERLEAVED |
@@ -40,111 +38,6 @@ static const struct snd_pcm_hardware ma35d1_pcm_hardware = {
 	.periods_min        = 1,
 	.periods_max        = 1024,
 };
-
-static int ma35d1_dma_hw_free(struct snd_pcm_substream *substream)
-{
-	struct ma35d1_audio *ma35d1_audio = ma35d1_i2s_data;
-
-	snd_pcm_set_runtime_buffer(substream, NULL);
-
-	if (ma35d1_audio->dma_chan[IN])
-		dma_release_channel(ma35d1_audio->dma_chan[IN]);
-
-	if (ma35d1_audio->dma_chan[OUT])
-		dma_release_channel(ma35d1_audio->dma_chan[OUT]);
-
-	ma35d1_audio->dma_chan[IN] = NULL;
-	ma35d1_audio->dma_chan[OUT] = NULL;
-
-	return 0;
-}
-
-static int ma35d1_dma_startup(struct snd_pcm_substream *substream)
-{
-	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct ma35d1_audio *ma35d1_audio = ma35d1_i2s_data;
-
-	runtime->private_data = ma35d1_audio;
-
-	snd_pcm_hw_constraint_integer(substream->runtime,
-	                              SNDRV_PCM_HW_PARAM_PERIODS);
-	snd_soc_set_runtime_hwparams(substream, &ma35d1_pcm_hardware);
-
-	return 0;
-}
-
-static int ma35d1_dma_shutdown(struct snd_pcm_substream *substream)
-{
-	return 0;
-}
-
-static const struct snd_pcm_ops ma35d1_asrc_dma_pcm_ops = {
-	.ioctl		= snd_pcm_lib_ioctl,
-	.hw_free	= ma35d1_dma_hw_free,
-	.open		= ma35d1_dma_startup,
-	.close		= ma35d1_dma_shutdown,
-};
-
-static int ma35d1_asrc_dma_pcm_new(struct snd_soc_pcm_runtime *rtd)
-{
-	struct snd_card *card = rtd->card->snd_card;
-	struct snd_pcm_substream *substream;
-	struct snd_pcm *pcm = rtd->pcm;
-	int ret, i;
-
-	ret = dma_coerce_mask_and_coherent(card->dev, DMA_BIT_MASK(32));
-	if (ret) {
-		dev_err(card->dev, "failed to set DMA mask\n");
-		return ret;
-	}
-
-	for (i = SNDRV_PCM_STREAM_PLAYBACK; i <= SNDRV_PCM_STREAM_LAST; i++) {
-		substream = pcm->streams[i].substream;
-		if (!substream)
-			continue;
-
-		ret = snd_dma_alloc_pages(SNDRV_DMA_TYPE_DEV, pcm->card->dev,
-		                          MA35D1_DMABUF_SIZE, &substream->dma_buffer);
-		if (ret) {
-			dev_err(card->dev, "failed to allocate DMA buffer\n");
-			goto err;
-		}
-	}
-
-	return 0;
-
-err:
-	if (--i == 0 && pcm->streams[i].substream)
-		snd_dma_free_pages(&pcm->streams[i].substream->dma_buffer);
-
-	return ret;
-}
-
-static void ma35d1_asrc_dma_pcm_free(struct snd_pcm *pcm)
-{
-	struct snd_pcm_substream *substream;
-	int i;
-
-	for (i = SNDRV_PCM_STREAM_PLAYBACK; i <= SNDRV_PCM_STREAM_LAST; i++) {
-		substream = pcm->streams[i].substream;
-		if (!substream)
-			continue;
-
-		snd_dma_free_pages(&substream->dma_buffer);
-		substream->dma_buffer.area = NULL;
-		substream->dma_buffer.addr = 0;
-	}
-}
-
-#if 0 /* CWWeng 2022.10.17 : in ma35d1-i2s.c, uses ma35d1_i2s_component for devm_snd_soc_register_component() */
-struct snd_soc_component_driver ma35d1_asrc_component = {
-	.name		= DRV_NAME,
-	.ops		= &ma35d1_asrc_dma_pcm_ops,
-	.pcm_new	= ma35d1_asrc_dma_pcm_new,
-	.pcm_free	= ma35d1_asrc_dma_pcm_free,
-};
-EXPORT_SYMBOL_GPL(ma35d1_asrc_component);
-#endif
 
 static const struct snd_dmaengine_pcm_config ma35d1_dmaengine_pcm_config = {
 	.pcm_hardware = &ma35d1_pcm_hardware,
@@ -185,3 +78,4 @@ module_platform_driver(ma35d1_pcm_driver);
 
 MODULE_DESCRIPTION("ma35d1 Audio DMA module");
 MODULE_LICENSE("GPL");
+
