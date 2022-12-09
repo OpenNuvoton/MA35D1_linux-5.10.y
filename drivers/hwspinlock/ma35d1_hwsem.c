@@ -38,21 +38,21 @@ struct nvt_hwsem {
 
 static void hwsem_UnLockReg(struct regmap *regmap)
 {
-        int ret;
+	int ret;
 
-        /* Unlock hwsem registers */
-        do {
-                regmap_write(regmap, REG_SYS_RLKTZNS, 0x59);
-                regmap_write(regmap, REG_SYS_RLKTZNS, 0x16);
-                regmap_write(regmap, REG_SYS_RLKTZNS, 0x88);
-                regmap_read(regmap, REG_SYS_RLKTZNS, &ret);
-        }while(ret == 0);
+	/* Unlock hwsem registers */
+	do {
+		regmap_write(regmap, REG_SYS_RLKTZNS, 0x59);
+		regmap_write(regmap, REG_SYS_RLKTZNS, 0x16);
+		regmap_write(regmap, REG_SYS_RLKTZNS, 0x88);
+		regmap_read(regmap, REG_SYS_RLKTZNS, &ret);
+	} while (ret == 0);
 }
 
 static void hwsem_LockReg(struct regmap *regmap)
 {
-        /* Lock hwsem registers */
-        regmap_write(regmap, REG_SYS_RLKTZNS, 0x0);
+	/* Lock hwsem registers */
+	regmap_write(regmap, REG_SYS_RLKTZNS, 0x0);
 }
 
 
