@@ -170,7 +170,7 @@ static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
 	ret_push = iio_push_to_buffers_with_timestamp(indio_dev, info->buffer,
 		pf->timestamp);
 	if (ret_push) {
-		// Set trigger source to software trigger (clear ADINT0 trigger)
+		/* Set trigger source to software trigger (clear ADINT0 trigger) */
 		writel((readl(info->regs + SCTL0) & ~TRGSELMSK), info->regs + SCTL0);
 	}
 
@@ -191,8 +191,8 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 	printk("[EADC] Enter %s .... info->bufi=%d\n",__FUNCTION__,info->bufi);
 #endif
 
-	if (readl(info->regs + STATUS2) & 1) {  //check ADIF0
-		writel(1, info->regs + STATUS2); //clear ADIF0
+	if (readl(info->regs + STATUS2) & 1) {  /* check ADIF0 */
+		writel(1, info->regs + STATUS2); /* clear ADIF0 */
 
 		/* Reading DR also clears EOC status flag */
 		info->buffer[info->bufi] = readl(info->regs + DAT0) & DATMSK;
@@ -200,7 +200,7 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 		if (iio_buffer_enabled(indio_dev)) {
 			info->bufi++;
 			if (info->bufi >= info->num_conv) {
-				// disable ADCIEN0
+				/* disable ADCIEN0 */
 				writel(readl(info->regs + CTL) & ~ADCIEN0, info->regs + CTL);
 
 				iio_trigger_poll(indio_dev->trig);
@@ -360,11 +360,11 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 
 	reinit_completion(&info->completion);
 
-	// enable channel
+	/* enable channel */
 	writel((readl(info->regs + SCTL0) & ~CHSELMSK)
 		| chan->channel, info->regs + SCTL0);
 
-	// check if the channel is designated as differential channel
+	/* check if the channel is designated as differential channel */
 	if (chan->differential)
 		writel((readl(info->regs + CTL) | DIFFEN), info->regs + CTL);
 	else
@@ -374,14 +374,14 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 	_ma35d1_eadc_register_dump(info);
 #endif
 
-	// software trigger sample module 0
+	/* software trigger sample module 0 */
 	writel(1, info->regs + SWTRG);
 
 	timeout = wait_for_completion_interruptible_timeout
 			(&info->completion, MA35D1_ADC_TIMEOUT);
 
 	*val = readl(info->regs + DAT0) & DATMSK;
-	//*val = info->buffer[0];
+	/* *val = info->buffer[0]; */
 
 #ifdef __EADC_DEBUG__
 	_ma35d1_eadc_register_dump(info);
@@ -416,10 +416,10 @@ static int ma35d1_adc_conf_scan_seq(struct iio_dev *indio_dev,
 		dev_dbg(&indio_dev->dev, "%s chan %d to Sample module %d\n",
 			__func__, chan->channel, i);
 
-		// configure sample module channel select
+		/* configure sample module channel select */
 		writel((readl(info->regs + SCTL0 + (i << 2)) & ~CHSELMSK)
 			| chan->channel, info->regs + SCTL0 + (i << 2));
-		// check if the channel is designated as differential channel
+		/* check if the channel is designated as differential channel */
 		if (chan->differential)
 			writel((readl(info->regs + CTL) | DIFFEN), info->regs + CTL);
 		else
@@ -464,23 +464,23 @@ static int __ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 	/* Reset adc buffer index */
 	info->bufi = 0;
 
-	// clear ADIF0
+	/* clear ADIF0 */
 	writel(1, info->regs + STATUS2);
-	// enable ADCIEN0
+	/* enable ADCIEN0 */
 	writel(readl(info->regs + CTL) | ADCIEN0, info->regs + CTL);
-	// enable ADINT0 for sample module 0
+	/* enable ADINT0 for sample module 0 */
 	writel(readl(info->regs + INTSRC0) | 1, info->regs + INTSRC0);
-	// set reference voltage from external Vref pin
+	/* set reference voltage from external Vref pin */
 	writel(readl(info->regs + REFADJCTL) | 1, info->regs + REFADJCTL);
-	// set sampling time
+	/* set sampling time */
 	writel(readl(info->regs + SELSMP0) | 3, info->regs + SELSMP0);
-	// set trigger delay count
+	/* set trigger delay count */
 	writel(readl(info->regs + SCTL0) | TRGDLYMSK, info->regs + SCTL0);
-	// Set trigger source to ADINT0
+	/* Set trigger source to ADINT0 */
 	writel((readl(info->regs + SCTL0) & ~TRGSELMSK)
 		| ADINT0TRG, info->regs + SCTL0);
 
-	// software trigger sample module 0
+	/* software trigger sample module 0 */
 	writel(1, info->regs + SWTRG);
 
 	return 0;
@@ -499,9 +499,9 @@ static void __ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
 {
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
 
-	// disable ADCIEN0
+	/* disable ADCIEN0 */
 	writel(readl(info->regs + CTL) & ~ADCIEN0, info->regs + CTL);
-	// Clear trigger source to software trigger, not ADINT0 trigger
+	/* Clear trigger source to software trigger, not ADINT0 trigger */
 	writel((readl(info->regs + SCTL0) & ~TRGSELMSK), info->regs + SCTL0);
 }
 
@@ -619,18 +619,18 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
-	// enable ADCEN
+	/* enable ADCEN */
 	writel(readl(info->regs + CTL) | ADCEN, info->regs + CTL);
 
-	// clear ADIF0
+	/* clear ADIF0 */
 	writel(1, info->regs + STATUS2);
-	// enable ADCIEN0
+	/* enable ADCIEN0 */
 	writel(readl(info->regs + CTL) | ADCIEN0, info->regs + CTL);
-	// enable ADINT0 for sample module 0
+	/* enable ADINT0 for sample module 0 */
 	writel(readl(info->regs + INTSRC0) | 1, info->regs + INTSRC0);
-	// set reference voltage from external Vref pin
+	/* set reference voltage from external Vref pin */
 	writel(readl(info->regs + REFADJCTL) | 1, info->regs + REFADJCTL);
-	// set sampling time
+	/* set sampling time */
 	writel(readl(info->regs + SELSMP0) | 3, info->regs + SELSMP0);
 
 	ret = iio_triggered_buffer_setup(indio_dev, &iio_pollfunc_store_time,
@@ -649,13 +649,13 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	dev_dbg(&pdev->dev, "%s: ma35d1 EADC\n",
 		indio_dev->name);
 
-	// dummy conversion, since the first conversion is incorrect
+	/* dummy conversion, since the first conversion is incorrect */
 	writel(1, info->regs + SWTRG);
 
 	return 0;
 
 err_free_channels:
-	// disable ADCEN
+	/* disable ADCEN */
 	writel(readl(info->regs + CTL) & ~ADCEN, info->regs + CTL);
 	ma35d1_adc_channels_remove(indio_dev);
 err_ret:
@@ -672,7 +672,7 @@ static int ma35d1_adc_remove(struct platform_device *pdev)
 
 	iio_device_free(indio_dev);
 
-	// disable ADCEN
+	/* disable ADCEN */
 	writel(readl(info->regs + CTL) & ~ADCEN, info->regs + CTL);
 
 	clk_disable_unprepare(info->eclk);
@@ -730,3 +730,4 @@ MODULE_DESCRIPTION("MA35D1 EADC controller driver");
 MODULE_AUTHOR("Nuvoton Technology Corp.");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:ma35d1-eadc");
+
