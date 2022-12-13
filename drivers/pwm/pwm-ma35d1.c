@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Copyright (c) 2020 Nuvoton Technology Corp.
+ * Copyright (c) 2022 Nuvoton Technology Corp.
  *
  * MA35D1 Series EPWM driver
  *
@@ -126,14 +126,14 @@ static int ma35d1_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	unsigned long flags;
 	int ch = (pwm->hwpwm + chip->base) % ma35d1->chip.npwm;
 
-	// Get PCLK, calculate valid parameter range.
+	/* Get PCLK, calculate valid parameter range. */
 	prescale = clk_get_rate(ma35d1->clk) / 1000000 - 1;
 
-	// now pwm time unit is 1000ns.
+	/* now pwm time unit is 1000ns. */
 	period = (period_ns + 500) / 1000;
 	duty = (duty_ns + 500) / 1000;
 
-	// don't want the minus 1 below change the value to -1 (0xFFFF)
+	/* don't want the minus 1 below change the value to -1 (0xFFFF) */
 	if (period == 0)
 		period = 1;
 	if (duty == 0)
@@ -141,7 +141,7 @@ static int ma35d1_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	spin_lock_irqsave(&ma35d1->lock, flags);
 
-	// Set prescale
+	/* Set prescale */
 	if (ch < 2)
 		__raw_writel(prescale, ma35d1->regs + REG_PWM_CLKPSC01);
 	else if (ch < 4)
@@ -263,3 +263,4 @@ module_platform_driver(ma35d1_epwm_driver);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Nuvoton Technology Corp.");
 MODULE_ALIAS("platform:ma35d1-epwm");
+
