@@ -155,6 +155,7 @@
 	pinctrl-0 = <&pinctrl_sdhci1_3_3V>;
 	pinctrl-1 = <&pinctrl_sdhci1_1_8V>;
 	vqmmc-supply = <&volt0_sdhci1>;
+	power-gpios = <&gpion 14 GPIO_ACTIVE_LOW>; /* PN14 */
 };
 
 &epwm0 {
@@ -244,10 +245,10 @@
 	pinctrl-0 = <&pinctrl_qspi0>;
 };
 
-&spi1 {
+&spi0 {
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_spi1>;
+	pinctrl-0 = <&pinctrl_spi0>;
 };
 
 &spi2 {
@@ -418,13 +419,14 @@
 		};
 	};
 
-	spi1 {
-		pinctrl_spi1: spi1grp{
+	spi0 {
+		pinctrl_spi0: spi0grp{
 			nuvoton,pins =
-				<SYS_GPC_MFPH_PC8MFP_SPI1_SS0	&pcfg_default>,
-				<SYS_GPC_MFPH_PC9MFP_SPI1_CLK	&pcfg_default>,
-				<SYS_GPC_MFPH_PC10MFP_SPI1_MOSI	&pcfg_default>,
-				<SYS_GPC_MFPH_PC11MFP_SPI1_MISO	&pcfg_default>;
+				<SYS_GPG_MFPL_PG0MFP_SPI0_SS0    &pcfg_default>,
+				<SYS_GPB_MFPH_PB8MFP_SPI0_SS1    &pcfg_default>,
+				<SYS_GPB_MFPH_PB9MFP_SPI0_CLK    &pcfg_default>,
+				<SYS_GPL_MFPH_PL14MFP_SPI0_MOSI    &pcfg_default>,
+				<SYS_GPL_MFPH_PL15MFP_SPI0_MISO    &pcfg_default>;
 		};
 	};
 
