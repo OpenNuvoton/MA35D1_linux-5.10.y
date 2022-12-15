@@ -672,13 +672,12 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 				if (time_after(jiffies, timeout)) {
 					pr_err("RSA decrypt time-out!\n");
 					return -EIO;
-					break;
 				}
 			}
 		} else {
 			/*
-		 	*  Invoke OP-TEE Crypto PTA to run RSA
-		 	*/
+			 *  Invoke OP-TEE Crypto PTA to run RSA
+			 */
 			memset(&inv_arg, 0, sizeof(inv_arg));
 			memset(&param, 0, sizeof(param));
 

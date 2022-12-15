@@ -16,8 +16,8 @@
 #include <linux/clk-provider.h>
 #include <linux/clk.h>
 #include <linux/platform_device.h>
-#include <asm/io.h>
-#include <asm/uaccess.h>
+#include <linux/io.h>
+#include <linux/uaccess.h>
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
@@ -54,7 +54,7 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 {
 	struct arm_smccc_res res;
 
-	switch(cmd) {
+	switch (cmd) {
 	case SET_CPU_FREQ_500M:
 		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 500, 0, 0, 0, 0,
 			      0, 0, &res);
@@ -118,7 +118,7 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 	return res.a0;
 }
 
-struct file_operations misctrl_fops = {
+const struct file_operations misctrl_fops = {
 	.owner  = THIS_MODULE,
 	.open   = ma35d1_misctrl_open,
 	.unlocked_ioctl = ma35d1_misctrl_ioctl,
@@ -137,10 +137,8 @@ static int ma35d1_misctrl_probe(struct platform_device *pdev)
 	int ret;
 
 	misctrl = devm_kzalloc(&pdev->dev, sizeof(struct ma35d1_misctrl), GFP_KERNEL);
-	if (misctrl == NULL) {
-		dev_err(&pdev->dev, "failed to allocate memory for ebi device\n");
+	if (misctrl == NULL)
 		return -ENOMEM;
-	}
 
 	ret = misc_register(&misctrl_dev[0]);
 	if (ret) {

@@ -1255,8 +1255,8 @@ static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
 				return ret;
 		} else {
 			/*
-		 	 *  Invoke OP-TEE Crypto PTA to run ECC
-		 	 */
+			 *  Invoke OP-TEE Crypto PTA to run ECC
+			 */
 			memset(&inv_arg, 0, sizeof(inv_arg));
 			memset(&param, 0, sizeof(param));
 

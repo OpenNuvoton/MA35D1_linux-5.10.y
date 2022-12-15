@@ -73,11 +73,10 @@ static void ma35d1_start_ehci(struct platform_device *pdev)
 	/* set UHOVRCURH(SYS_MISCFCR0[12]) 1 => USBH Host over-current detect is high-active */
 	/*                                 0 => USBH Host over-current detect is low-active  */
 	regmap_read(ma35d1_ehci->sysregmap, REG_SYS_MISCFCR0, &reg);
-	if (ma35d1_ehci->oc_active_level) {
+	if (ma35d1_ehci->oc_active_level)
 		regmap_write(ma35d1_ehci->sysregmap, REG_SYS_MISCFCR0, (reg | (1<<12)));
-	} else {
+	else
 		regmap_write(ma35d1_ehci->sysregmap, REG_SYS_MISCFCR0, (reg & ~(1<<12)));
-	}
 }
 
 static void ma35d1_stop_ehci(struct platform_device *pdev)
@@ -159,7 +158,7 @@ static int ehci_ma35d1_drv_probe(struct platform_device *pdev)
 	if (of_property_read_u32(pdev->dev.of_node, "oc-active-level", &(ma35d1_ehci->oc_active_level))) {
 		ma35d1_ehci->oc_active_level = 0;
 		dev_warn(&pdev->dev, "EHCI oc-active-level not found!!\n");
-        }
+	}
 
 	ma35d1_start_ehci(pdev);
 

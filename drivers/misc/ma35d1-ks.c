@@ -237,9 +237,8 @@ static int optee_ks_read(struct optee_ks_private *ks_priv, void __user *arg)
 	param[1].u.memref.shm_offs = 0;
 
 	err = tee_client_invoke_func(ks_priv->ctx, &inv_arg, param);
-	if ((err < 0) || (inv_arg.ret != 0)) {
+	if ((err < 0) || (inv_arg.ret != 0))
 		return -EINVAL;
-	}
 
 	memcpy((u8 *)r_args.key, ks_priv->va_shm, r_args.word_cnt * 4);
 	return copy_to_user(arg, &r_args, sizeof(r_args));
