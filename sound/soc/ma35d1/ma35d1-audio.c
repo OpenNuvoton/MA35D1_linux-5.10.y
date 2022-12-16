@@ -58,7 +58,7 @@ static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct sn
 		return ret;
 
 	/* set prescaler division for sample rate */
-	ret =snd_soc_dai_set_sysclk(cpu_dai, MA35D1_AUDIO_CLKDIV, sample_rate, SND_SOC_CLOCK_OUT);
+	ret = snd_soc_dai_set_sysclk(cpu_dai, MA35D1_AUDIO_CLKDIV, sample_rate, SND_SOC_CLOCK_OUT);
 	if (ret < 0)
 		return ret;
 
@@ -81,9 +81,9 @@ static struct snd_soc_ops ma35d1_audio_ops = {
 };
 
 SND_SOC_DAILINK_DEFS(hifi,
-                     DAILINK_COMP_ARRAY(COMP_CPU("40480000.i2s")),
-                     DAILINK_COMP_ARRAY(COMP_CODEC("nau8822.0-001a", "nau8822-hifi")),
-                     DAILINK_COMP_ARRAY(COMP_PLATFORM("i2s_pcm")));
+			DAILINK_COMP_ARRAY(COMP_CPU("40480000.i2s")),
+			DAILINK_COMP_ARRAY(COMP_CODEC("nau8822.0-001a", "nau8822-hifi")),
+			DAILINK_COMP_ARRAY(COMP_PLATFORM("i2s_pcm")));
 
 static struct snd_soc_dai_link ma35d1evb_i2s_dai = {
 	.name               =   "IIS",

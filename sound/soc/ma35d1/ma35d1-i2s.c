@@ -33,8 +33,8 @@ struct ma35d1_audio *ma35d1_i2s_data;
 EXPORT_SYMBOL(ma35d1_i2s_data);
 
 static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
-                                struct snd_pcm_hw_params *params,
-                                struct snd_soc_dai *dai)
+				struct snd_pcm_hw_params *params,
+				struct snd_soc_dai *dai)
 {
 	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(dai->dev);
 	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
@@ -134,22 +134,21 @@ static int ma35d1_i2s_trigger(struct snd_pcm_substream *substream, int cmd, stru
 	case SNDRV_PCM_TRIGGER_RESUME:
 		val |= I2S_EN;
 		val |= MCLKEN;
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 			val |= TX_EN | TXPDMAEN;
-		} else {
+		else
 			val |= RX_EN | RXPDMAEN;
-		}
+
 		AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
 
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 		val &= ~I2S_EN;
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 			val &= ~(TX_EN | TXPDMAEN);
-		} else {
+		else
 			val &= ~(RX_EN | RXPDMAEN);
-		}
 
 		AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
 
@@ -180,13 +179,13 @@ static int ma35d1_i2s_probe(struct snd_soc_dai *dai)
 	ma35d1_audio->dma_params_tx.peripheral_size = sizeof(ma35d1_audio->pcfg_tx);
 
 	snd_soc_dai_init_dma_data(dai, &ma35d1_audio->dma_params_tx,
-	                          &ma35d1_audio->dma_params_rx);
+					&ma35d1_audio->dma_params_rx);
 
 	snd_soc_dai_set_drvdata(dai, ma35d1_audio);
 
 	/* Set Audio_JKEN pin */
 	ma35d1_audio->pwdn_gpio = devm_gpiod_get_optional(dai->dev, "powerdown",
-	                          GPIOD_OUT_HIGH);
+					GPIOD_OUT_HIGH);
 	if (IS_ERR(ma35d1_audio->pwdn_gpio))
 		return PTR_ERR(ma35d1_audio->pwdn_gpio);
 
@@ -201,6 +200,7 @@ static int ma35d1_i2s_probe(struct snd_soc_dai *dai)
 static int ma35d1_i2s_remove(struct snd_soc_dai *dai)
 {
 	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(dai->dev);
+
 	clk_disable(ma35d1_audio->clk);
 
 	return 0;
@@ -268,7 +268,7 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 	}
 
 	ma35d1_audio->pdma_reqsel_tx = dma_tx_num;
-	pr_debug("ma35d1_audio->pdma_reqsel_tx = 0x%lx\n",(ulong)ma35d1_audio->pdma_reqsel_tx);
+	pr_debug("ma35d1_audio->pdma_reqsel_tx = 0x%lx\n", (ulong)ma35d1_audio->pdma_reqsel_tx);
 
 	if (of_property_read_u32(pdev->dev.of_node, "pdma_reqsel_rx", &dma_rx_num) != 0) {
 		dev_err(&pdev->dev, "can not get bank!\n");
@@ -276,7 +276,7 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 	}
 
 	ma35d1_audio->pdma_reqsel_rx = dma_rx_num;
-	pr_debug("ma35d1_audio->pdma_reqsel_rx = 0x%lx\n",(ulong)ma35d1_audio->pdma_reqsel_rx);
+	pr_debug("ma35d1_audio->pdma_reqsel_rx = 0x%lx\n", (ulong)ma35d1_audio->pdma_reqsel_rx);
 
 	ma35d1_audio->res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!ma35d1_audio->res) {
@@ -307,7 +307,7 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 	dev_set_drvdata(&pdev->dev, ma35d1_audio);
 
 	ret = devm_snd_soc_register_component(&pdev->dev, &ma35d1_i2s_component,
-	                                      &ma35d1_i2s_dai, 1);
+						&ma35d1_i2s_dai, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register ASoC DAI\n");
 		goto out3;

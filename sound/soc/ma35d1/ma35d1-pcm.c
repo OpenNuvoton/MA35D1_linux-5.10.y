@@ -48,7 +48,7 @@ static const struct snd_dmaengine_pcm_config ma35d1_dmaengine_pcm_config = {
 static int ma35d1_soc_platform_probe(struct platform_device *pdev)
 {
 	return devm_snd_dmaengine_pcm_register(&pdev->dev, &ma35d1_dmaengine_pcm_config,
-	                                       SND_DMAENGINE_PCM_FLAG_COMPAT);
+						SND_DMAENGINE_PCM_FLAG_COMPAT);
 }
 
 static int ma35d1_soc_platform_remove(struct platform_device *pdev)

@@ -23,7 +23,7 @@ Required Properties:
 
 Example: 
 	spi0: spi0@40600000 {
-		compatible = "nuvoton,nu3500-spi";
+		compatible = "nuvoton,ma35d1-spi";
 		reg = <0x0 0x40600000 0x0 0x10000>;
 		interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk spi0_gate>;

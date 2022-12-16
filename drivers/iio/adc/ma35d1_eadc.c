@@ -34,8 +34,6 @@
 
 #include <linux/clk.h>
 
-//#define __EADC_DEBUG__
-
 /* ma35d1 eadc registers offset */
 #define DAT0	0x00
 #define DAT1	0x04
@@ -132,24 +130,6 @@ static const struct iio_chan_spec ma35d1_adc_iio_channels[] = {
 
 };
 
-#ifdef __EADC_DEBUG__
-static void _ma35d1_eadc_register_dump(struct ma35d1_adc_device *info)
-{
-	printk("\n=== EADC registers ===\n");
-	printk("DAT0 : 0x%x\n",readl(info->regs + DAT0));
-	printk("CTL : 0x%x\n",readl(info->regs + CTL));
-	printk("SCTL0 : 0x%x\n",readl(info->regs + SCTL0));
-	printk("INTSRC0 : 0x%x\n",readl(info->regs + INTSRC0));
-	printk("STATUS0 : 0x%x\n",readl(info->regs + STATUS0));
-	printk("STATUS2 : 0x%x\n",readl(info->regs + STATUS2));
-	printk("STATUS3 : 0x%x\n",readl(info->regs + STATUS3));
-	printk("PWRM : 0x%x\n",readl(info->regs + PWRM));
-	printk("SELSMP0 : 0x%x\n",readl(info->regs + SELSMP0));
-	printk("REFADJCTL : 0x%x\n",readl(info->regs + REFADJCTL));
-	printk("======\n\n");
-}
-#endif
-
 static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
 {
 	struct iio_poll_func *pf = p;
@@ -157,10 +137,6 @@ static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
 	int channel;
 	int ret_push;
-
-#ifdef __EADC_DEBUG__
-	printk("[EADC] Enter %s ....\n",__FUNCTION__);
-#endif
 
 	channel = find_first_bit(indio_dev->active_scan_mask,
 				indio_dev->masklength);
@@ -186,10 +162,6 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 {
 	struct iio_dev *indio_dev = data;
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
-
-#ifdef __EADC_DEBUG__
-	printk("[EADC] Enter %s .... info->bufi=%d\n",__FUNCTION__,info->bufi);
-#endif
 
 	if (readl(info->regs + STATUS2) & 1) {  /* check ADIF0 */
 		writel(1, info->regs + STATUS2); /* clear ADIF0 */
@@ -232,10 +204,6 @@ static void nuvoton_adc_chan_init_one(struct iio_dev *indio_dev,
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
 	char *name = info->chan_name[vinp];
 
-#ifdef __EADC_DEBUG__
-	printk("[EADC] Enter %s ....\n",__FUNCTION__);
-#endif
-
 	chan->type = IIO_VOLTAGE;
 	chan->channel = vinp;
 	if (differential) {
@@ -264,10 +232,6 @@ static int ma35d1_adc_chan_of_init(struct iio_dev *indio_dev)
 	struct iio_chan_spec *channels;
 	int scan_index = 0, num_channels = 0, num_diff = 0, ret, i;
 	u32 val;
-
-#ifdef __EADC_DEBUG__
-	printk("[EADC] Enter %s ....\n",__FUNCTION__);
-#endif
 
 	ret = of_property_count_u32_elems(node, "eadc-channels");
 	if (ret > EADC_CH_MAX) {
@@ -323,7 +287,7 @@ static int ma35d1_adc_chan_of_init(struct iio_dev *indio_dev)
 	}
 
 	for (i = 0; i < num_diff; i++) {
-		if (diff[i].vinp >= EADC_CH_MAX||
+		if (diff[i].vinp >= EADC_CH_MAX ||
 		    diff[i].vinn >= EADC_CH_MAX) {
 			dev_err(&indio_dev->dev, "Invalid channel in%d-in%d\n",
 				diff[i].vinp, diff[i].vinn);
@@ -349,10 +313,6 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
 	unsigned long timeout;
 
-#ifdef __EADC_DEBUG__
-	printk("[EADC] Enter %s ....\n",__FUNCTION__);
-#endif
-
 	if (mask != IIO_CHAN_INFO_RAW)
 		return -EINVAL;
 
@@ -370,10 +330,6 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 	else
 		writel((readl(info->regs + CTL) & ~DIFFEN), info->regs + CTL);
 
-#ifdef __EADC_DEBUG__
-	_ma35d1_eadc_register_dump(info);
-#endif
-
 	/* software trigger sample module 0 */
 	writel(1, info->regs + SWTRG);
 
@@ -382,10 +338,6 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 
 	*val = readl(info->regs + DAT0) & DATMSK;
 	/* *val = info->buffer[0]; */
-
-#ifdef __EADC_DEBUG__
-	_ma35d1_eadc_register_dump(info);
-#endif
 
 	mutex_unlock(&indio_dev->mlock);
 
@@ -402,10 +354,6 @@ static int ma35d1_adc_conf_scan_seq(struct iio_dev *indio_dev,
 	const struct iio_chan_spec *chan;
 	u32 bit;
 	int i = 0;
-
-#ifdef __EADC_DEBUG__
-	printk("[EADC] Enter %s ....\n",__FUNCTION__);
-#endif
 
 	for_each_set_bit(bit, scan_mask, indio_dev->masklength) {
 		chan = indio_dev->channels + bit;
@@ -442,10 +390,6 @@ static int ma35d1_adc_update_scan_mode(struct iio_dev *indio_dev,
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
 	int ret;
 
-#ifdef __EADC_DEBUG__
-	printk("[EADC] Enter %s ....\n",__FUNCTION__);
-#endif
-
 	info->num_conv = bitmap_weight(scan_mask, indio_dev->masklength);
 
 	ret = ma35d1_adc_conf_scan_seq(indio_dev, scan_mask);
@@ -456,10 +400,6 @@ static int ma35d1_adc_update_scan_mode(struct iio_dev *indio_dev,
 static int __ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 {
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
-
-#ifdef __EADC_DEBUG__
-	printk("[EADC] Enter %s ....\n",__FUNCTION__);
-#endif
 
 	/* Reset adc buffer index */
 	info->bufi = 0;
@@ -571,7 +511,6 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 
 	if (of_property_read_u32(pdev->dev.of_node, "eadc-frequency", &freq) < 0)
 		panic("missing 'eadc-frequency' property");
-	printk("EADC runs at %d Hz\n", freq);
 
 	of_property_read_string(pdev->dev.of_node, "clock-enable", &clkgate);
 	info->eclk = devm_clk_get(&pdev->dev, "eadc_gate");

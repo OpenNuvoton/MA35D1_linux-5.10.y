@@ -24,7 +24,7 @@ Required Properties:
 
 Example: including SPI NOR and NAND 
 	qspi0: qspi0@40680000 {
-		compatible = "nuvoton,nu3500-qspi";
+		compatible = "nuvoton,ma35d1-qspi";
 		reg = <0x0 0x40680000 0x0 0x10000>;
 		interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk qspi0_gate>;
