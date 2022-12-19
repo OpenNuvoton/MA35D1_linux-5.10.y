@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
+ * Nuvoton MA35D1 EBI
+ *
  * Copyright (C) 2020 Nuvoton Technology Corp.
  */
-
 
 #include <linux/module.h>
 #include <linux/fs.h>
@@ -16,8 +17,8 @@
 #include <linux/clk-provider.h>
 #include <linux/clk.h>
 #include <linux/platform_device.h>
-#include <asm/io.h>
-#include <asm/uaccess.h>
+#include <linux/io.h>
+#include <linux/uaccess.h>
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
@@ -27,7 +28,6 @@
 #include "regs-ma35d1-ebi.h"
 
 #define EBI_CH			3
-
 
 struct ebi_dev {
 	int minor;// dynamic minor num, so we need this to distinguish between channels
@@ -52,23 +52,20 @@ static inline void ma35d1_set_ebi_ctl(u8 u8Bank)
 	void __iomem *EBIBaseAddr = ebi[u8Bank]->reg_base;
 	unsigned int TIMIING_CTL, TIMIING_TCTL;
 
-	if(ebi[u8Bank]->busmode == EBI_OPMODE_ADSEPARATE) {
+	if (ebi[u8Bank]->busmode == EBI_OPMODE_ADSEPARATE)
 		writel_relaxed(readl_relaxed(EBIBaseAddr) | EBI_CTL_ADSEPEN_Msk, EBIBaseAddr);
-	} else {
+	else
 		writel_relaxed(readl_relaxed(EBIBaseAddr) & ~EBI_CTL_ADSEPEN_Msk, EBIBaseAddr);
-	}
 
-	if(ebi[u8Bank]->csactiveLevel == EBI_CS_ACTIVE_LOW) {
+	if (ebi[u8Bank]->csactiveLevel == EBI_CS_ACTIVE_LOW)
 		writel_relaxed(readl_relaxed(EBIBaseAddr) & ~EBI_CTL_CSPOLINV_Msk, EBIBaseAddr);
-	} else {
+	else
 		writel_relaxed(readl_relaxed(EBIBaseAddr) | EBI_CTL_CSPOLINV_Msk, EBIBaseAddr);
-	}
 
-	if(ebi[u8Bank]->datawidth == EBI_BUSWIDTH_8BIT) {
+	if (ebi[u8Bank]->datawidth == EBI_BUSWIDTH_8BIT)
 		writel_relaxed(readl_relaxed(EBIBaseAddr) & ~EBI_CTL_DW16_Msk, EBIBaseAddr);
-	} else {
+	else
 		writel_relaxed(readl_relaxed(EBIBaseAddr) | EBI_CTL_DW16_Msk, EBIBaseAddr);
-	}
 
 	TIMIING_CTL = (readl_relaxed(EBIBaseAddr) & ~(EBI_CTL_MCLKDIV_Msk | EBI_CTL_TALE_Msk)) |
 			((ebi[u8Bank]->MCLKDIV) << EBI_CTL_MCLKDIV_Pos) |
@@ -81,7 +78,6 @@ static inline void ma35d1_set_ebi_ctl(u8 u8Bank)
 			((ebi[u8Bank]->IDLE) << EBI_TCTL_W2X_Pos) |
 			((ebi[u8Bank]->IDLE) << EBI_TCTL_R2R_Pos);
 	writel_relaxed(TIMIING_TCTL, EBIBaseAddr+REG_EBI_TCTL);
-
 }
 
 static long ebi_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -90,12 +86,12 @@ static long ebi_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct ebi_dev *t = (struct ebi_dev *)filp->private_data;
 	u8 ch;
 
-	pebi=&sebi;
+	pebi = &sebi;
 
-	switch(cmd) {
+	switch (cmd) {
 	case EBI_IOC_SET:
-		if(copy_from_user((void *)&sebi, (const void *)arg,
-		                  sizeof(struct ma35d1_set_ebi)))
+		if (copy_from_user((void *)&sebi, (const void *)arg,
+			sizeof(struct ma35d1_set_ebi)))
 			return -EFAULT;
 
 		ch = pebi->bank;
@@ -113,8 +109,8 @@ static int ebi_open(struct inode *inode, struct file *filp)
 {
 	u8 i, ch;
 
-	for(i = 0; i < EBI_CH; i++) {
-		if(ebi[i]->minor == iminor(inode)) {
+	for (i = 0; i < EBI_CH; i++) {
+		if (ebi[i]->minor == iminor(inode)) {
 			ch = i;
 			break;
 		}
@@ -131,12 +127,12 @@ static int ebi_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static int ebi_mmap(struct file *filp, struct vm_area_struct * vma);
-struct file_operations ebi_fops = {
+static int ebi_mmap(struct file *filp, struct vm_area_struct *vma);
+static const struct file_operations ebi_fops = {
 	.owner		= THIS_MODULE,
 	.open		= ebi_open,
 	.release	= ebi_release,
-	.mmap 		= ebi_mmap,
+	.mmap		= ebi_mmap,
 	.unlocked_ioctl	= ebi_ioctl,
 };
 
@@ -159,7 +155,7 @@ static struct miscdevice ebi_dev[] = {
 };
 
 
-static int ebi_mmap(struct file *filp, struct vm_area_struct * vma)
+static int ebi_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	struct ebi_dev *t = (struct ebi_dev *)filp->private_data;
 	unsigned long pageFrameNo = 0, size;
@@ -169,8 +165,8 @@ static int ebi_mmap(struct file *filp, struct vm_area_struct * vma)
 	size = vma->vm_end - vma->vm_start;
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 	vma->vm_flags |= (VM_DONTEXPAND | VM_DONTDUMP);
-	if (remap_pfn_range(vma, vma->vm_start, pageFrameNo,size, vma->vm_page_prot)) {
-		printk(KERN_INFO "ma35d1_mem_mmap() : remap_pfn_range() failed !\n");
+	if (remap_pfn_range(vma, vma->vm_start, pageFrameNo, size, vma->vm_page_prot)) {
+		pr_err("ma35d1_mem_mmap() : remap_pfn_range() failed !\n");
 		return -EINVAL;
 	}
 
@@ -183,16 +179,14 @@ static int ma35d1_ebi_probe(struct platform_device *pdev)
 	int ret;
 
 	if (of_property_read_u32_array(pdev->dev.of_node, "bank", &ch,
-	                               1) != 0) {
+					1) != 0) {
 		dev_err(&pdev->dev, "can not get bank!\n");
 		return -EINVAL;
 	}
 
 	ebi[ch] = devm_kzalloc(&pdev->dev, sizeof(struct ebi_dev), GFP_KERNEL);
-	if (ebi[ch] == NULL) {
-		dev_err(&pdev->dev, "failed to allocate memory for ebi device\n");
+	if (ebi[ch] == NULL)
 		return -ENOMEM;
-	}
 
 	ebi[ch]->reg_base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(ebi[ch]->reg_base)) {
@@ -223,42 +217,42 @@ static int ma35d1_ebi_probe(struct platform_device *pdev)
 	ebi[ch]->minor = MINOR(ebi_dev[ch].minor);
 	ebi[ch]->bank = ch;
 
-	ret = of_property_read_u32_array(pdev->dev.of_node,"busmode",&ebi[ch]->busmode, 1);
+	ret = of_property_read_u32_array(pdev->dev.of_node, "busmode", &ebi[ch]->busmode, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "EBI 'busmode' cannot be read!\n");
 		return ret;
 	}
-	ret = of_property_read_u32_array(pdev->dev.of_node,"csactiveLevel",&ebi[ch]->csactiveLevel, 1);
+	ret = of_property_read_u32_array(pdev->dev.of_node, "csactiveLevel", &ebi[ch]->csactiveLevel, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "EBI 'csactiveLevel' cannot be read!\n");
 		return ret;
 	}
-	ret = of_property_read_u32_array(pdev->dev.of_node,"datawidth",&ebi[ch]->datawidth, 1);
+	ret = of_property_read_u32_array(pdev->dev.of_node, "datawidth", &ebi[ch]->datawidth, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "EBI 'datawidth' cannot be read!\n");
 		return ret;
 	}
-	ret = of_property_read_u32_array(pdev->dev.of_node,"tALE",&ebi[ch]->tALE, 1);
+	ret = of_property_read_u32_array(pdev->dev.of_node, "tALE", &ebi[ch]->tALE, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "EBI Timing control 'tALE' cannot be read!\n");
 		return ret;
 	}
-	ret = of_property_read_u32_array(pdev->dev.of_node,"tACC",&ebi[ch]->tACC, 1);
+	ret = of_property_read_u32_array(pdev->dev.of_node, "tACC", &ebi[ch]->tACC, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "EBI Timing control 'tACC' cannot be read!\n");
 		return ret;
 	}
-	ret = of_property_read_u32_array(pdev->dev.of_node,"tAHD",&ebi[ch]->tAHD, 1);
+	ret = of_property_read_u32_array(pdev->dev.of_node, "tAHD", &ebi[ch]->tAHD, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "EBI Timing control 'tAHD' cannot be read!\n");
 		return ret;
 	}
-	ret = of_property_read_u32_array(pdev->dev.of_node,"IDLE",&ebi[ch]->IDLE, 1);
+	ret = of_property_read_u32_array(pdev->dev.of_node, "IDLE", &ebi[ch]->IDLE, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "EBI Timing control 'IDLE' cannot be read!\n");
 		return ret;
 	}
-	ret = of_property_read_u32_array(pdev->dev.of_node,"MCLKDIV",&ebi[ch]->MCLKDIV, 1);
+	ret = of_property_read_u32_array(pdev->dev.of_node, "MCLKDIV", &ebi[ch]->MCLKDIV, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "EBI Timing control 'MCLKDIV' cannot be read!\n");
 		return ret;
