@@ -25,6 +25,7 @@
 #include <soc/nuvoton/ma35d1_sip.h>
 
 #define SET_CPU_FREQ_500M	0x1005
+#define SET_CPU_FREQ_600M	0x1006
 #define SET_CPU_FREQ_800M	0x1008
 #define SET_CPU_FREQ_1000M	0x1010
 #define GET_PMIC_VOLT		0x1101
@@ -59,7 +60,10 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 500, 0, 0, 0, 0,
 			      0, 0, &res);
 		break;
-
+        case SET_CPU_FREQ_600M:
+		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 600, 0, 0, 0, 0,
+				0, 0, &res);
+		break;
 	case SET_CPU_FREQ_800M:
 		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 800, 0, 0, 0, 0,
 			      0, 0, &res);
@@ -71,14 +75,14 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 		break;
 
 	case GET_PMIC_VOLT:
-		arm_smccc_smc(MA35D1_SIP_PMIC, 0, 0, 0, 0, 0,
+		arm_smccc_smc(MA35D1_SIP_PMIC, MA35d1_SIP_PMIC_CPU, 0, 0, 0, 0,
 			      0, 0, &res);
 		if (res.a0 != 0)
 			return -EIO;
 		return res.a1;
 
 	case SET_PMIC_VOLT:
-		arm_smccc_smc(MA35D1_SIP_PMIC, arg, 0, 0, 0, 0,
+		arm_smccc_smc(MA35D1_SIP_PMIC, MA35d1_SIP_PMIC_CPU, arg, 0, 0, 0,
 			      0, 0, &res);
 		break;
 
