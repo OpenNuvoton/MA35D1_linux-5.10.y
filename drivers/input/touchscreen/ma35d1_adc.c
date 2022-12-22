@@ -122,19 +122,19 @@ struct ma35d1_adc {
 	enum touch_state	prev_ts_state;
 	struct hrtimer		trigger_hrt;
 	struct completion	completion;
-	int			enable_ts;
-	int			enable_iio;
-	int			enable_ts_wk;
-	int			ts_type;
-	int			p_th;
-	int			ts_time;
-	int			ts_count;
-	int			ts_old;
-	int			ts_oldx;
-	int			ts_oldy;
-	int 		pd_handle; // mute before CTL mode change
-	int			pu_handle; // catch valid pu
-	int			touch_cnt; // debounce
+	int    enable_ts;
+	int    enable_iio;
+	int    enable_ts_wk;
+	int    ts_type;
+	int    p_th;
+	int    ts_time;
+	int    ts_count;
+	int    ts_old;
+	int    ts_oldx;
+	int    ts_oldy;
+	int    pd_handle; // mute before CTL mode change
+	int    pu_handle; // catch valid pu
+	int    touch_cnt; // debounce
 };
 
 static int report_touch(struct ma35d1_adc *priv);
@@ -150,8 +150,8 @@ static irqreturn_t ma35d1_adc_interrupt(int irq, void *private)
 	isr = __raw_readl(priv->base + REG_ADC_ISR);
 	wkisr = __raw_readl(priv->base + REG_ADC_WKISR);
 
-	if((isr & ADC_ISR_PEUEF) && (priv->ts_type == 5)) {
-		if(priv->pu_handle) {
+	if ((isr & ADC_ISR_PEUEF) && (priv->ts_type == 5)) {
+		if (priv->pu_handle) {
 			//printk("pen up!!\n");
 			priv->pu_handle = 0;
 			priv->ts_state = TS_PENUP;
@@ -159,31 +159,27 @@ static irqreturn_t ma35d1_adc_interrupt(int irq, void *private)
 			tasklet_schedule(&priv->ts_tasklet);
 		}
 	}
-	
+
 	if (isr & ADC_ISR_PEDEF) {
-		if(priv->ts_type == 5)
-		{
-			if(priv->pd_handle == 1) {
-				if(isr != (ADC_ISR_PEDEF | ADC_ISR_PEUEF))
+		if (priv->ts_type == 5) {
+			if (priv->pd_handle == 1) {
+				if (isr != (ADC_ISR_PEDEF | ADC_ISR_PEUEF))
 					tasklet_schedule(&priv->ts_tasklet);
-			}
-			else 
+			} else
 				priv->pd_handle++;
-		}
-		else
+		} else
 			tasklet_schedule(&priv->ts_tasklet);
 	}
 
 	if (wkisr & ADC_WKISR_WPEDEF)
 		__raw_writel(ADC_WKISR_WPEDEF, priv->base + REG_ADC_WKISR);
 
-	if (isr & ADC_ISR_NACF) {
+	if (isr & ADC_ISR_NACF)
 		complete(&priv->completion);
-	}
 
-	if (isr & ADC_ISR_MF) {
+	if (isr & ADC_ISR_MF)
 		tasklet_schedule(&priv->ts_tasklet);
-	}
+
 	__raw_writel(isr, priv->base + REG_ADC_ISR);
 
 	//printk("ISR value : 0x%x\n", isr);
@@ -210,7 +206,7 @@ static void ma35d1adc_ts_tasklet(struct ma35d1_adc *priv)
 		detect_touch(priv);
 	else if (priv->ts_state == TS_CONVERT)
 		report_touch(priv);
-	else if(priv->ts_state == TS_PENUP)
+	else if (priv->ts_state == TS_PENUP)
 		detect_penup(priv);
 }
 
@@ -225,8 +221,8 @@ static enum hrtimer_restart trigger_hrtimer(struct hrtimer *hrtimer)
 
 	spin_lock_irqsave(&priv->lock, flags);
 	priv->pu_handle = priv->pd_handle = 0;
-	
-	__raw_writel((__raw_readl(priv->base + REG_ADC_CTL) & ~ADC_CTL_PEDEEN ) | ADC_CTL_MST,
+
+	__raw_writel((__raw_readl(priv->base + REG_ADC_CTL) & ~ADC_CTL_PEDEEN) | ADC_CTL_MST,
 			priv->base + REG_ADC_CTL);
 	spin_unlock_irqrestore(&priv->lock, flags);
 
@@ -244,24 +240,21 @@ static void detect_touch(struct ma35d1_adc *priv)
 	/* Disable pen down detection*/
 	priv->pu_handle = priv->pd_handle = 0;
 	priv->touch_cnt = 3;
-	
+
 	__raw_writel(__raw_readl(priv->base + REG_ADC_CTL) &
 		~(ADC_CTL_PEDEEN), priv->base + REG_ADC_CTL);
 
-	if(priv->ts_type == 5)
-	{
-		__raw_writel((__raw_readl(priv->base + REG_ADC_CONF) & ~ADC_CONF_NACEN) | 
+	if (priv->ts_type == 5) {
+		__raw_writel((__raw_readl(priv->base + REG_ADC_CONF) & ~ADC_CONF_NACEN) |
 			ADC_CONF_TEN, priv->base + REG_ADC_CONF);
-		__raw_writel(__raw_readl(priv->base + REG_ADC_IER) | ADC_IER_MIEN, 
+		__raw_writel(__raw_readl(priv->base + REG_ADC_IER) | ADC_IER_MIEN,
 			priv->base + REG_ADC_IER);
-	}
-	else
-	{
+	} else {
 		/* Enable touch detection  */
-		__raw_writel((__raw_readl(priv->base + REG_ADC_CONF) & ~ADC_CONF_NACEN) | 
+		__raw_writel((__raw_readl(priv->base + REG_ADC_CONF) & ~ADC_CONF_NACEN) |
 			ADC_CONF_TEN | ADC_CONF_ZEN, priv->base + REG_ADC_CONF);
 		/* Config interrupt */
-		__raw_writel((__raw_readl(priv->base + REG_ADC_IER) & ~ADC_IER_PEDEIEN) | 
+		__raw_writel((__raw_readl(priv->base + REG_ADC_IER) & ~ADC_IER_PEDEIEN) |
 			ADC_IER_MIEN, priv->base + REG_ADC_IER);
 	}
 
@@ -292,9 +285,9 @@ static void detect_pendown(struct ma35d1_adc *priv)
 	/*Disable pendown Interrupt */
 	__raw_writel((__raw_readl(priv->base + REG_ADC_IER) &
 		~(ADC_IER_PEDEIEN | ADC_IER_PEUEIEN)), priv->base + REG_ADC_IER);
-	
+
 	/* Enable pen down event */
-	if(priv->ts_type == 5)
+	if (priv->ts_type == 5)
 		reg = ADC_CTL_ADEN | ADC_CTL_WMSWCH | ADC_CTL_PEDEEN;
 	else
 		reg = ADC_CTL_ADEN | ADC_CTL_PEDEEN;
@@ -310,7 +303,7 @@ static void detect_pendown(struct ma35d1_adc *priv)
 			priv->base + REG_ADC_ISR);
 
 	/* Enable pendown Interrupt */
-	if(priv->ts_type == 5)
+	if (priv->ts_type == 5)
 		reg = ADC_IER_PEDEIEN | ADC_IER_PEUEIEN;
 	else
 		reg = ADC_IER_PEDEIEN;
@@ -350,8 +343,7 @@ static void stop_detect(struct ma35d1_adc *priv)
 {
 	unsigned long flags;
 
-	if(priv->ts_type == 5)
-	{
+	if (priv->ts_type == 5)	{
 		input_report_abs(priv->ts_dev, ABS_PRESSURE, 0);
 		input_sync(priv->ts_dev);
 	}
@@ -384,20 +376,18 @@ static int report_touch(struct ma35d1_adc *priv)
 	y = reg >> ADC_DATA_SHIFT;
 
 	//printk("x %d y %d, diffx %d diffy %d\n",x,y, abs(x - priv->ts_oldx), abs(y - priv->ts_oldy));
-	if(priv->ts_type == 5)
-	{
+	if (priv->ts_type == 5)	{
 		priv->pu_handle = 1;
 		__raw_writel((__raw_readl(priv->base + REG_ADC_CTL) &
 			~(ADC_CTL_MST)) | ADC_CTL_PEDEEN, priv->base + REG_ADC_CTL);
 
 		input_report_key(priv->ts_dev, BTN_TOUCH, 1);
 		input_report_abs(priv->ts_dev, ABS_PRESSURE, 2000);
-		if(priv->touch_cnt) {
+		if (priv->touch_cnt) {
 			input_report_abs(priv->ts_dev, ABS_Y, y);
 			input_report_abs(priv->ts_dev, ABS_X, x);
 			priv->touch_cnt--;
-		}
-		else {
+		} else {
 			input_report_abs(priv->ts_dev, ABS_Y, priv->ts_oldy);
 			input_report_abs(priv->ts_dev, ABS_X, priv->ts_oldx);
 			input_sync(priv->ts_dev);
@@ -484,7 +474,7 @@ static void ma35d1_ts_close(struct input_dev *dev)
 {
 	struct ma35d1_adc *priv = input_get_drvdata(dev);
 
-	if(priv->ts_type == 5)
+	if (priv->ts_type == 5)
 		priv->pd_handle = 1;
 
 	stop_detect(priv);
@@ -689,7 +679,6 @@ static int ma35d1_iio_unregister(struct platform_device *pdev)
 }
 
 // IIO related function ends here
- 
 static int ma35d1_adc_probe_dt(struct ma35d1_adc *priv,
 			     struct platform_device *pdev)
 {
@@ -734,10 +723,7 @@ static int ma35d1_adc_probe_dt(struct ma35d1_adc *priv,
 		dev_warn(&pdev->dev,
 			"Missing clock-rate in the DT, set to 1MHz\n");
 		priv->clk_rate = ADC_DEFAULT_CLK_RATE;
-
 	}
-	else
-		printk("====>clk is %d", priv->clk_rate);
 
 	return 0;
 }
