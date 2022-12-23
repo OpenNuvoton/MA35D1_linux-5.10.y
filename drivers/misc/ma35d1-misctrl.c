@@ -77,14 +77,12 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 	case GET_PMIC_VOLT:
 		arm_smccc_smc(MA35D1_SIP_PMIC, MA35d1_SIP_PMIC_CPU, 0, 0, 0, 0,
 			      0, 0, &res);
-		if (res.a0 != 0)
-			return -EIO;
-		return res.a1;
+		return res.a0;
 
 	case SET_PMIC_VOLT:
 		arm_smccc_smc(MA35D1_SIP_PMIC, MA35d1_SIP_PMIC_CPU, arg, 0, 0, 0,
 			      0, 0, &res);
-		break;
+		return 0;
 
 	case SET_EPLL_DIV_BY_2:
 		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_2, 0, 0, 0, 0,
