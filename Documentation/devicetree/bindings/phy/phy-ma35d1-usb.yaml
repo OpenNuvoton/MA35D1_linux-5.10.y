@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: GPL-2.0
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/phy/phy-ma35d1-usb.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Nuvoton MA35D1 USB2.0 phy
+
+maintainers:
+  - HPChen <hpchen0@nuvoton.com>
+
+properties:
+  compatible:
+    enum:
+      - nuvoton,ma35d1-usb-phy
+
+  "#phy-cells":
+    const: 0
+
+  clocks:
+    maxItems: 1
+    description: USB PHY clock
+
+  clock-names:
+    const: usbd_gate
+
+required:
+  - compatible
+  - clocks
+  - clock-enable
+  - "#phy-cells"
+
+additionalProperties: false
+
+examples:
+  - |
+    usb_phy: usb-phy {
+        compatible = "nuvoton,ma35d1-usb-phy";
+        clocks = <&clk USBD_GATE>;
+        clock-names = "usbd_gate";
+        clock-enable = "usbd_gate";
+        nuvoton,sys = <&sys>;
+        #phy-cells = <0>;
+    };
+
