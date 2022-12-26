@@ -1,22 +1,14 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
- *  linux/drivers/serial/ma35d1_serial.h
  *
  *  MA35D1 serial driver header file
  *
- *
  *  Copyright (C) 2017 Nuvoton Technology Corp.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
  *
  */
 
 #ifndef __MA35D1_SERIAL_H__
 #define __MA35D1_SERIAL_H__
-
-//#define MA35D1_VA_UART0 0x10000000
 
 #define UART_REG_RBR	0x00
 #define UART_REG_THR	0x00
@@ -140,4 +132,4 @@ struct ma35d1_ip_tx_dma {
 	dma_cookie_t cookie;
 };
 
-#endif // __MA35D1_SERIAL_H__
+#endif

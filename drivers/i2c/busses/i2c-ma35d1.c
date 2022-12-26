@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * linux/drivers/i2c/busses/i2c-ma35d1.c
  *
@@ -60,56 +61,56 @@
 
 /* ma35d1 i2c Status */
 // Master
-#define  M_START                 0x08  //Start
-#define  M_REPEAT_START          0x10  //Master Repeat Start
-#define  M_TRAN_ADDR_ACK         0x18  //Master Transmit Address ACK
-#define  M_TRAN_ADDR_NACK        0x20  //Master Transmit Address NACK
-#define  M_TRAN_DATA_ACK         0x28  //Master Transmit Data ACK
-#define  M_TRAN_DATA_NACK        0x30  //Master Transmit Data NACK
-#define  M_ARB_LOST              0x38  //Master Arbitration Los
-#define  M_RECE_ADDR_ACK         0x40  //Master Receive Address ACK
-#define  M_RECE_ADDR_NACK        0x48  //Master Receive Address NACK
-#define  M_RECE_DATA_ACK         0x50  //Master Receive Data ACK
-#define  M_RECE_DATA_NACK        0x58  //Master Receive Data NACK
-#define  BUS_ERROR               0x00  //Bus error
+#define  M_START               0x08  //Start
+#define  M_REPEAT_START        0x10  //Master Repeat Start
+#define  M_TRAN_ADDR_ACK       0x18  //Master Transmit Address ACK
+#define  M_TRAN_ADDR_NACK      0x20  //Master Transmit Address NACK
+#define  M_TRAN_DATA_ACK       0x28  //Master Transmit Data ACK
+#define  M_TRAN_DATA_NACK      0x30  //Master Transmit Data NACK
+#define  M_ARB_LOST            0x38  //Master Arbitration Los
+#define  M_RECE_ADDR_ACK       0x40  //Master Receive Address ACK
+#define  M_RECE_ADDR_NACK      0x48  //Master Receive Address NACK
+#define  M_RECE_DATA_ACK       0x50  //Master Receive Data ACK
+#define  M_RECE_DATA_NACK      0x58  //Master Receive Data NACK
+#define  BUS_ERROR             0x00  //Bus error
 
 // Slave
-#define  S_REPEAT_START_STOP     0xA0  //Slave Transmit Repeat Start or Stop
-#define  S_TRAN_ADDR_ACK         0xA8  //Slave Transmit Address ACK
-#define  S_TRAN_DATA_ACK         0xB8  //Slave Transmit Data ACK
-#define  S_TRAN_DATA_NACK        0xC0  //Slave Transmit Data NACK
-#define  S_TRAN_LAST_DATA_ACK    0xC8  //Slave Transmit Last Data ACK
-#define  S_RECE_ADDR_ACK         0x60  //Slave Receive Address ACK
-#define  S_RECE_ARB_LOST         0x68  //Slave Receive Arbitration Lost
-#define  S_RECE_DATA_ACK         0x80  //Slave Receive Data ACK
-#define  S_RECE_DATA_NACK        0x88  //Slave Receive Data NACK
+#define  S_REPEAT_START_STOP   0xA0  //Slave Transmit Repeat Start or Stop
+#define  S_TRAN_ADDR_ACK       0xA8  //Slave Transmit Address ACK
+#define  S_TRAN_DATA_ACK       0xB8  //Slave Transmit Data ACK
+#define  S_TRAN_DATA_NACK      0xC0  //Slave Transmit Data NACK
+#define  S_TRAN_LAST_DATA_ACK  0xC8  //Slave Transmit Last Data ACK
+#define  S_RECE_ADDR_ACK       0x60  //Slave Receive Address ACK
+#define  S_RECE_ARB_LOST       0x68  //Slave Receive Arbitration Lost
+#define  S_RECE_DATA_ACK       0x80  //Slave Receive Data ACK
+#define  S_RECE_DATA_NACK      0x88  //Slave Receive Data NACK
 
 //GC Mode
-#define  GC_ADDR_ACK             0x70  //GC mode Address ACK
-#define  GC_ARB_LOST             0x78  //GC mode Arbitration Lost
-#define  GC_DATA_ACK             0x90  //GC mode Data ACK
-#define  GC_DATA_NACK            0x98  //GC mode Data NACK
+#define  GC_ADDR_ACK           0x70  //GC mode Address ACK
+#define  GC_ARB_LOST           0x78  //GC mode Arbitration Lost
+#define  GC_DATA_ACK           0x90  //GC mode Data ACK
+#define  GC_DATA_NACK          0x98  //GC mode Data NACK
 
 //Other
-#define  ADDR_TRAN_ARB_LOST      0xB0  //Address Transmit Arbitration Lost
-#define  BUS_RELEASED            0xF8  //Bus Released
+#define  ADDR_TRAN_ARB_LOST    0xB0  //Address Transmit Arbitration Lost
+#define  BUS_RELEASED          0xF8  //Bus Released
 
 
-/*---------------------------------------------------------------------------------------------------------*/
-/*  I2C_CTL constant definitions.                                                                            */
-/*---------------------------------------------------------------------------------------------------------*/
-#define I2C_CTL_STA_SI            0x28UL /* I2C_CTL setting for I2C control bits. It would set STA and SI bits       */
-#define I2C_CTL_STA_SI_AA         0x2CUL /* I2C_CTL setting for I2C control bits. It would set STA, SI and AA bits   */
-#define I2C_CTL_STO_SI            0x18UL /* I2C_CTL setting for I2C control bits. It would set STO and SI bits       */
-#define I2C_CTL_STO_SI_AA         0x1CUL /* I2C_CTL setting for I2C control bits. It would set STO, SI and AA bits   */
-#define I2C_CTL_SI                0x08UL /* I2C_CTL setting for I2C control bits. It would set SI bit                */
-#define I2C_CTL_SI_AA             0x0CUL /* I2C_CTL setting for I2C control bits. It would set SI and AA bits        */
-#define I2C_CTL_STA               0x20UL /* I2C_CTL setting for I2C control bits. It would set STA bit               */
-#define I2C_CTL_STO               0x10UL /* I2C_CTL setting for I2C control bits. It would set STO bit               */
-#define I2C_CTL_AA                0x04UL /* I2C_CTL setting for I2C control bits. It would set AA bit                */
+/*------------------------------- */
+/*  I2C_CTL constant definitions. */
+/*--------------------------------*/
+#define I2C_CTL_STA_SI            0x28UL
+#define I2C_CTL_STA_SI_AA         0x2CUL
+#define I2C_CTL_STO_SI            0x18UL
+#define I2C_CTL_STO_SI_AA         0x1CUL
+#define I2C_CTL_SI                0x08UL
+#define I2C_CTL_SI_AA             0x0CUL
+#define I2C_CTL_STA               0x20UL
+#define I2C_CTL_STO               0x10UL
+#define I2C_CTL_AA                0x04UL
 
-#define I2C_GCMODE_ENABLE   1    /*!< Enable I2C GC Mode  \hideinitializer */
-#define I2C_GCMODE_DISABLE  0    /*!< Disable I2C GC Mode  \hideinitializer */
+#define I2C_GCMODE_ENABLE   1
+#define I2C_GCMODE_DISABLE  0
 
 /* i2c controller private data */
 
@@ -141,11 +142,12 @@ struct ma35d1_i2c {
 
 /* ma35d1_i2c_master_complete
  *
- * complete the message and wake up the caller, using the given return code,
+ * complete the message and wake up the caller,
+ * using the given return code,
  * or zero to mean ok.
-*/
-
-static inline void ma35d1_i2c_master_complete(struct ma35d1_i2c *i2c, int ret)
+ */
+static inline void ma35d1_i2c_master_complete(struct ma35d1_i2c *i2c,
+											int ret)
 {
 	dev_dbg(i2c->dev, "master_complete %d\n", ret);
 
@@ -181,21 +183,23 @@ static inline void ma35d1_i2c_enable_irq(struct ma35d1_i2c *i2c)
 /* ma35d1_i2c_message_start
  *
  * put the start of a message onto the bus
-*/
-
+ */
 static void ma35d1_i2c_message_start(struct ma35d1_i2c *i2c)
 {
-	writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI), i2c->regs + CTL0);
-	writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_STA), i2c->regs + CTL0);
+	writel(((readl(i2c->regs+CTL0) &
+		~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI), i2c->regs + CTL0);
+	writel(((readl(i2c->regs+CTL0) &
+		~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_STA), i2c->regs + CTL0);
 }
 
 static void ma35d1_check_work(struct work_struct *work)
 {
-	struct ma35d1_i2c *i2c = container_of(work, struct ma35d1_i2c, check_work.work);
+	struct ma35d1_i2c *i2c =
+			container_of(work, struct ma35d1_i2c, check_work.work);
 	unsigned int tmp;
 	struct reset_control *rst;
 
-	if(readl(i2c->regs+CTL0) & I2C_CTL_STO) {
+	if (readl(i2c->regs+CTL0) & I2C_CTL_STO) {
 		tmp = readl(i2c->regs+CLKDIV);
 
 		rst = devm_reset_control_get(i2c->adap.dev.parent, NULL);
@@ -213,8 +217,10 @@ static void ma35d1_check_work(struct work_struct *work)
 		writel((readl(i2c->regs+CTL0) | (0x40)), (i2c->regs+CTL0));
 	}
 
-	if(i2c->slave_mode)
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
+	if (i2c->slave_mode)
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
 
 	ma35d1_i2c_master_complete(i2c, i2c->stop_ret);
 }
@@ -227,39 +233,37 @@ static inline void ma35d1_i2c_stop(struct ma35d1_i2c *i2c, int ret)
 
 	i2c->stop_ret = ret;
 
-	if(readl(i2c->regs+CTL0) & I2C_CTL_AA) {
-		writel((readl(i2c->regs+CTL0) &~ (I2C_CTL_AA)), (i2c->regs+CTL0));
-		while( ((readl(i2c->regs+CTL0) & I2C_CTL_AA)) && (i < 100)) {
+	if (readl(i2c->regs+CTL0) & I2C_CTL_AA) {
+		writel((readl(i2c->regs+CTL0) & ~(I2C_CTL_AA)), (i2c->regs+CTL0));
+		while (((readl(i2c->regs+CTL0) & I2C_CTL_AA)) && (i < 100))
 			i++;
-		}
 	}
 
-	writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_STO | I2C_CTL_SI)), (i2c->regs+CTL0));
+	writel(((readl(i2c->regs+CTL0) &
+		~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_STO | I2C_CTL_SI)),
+		(i2c->regs+CTL0));
 
 	i = 0;
-	while(readl(i2c->regs+CTL0) & I2C_CTL_STO) {
+	while (readl(i2c->regs+CTL0) & I2C_CTL_STO) {
 		i++;
-		if(i > 50) {
+		if (i > 50) {
 			schedule_delayed_work(&i2c->check_work, msecs_to_jiffies(1));
 			return;
 		}
 	}
 
-	if(i2c->slave_mode)
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
+	if (i2c->slave_mode)
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
 
 	ma35d1_i2c_master_complete(i2c, ret);
 }
 
-/* helper functions to determine the current state in the set of
- * messages we are sending
-*/
-
 /* is_lastmsg()
  *
  * returns TRUE if the current message is the last in the set
-*/
-
+ */
 static inline int is_lastmsg(struct ma35d1_i2c *i2c)
 {
 	return i2c->msg_idx >= (i2c->msg_num - 1);
@@ -268,8 +272,7 @@ static inline int is_lastmsg(struct ma35d1_i2c *i2c)
 /* is_msglast
  *
  * returns TRUE if we this is the last byte in the current message
-*/
-
+ */
 static inline int is_msglast(struct ma35d1_i2c *i2c)
 {
 	return i2c->msg_ptr == i2c->msg->len-1;
@@ -278,8 +281,7 @@ static inline int is_msglast(struct ma35d1_i2c *i2c)
 /* is_msgend
  *
  * returns TRUE if we reached the end of the current message
-*/
-
+ */
 static inline int is_msgend(struct ma35d1_i2c *i2c)
 {
 	return i2c->msg_ptr >= i2c->msg->len;
@@ -290,41 +292,64 @@ static void I2C_SlaveTRx(struct ma35d1_i2c *i2c, unsigned long iicstat)
 {
 	unsigned char byte;
 
-	if (iicstat == S_RECE_ADDR_ACK) {  /* Own SLA+W has been receive; ACK has been return */
-
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO)) | (I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
+	if (iicstat == S_RECE_ADDR_ACK) {
+		/* Own SLA+W has been receive; ACK has been return */
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO)) | (I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
 	} else if (iicstat == S_RECE_DATA_ACK)  {
-		/* Previously address with own SLA address Data has been received; ACK has been returned*/
+		/* Previously address with own SLA address Data has been received;
+		 * ACK has been returned
+		 */
 		byte = readb(i2c->regs + DAT);
 
 		i2c_slave_event(i2c->slave, I2C_SLAVE_WRITE_RECEIVED, &byte);
 
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
-	} else if(iicstat == S_TRAN_ADDR_ACK) {
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
+	} else if (iicstat == S_TRAN_ADDR_ACK) {
 		/* Own SLA+R has been receive; ACK has been return */
-		i2c_slave_event(i2c->slave, I2C_SLAVE_READ_PROCESSED, &byte);    // I2C_SLAVE_READ_PROCESSED:
+		i2c_slave_event(i2c->slave, I2C_SLAVE_READ_PROCESSED, &byte);
 
 		writel(byte, i2c->regs+DAT);
 
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
 	} else if (iicstat == S_TRAN_DATA_NACK) {
-		/* Data byte or last data in I2CDAT has been transmitted. Not ACK has been received */
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
+		/* Data byte or last data in I2CDAT has been transmitted.
+		 * Not ACK has been received
+		 */
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
 	} else if (iicstat == S_RECE_DATA_NACK) {
-		/* Previously addressed with own SLA address; NOT ACK has been returned */
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
+		/* Previously addressed with own SLA address;
+		 *	NOT ACK has been returned
+		 */
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
 	} else if (iicstat == S_REPEAT_START_STOP) {
-		/* A STOP or repeated START has been received while still addressed as Slave/Receiver*/
+		/* A STOP or repeated START has been received
+		 *	while still addressed as Slave/Receiver
+		 */
 		i2c_slave_event(i2c->slave, I2C_SLAVE_STOP, &byte);
 
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|(I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
 	} else {
 		dev_err(i2c->dev, "Status is NOT processed\n");
-		writel(((readl(i2c->regs+CTL0) &~ (0x3C))|(I2C_CTL_SI | I2C_CTL_AA)), (i2c->regs+CTL0));
+		writel(((readl(i2c->regs+CTL0) &
+			~(0x3C))|(I2C_CTL_SI | I2C_CTL_AA)),
+			(i2c->regs+CTL0));
 	}
 }
 
-static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iicstat)
+static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c,
+									unsigned long iicstat)
 {
 	unsigned char byte;
 
@@ -332,15 +357,20 @@ static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iics
 		/* START has been transmitted and prepare SLA+W */
 
 		if (i2c->msg->flags & I2C_M_RD)
-			writel( (((i2c->msg->addr & 0x7f) << 1)|0x1), (i2c->regs+DAT)); /* Write SLA+R to Register I2CDAT */
+			/* Write SLA+R to Register I2CDAT */
+			writel((((i2c->msg->addr & 0x7f) << 1)|0x1), (i2c->regs+DAT));
 		else
-			writel( ((i2c->msg->addr & 0x7f) << 1), (i2c->regs+DAT)); /* Write SLA+W to Register I2CDAT */
+			/* Write SLA+W to Register I2CDAT */
+			writel(((i2c->msg->addr & 0x7f) << 1), (i2c->regs+DAT));
 
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI), (i2c->regs+CTL0));
-	} else if ((iicstat == M_TRAN_ADDR_ACK) || (iicstat == M_TRAN_DATA_ACK)) {
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI),
+			(i2c->regs+CTL0));
+	} else if ((iicstat == M_TRAN_ADDR_ACK) ||
+				(iicstat == M_TRAN_DATA_ACK)) {
 		/* SLA+W has been transmitted and ACK has been received */
 
-		if(iicstat == M_TRAN_ADDR_ACK) {
+		if (iicstat == M_TRAN_ADDR_ACK) {
 			if (is_lastmsg(i2c) && i2c->msg->len == 0) {
 				ma35d1_i2c_stop(i2c, 0);
 				return;
@@ -350,7 +380,9 @@ static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iics
 		if (!is_msgend(i2c)) {
 			byte = i2c->msg->buf[i2c->msg_ptr++];
 			writel(byte, i2c->regs+DAT);
-			writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI), (i2c->regs+CTL0));
+			writel(((readl(i2c->regs+CTL0) &
+				~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI),
+				(i2c->regs+CTL0));
 		} else if (!is_lastmsg(i2c)) {
 			/* we need to go to the next i2c message */
 			dev_dbg(i2c->dev, "WRITE: Next Message\n");
@@ -360,14 +392,17 @@ static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iics
 			i2c->msg++;
 
 			/* send the new start */
-			writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_STA|I2C_CTL_SI), (i2c->regs+CTL0));
+			writel(((readl(i2c->regs+CTL0) &
+				~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_STA|I2C_CTL_SI),
+				(i2c->regs+CTL0));
 		} else {
 			/* send stop */
 			ma35d1_i2c_stop(i2c, 0);
 		}
 	} else if (iicstat == M_TRAN_DATA_NACK)
 		ma35d1_i2c_stop(i2c, 0);
-	else if ((iicstat == M_TRAN_ADDR_NACK) || (iicstat == M_RECE_ADDR_NACK)) {
+	else if ((iicstat == M_TRAN_ADDR_NACK) ||
+			(iicstat == M_RECE_ADDR_NACK)) {
 		/* Master Transmit Address NACK */
 		/* 0x20: SLA+W has been transmitted and NACK has been received */
 		/* 0x48: SLA+R has been transmitted and NACK has been received */
@@ -380,28 +415,39 @@ static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iics
 		/* Repeat START has been transmitted and prepare SLA+R */
 
 		if (i2c->msg->flags & I2C_M_RD)
-			writel( (((i2c->msg->addr & 0x7f) << 1)|0x1), (i2c->regs+DAT)); /* Write SLA+R to Register I2CDAT */
+			/* Write SLA+R to Register I2CDAT */
+			writel((((i2c->msg->addr & 0x7f) << 1)|0x1), (i2c->regs+DAT));
 		else
-			writel( ((i2c->msg->addr & 0x7f) << 1), (i2c->regs+DAT)); /* Write SLA+W to Register I2CDAT */
+			/* Write SLA+W to Register I2CDAT */
+			writel(((i2c->msg->addr & 0x7f) << 1), (i2c->regs+DAT));
 
-		writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI), (i2c->regs+CTL0));
+		writel(((readl(i2c->regs+CTL0) &
+			~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI),
+			(i2c->regs+CTL0));
 	} else if (iicstat == M_RECE_ADDR_ACK) {
 		/* SLA+R has been transmitted and ACK has been received */
 
-		if (is_lastmsg(i2c) && i2c->msg->len == 0) {
+		if (is_lastmsg(i2c) && i2c->msg->len == 0)
 			ma35d1_i2c_stop(i2c, 0);
-		} else if(is_lastmsg(i2c) && (i2c->msg->len == 1)) {
-			writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI), (i2c->regs+CTL0));
-		} else
-			writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI_AA), (i2c->regs+CTL0));
-	} else if ((iicstat == M_RECE_DATA_ACK) || (iicstat == M_RECE_DATA_NACK)) {
+		else if (is_lastmsg(i2c) && (i2c->msg->len == 1))
+			writel(((readl(i2c->regs+CTL0) &
+				~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI),
+				(i2c->regs+CTL0));
+		else
+			writel(((readl(i2c->regs+CTL0) &
+				~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI_AA),
+				(i2c->regs+CTL0));
+	} else if ((iicstat == M_RECE_DATA_ACK) ||
+				(iicstat == M_RECE_DATA_NACK)) {
 		/* DATA has been transmitted and ACK has been received */
 		byte = readb(i2c->regs + DAT);
 		i2c->msg->buf[i2c->msg_ptr++] = byte;
 
 		if (is_msglast(i2c)) {
 			/* last byte of buffer */
-			writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI), (i2c->regs+CTL0));
+			writel(((readl(i2c->regs+CTL0) &
+				~(I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI),
+				(i2c->regs+CTL0));
 		} else if (is_msgend(i2c)) {
 			/* ok, we've read the entire buffer, see if there
 			 * is anything else we need to do
@@ -421,14 +467,19 @@ static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iics
 				i2c->msg++;
 
 				/* send the new start */
-				writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_STA|I2C_CTL_SI), (i2c->regs+CTL0));
+				writel(((readl(i2c->regs+CTL0) &
+					~(I2C_CTL_STA_SI_AA|I2C_CTL_STO)) |
+					I2C_CTL_STA|I2C_CTL_SI),
+					(i2c->regs+CTL0));
 			}
 		} else {
-			writel(((readl(i2c->regs+CTL0) &~ (I2C_CTL_STA_SI_AA|I2C_CTL_STO))|I2C_CTL_SI_AA), (i2c->regs+CTL0));
+			writel(((readl(i2c->regs+CTL0) &
+				~(I2C_CTL_STA_SI_AA|I2C_CTL_STO)) | I2C_CTL_SI_AA),
+				(i2c->regs+CTL0));
 		}
 
 	} else {
-		dev_err(i2c->dev,"Status is NOT processed\n");
+		dev_err(i2c->dev, "Status is NOT processed\n");
 		ma35d1_i2c_disable_irq(i2c);
 		ma35d1_i2c_stop(i2c, 0);
 	}
@@ -439,8 +490,7 @@ static void i2c_ma35d1_irq_master_TRx(struct ma35d1_i2c *i2c, unsigned long iics
 /* ma35d1_i2c_irq
  *
  * top level IRQ servicing routine
-*/
-
+ */
 static irqreturn_t ma35d1_i2c_irq(int irqno, void *dev_id)
 {
 	struct ma35d1_i2c *i2c = dev_id;
@@ -467,9 +517,9 @@ static irqreturn_t ma35d1_i2c_irq(int irqno, void *dev_id)
 
 	/* pretty much this leaves us with the fact that we've
 	 * transmitted or received whatever byte we last sent
-	*/
+	 */
 
-	if(i2c->slave_mode)
+	if (i2c->slave_mode)
 		I2C_SlaveTRx(i2c, status);
 	else
 		i2c_ma35d1_irq_master_TRx(i2c, status);
@@ -481,10 +531,9 @@ out:
 /* ma35d1_i2c_doxfer
  *
  * this starts an i2c transfer
-*/
-
+ */
 static int ma35d1_i2c_doxfer(struct ma35d1_i2c *i2c,
-                              struct i2c_msg *msgs, int num)
+							struct i2c_msg *msgs, int num)
 {
 	unsigned long iicstat, timeout;
 	int spins = 20;
@@ -507,7 +556,7 @@ static int ma35d1_i2c_doxfer(struct ma35d1_i2c *i2c,
 
 	/* having these next two as dev_err() makes life very
 	 * noisy when doing an i2cdetect
-	*/
+	 */
 
 	if (timeout == 0)
 		dev_dbg(i2c->dev, "timeout\n");
@@ -527,18 +576,18 @@ static int ma35d1_i2c_doxfer(struct ma35d1_i2c *i2c,
 
 	/* if that timed out sleep */
 	if (!spins) {
-		msleep(1);
+		msleep(20);
 		iicstat = readl(i2c->regs + CTL0);
 	}
 
 	if (iicstat & (0x1<<4))
 		dev_warn(i2c->dev, "timeout waiting for bus idle\n");
 
-	if(i2c->arblost) {
+	if (i2c->arblost) {
 		dev_dbg(i2c->dev, "arb lost, stop\n");
 		i2c->arblost = 0;
 		ma35d1_i2c_stop(i2c, 0);
-		msleep(1);
+		msleep(20);
 		ma35d1_i2c_disable_irq(i2c);
 		ret = -EAGAIN;
 	}
@@ -550,9 +599,9 @@ static int ma35d1_i2c_doxfer(struct ma35d1_i2c *i2c,
  *
  * first port of call from the i2c bus code when an message needs
  * transferring across the i2c bus.
-*/
-
-static int ma35d1_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs, int num)
+ */
+static int ma35d1_i2c_xfer(struct i2c_adapter *adap,
+						struct i2c_msg *msgs, int num)
 {
 	struct ma35d1_i2c *i2c = (struct ma35d1_i2c *)adap->algo_data;
 	int retry;
@@ -590,13 +639,14 @@ static int ma35d1_reg_slave(struct i2c_client *slave)
 	priv->slave = slave;
 
 	// Enable I2C
-	writel(readl(priv->regs + CTL0) | (0x1 << 6), (priv->regs + CTL0)); // CTL0
+	writel(readl(priv->regs + CTL0) | (0x1 << 6), (priv->regs + CTL0));
 
 	// Set Slave Address
 	writel(slave->addr, (priv->regs + ADDR0));
 
 	// I2C enter SLV mode
-	writel((readl(priv->regs+CTL0)|I2C_CTL_AA|I2C_CTL_SI), (priv->regs+CTL0));
+	writel((readl(priv->regs+CTL0)|I2C_CTL_AA|I2C_CTL_SI),
+			(priv->regs+CTL0));
 
 	return 0;
 }
@@ -605,9 +655,9 @@ static int ma35d1_unreg_slave(struct i2c_client *slave)
 {
 	struct ma35d1_i2c *priv = i2c_get_adapdata(slave->adapter);
 
-	// Disable I2C
-	writel(readl(priv->regs + CTL0) &~ (0x1 << 6), (priv->regs + CTL0)); // CTL0
-	// Disable i2c interrupt
+	/* Disable I2C */
+	writel(readl(priv->regs + CTL0) & ~(0x1 << 6), (priv->regs + CTL0));
+	/* Disable i2c interrupt */
 	ma35d1_i2c_disable_irq(priv);
 
 	priv->slave = NULL;
@@ -620,7 +670,8 @@ static int ma35d1_unreg_slave(struct i2c_client *slave)
 /* declare our i2c functionality */
 static u32 ma35d1_i2c_func(struct i2c_adapter *adap)
 {
-	return I2C_FUNC_I2C | I2C_FUNC_PROTOCOL_MANGLING | I2C_FUNC_SMBUS_EMUL ;
+	return I2C_FUNC_I2C | I2C_FUNC_PROTOCOL_MANGLING |
+			I2C_FUNC_SMBUS_EMUL;
 }
 
 /* i2c bus registration info */
@@ -635,12 +686,11 @@ static const struct i2c_algorithm ma35d1_i2c_algorithm = {
 /* ma35d1_i2c_probe
  *
  * called by the bus driver when a suitable device is found
-*/
-
+ */
 static int ma35d1_i2c_probe(struct platform_device *pdev)
 {
 	struct ma35d1_i2c *i2c;
-	struct ma35d1_platform_i2c *pdata=NULL;
+	struct ma35d1_platform_i2c *pdata = NULL;
 	struct resource *res;
 	struct i2c_adapter *adap;
 	int ret, err;
@@ -708,7 +758,8 @@ static int ma35d1_i2c_probe(struct platform_device *pdev)
 
 	writel(ret & 0xffff, i2c->regs + CLKDIV);
 
-	__raw_writel((__raw_readl(i2c->regs+CTL0)|(0x1 << 6)), i2c->regs + CTL0);
+	__raw_writel((__raw_readl(i2c->regs+CTL0)|(0x1 << 6)),
+				i2c->regs + CTL0);
 
 	/* find the IRQ for this unit (note, this relies on the init call to
 	 * ensure no current IRQs pending
@@ -720,7 +771,8 @@ static int ma35d1_i2c_probe(struct platform_device *pdev)
 		goto err_clk;
 	}
 
-	ret = request_irq(i2c->irq, ma35d1_i2c_irq, IRQF_SHARED, dev_name(&pdev->dev), i2c);
+	ret = request_irq(i2c->irq, ma35d1_i2c_irq,
+					IRQF_SHARED, dev_name(&pdev->dev), i2c);
 
 	if (ret != 0) {
 		dev_err(&pdev->dev, "cannot claim IRQ %d\n", i2c->irq);
@@ -750,7 +802,8 @@ static int ma35d1_i2c_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, i2c);
 
-	dev_info(&pdev->dev, "%s: ma35d1 I2C adapter\n", dev_name(&i2c->adap.dev));
+	dev_info(&pdev->dev, "%s: ma35d1 I2C adapter\n",
+			dev_name(&i2c->adap.dev));
 
 	return 0;
 
@@ -767,8 +820,7 @@ err_clk:
 /* ma35d1_i2c_remove
  *
  * called when device is removed from the bus
-*/
-
+ */
 static int ma35d1_i2c_remove(struct platform_device *pdev)
 {
 	struct ma35d1_i2c *i2c = platform_get_drvdata(pdev);
@@ -838,3 +890,4 @@ module_platform_driver(ma35d1_i2c_driver);
 MODULE_DESCRIPTION("ma35d1 I2C Bus driver");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:ma35d1-i2c");
+

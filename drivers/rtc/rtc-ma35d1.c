@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Copyright (c) 2020 Nuvoton technology corporation.
  *
@@ -75,19 +76,22 @@ struct ma35d1_bcd_time {
 	int bcd_year;
 };
 
-static inline unsigned int rtc_reg_read(struct ma35d1_rtc *p, int offset)
+static inline unsigned int rtc_reg_read(struct ma35d1_rtc *p,
+									int offset)
 {
-	return(__raw_readl(p->rtc_reg + offset));
+	return __raw_readl(p->rtc_reg + offset);
 }
 
-static inline void rtc_reg_write(struct ma35d1_rtc *p, int offset, int value)
+static inline void rtc_reg_write(struct ma35d1_rtc *p,
+								int offset, int value)
 {
 	unsigned int writetimeout = 0x400;
 
 	__raw_writel(value, p->rtc_reg + offset);
 
 	// wait rtc register write finish
-	while((__raw_readl(p->rtc_reg + REG_RTC_RIIR) & (1 << 31)) && writetimeout--)
+	while ((__raw_readl(p->rtc_reg + REG_RTC_RIIR) &
+			(1 << 31)) && writetimeout--)
 		udelay(1);
 }
 
@@ -106,17 +110,17 @@ static irqreturn_t ma35d1_rtc_interrupt(int irq, void *_rtc)
 	if (rtc_irq & TICKINTENB) {
 		rtc_reg_write(rtc, REG_RTC_RIIR, TICKINTENB);
 
-		if(rtc->LXT_Fail != 1)
+		if (rtc->LXT_Fail != 1)
 			events |= RTC_UF | RTC_IRQF;
 	}
 
 	if (rtc_irq & (CLKFIEN | CLKSTIEN)) {
-		if(rtc->LXT_Detect == 1) {
+		if (rtc->LXT_Detect == 1)
 			rtc->LXT_Fail = 1;
-		}
 
-		rtc_reg_write(rtc, REG_RTC_RIER, 
-					(__raw_readl(rtc->rtc_reg + REG_RTC_RIER) &~ (CLKFIEN | CLKSTIEN)));
+		rtc_reg_write(rtc, REG_RTC_RIER,
+				(__raw_readl(rtc->rtc_reg + REG_RTC_RIER) &
+					~(CLKFIEN | CLKSTIEN)));
 		rtc_reg_write(rtc, REG_RTC_RIIR, (CLKFIEN | CLKSTIEN));
 	}
 
@@ -139,7 +143,7 @@ static int *check_rtc_access_enable(struct ma35d1_rtc *ma35d1_rtc)
 }
 
 static int ma35d1_rtc_bcd2bin(unsigned int timereg,
-				unsigned int calreg, unsigned int wdayreg, struct rtc_time *tm)
+			unsigned int calreg, unsigned int wdayreg, struct rtc_time *tm)
 {
 	tm->tm_mday	= bcd2bin(calreg >> 0);
 	tm->tm_mon	= bcd2bin(calreg >> 8);
@@ -194,10 +198,14 @@ static int ma35d1_alarm_irq_enable(struct device *dev, unsigned int enabled)
 {
 	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
 
-	if (enabled)
-		rtc_reg_write(rtc, REG_RTC_RIER, (__raw_readl(rtc->rtc_reg + REG_RTC_RIER)|(ALARMINTENB)));
-	else
-		rtc_reg_write(rtc, REG_RTC_RIER, (__raw_readl(rtc->rtc_reg + REG_RTC_RIER)&(~ALARMINTENB)));
+	if (enabled) {
+		rtc_reg_write(rtc, REG_RTC_RIER,
+			(__raw_readl(rtc->rtc_reg + REG_RTC_RIER)|(ALARMINTENB)));
+	} else {
+		rtc_reg_write(rtc, REG_RTC_RIER,
+			(__raw_readl(rtc->rtc_reg + REG_RTC_RIER)&(~ALARMINTENB)));
+	}
+
 	return 0;
 }
 
@@ -207,7 +215,7 @@ static int ma35d1_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	unsigned int timeval, clrval, wdayval;
 	unsigned int rtc_irq = __raw_readl(rtc->rtc_reg + REG_RTC_RIIR);
 
-	if((rtc->LXT_Fail == 1) || (rtc_irq & (CLKFIEN | CLKSTIEN)))
+	if ((rtc->LXT_Fail == 1) || (rtc_irq & (CLKFIEN | CLKSTIEN)))
 		return -EIO;
 
 	timeval = __raw_readl(rtc->rtc_reg + REG_RTC_TLR);
@@ -225,7 +233,7 @@ static int ma35d1_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	int *err;
 	unsigned int rtc_irq = __raw_readl(rtc->rtc_reg + REG_RTC_RIIR);
 
-	if((rtc->LXT_Fail == 1) || (rtc_irq & (CLKFIEN | CLKSTIEN)))
+	if ((rtc->LXT_Fail == 1) || (rtc_irq & (CLKFIEN | CLKSTIEN)))
 		return -EIO;
 
 	ma35d1_rtc_bin2bcd(dev, tm, &gettm);
@@ -277,61 +285,56 @@ static int ma35d1_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	val = tm.bcd_sec | tm.bcd_min | tm.bcd_hour;
 	rtc_reg_write(rtc, REG_RTC_TAR, val);
 
-	rtc_reg_write(rtc, REG_RTC_PWRCTL, (__raw_readl(rtc->rtc_reg + REG_RTC_PWRCTL) | (1 << 3)));
+	rtc_reg_write(rtc, REG_RTC_PWRCTL,
+		(__raw_readl(rtc->rtc_reg + REG_RTC_PWRCTL) | (1 << 3)));
 
 	return 0;
 }
 
-static int ma35d1_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
+static int ma35d1_ioctl(struct device *dev, unsigned int cmd,
+						unsigned long arg)
 {
 	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
 	unsigned int spare_data[16], i;
 	int *err;
 
-	switch(cmd)
-	{
-		case RTC_GET_SPARE_DATA:
-			err = check_rtc_access_enable(rtc);
-			if (IS_ERR(err))
-				return PTR_ERR(err);
+	switch (cmd) {
+	case RTC_GET_SPARE_DATA:
+		err = check_rtc_access_enable(rtc);
+		if (IS_ERR(err))
+			return PTR_ERR(err);
 
-			for(i = 0; i < 16; i++)
-			{
-				spare_data[i] =  __raw_readl(rtc->rtc_reg + (0x40+(i*4)));
-			}
+		for (i = 0; i < 16; i++)
+			spare_data[i] =  __raw_readl(rtc->rtc_reg + (0x40+(i*4)));
 
-			if(copy_to_user((void*)arg, (void *)&spare_data[0], sizeof(spare_data)))
-			{
-				return -EFAULT;
-			}
+		if (copy_to_user((void *)arg, (void *)&spare_data[0],
+						sizeof(spare_data)))
+			return -EFAULT;
 
-		break;
+	break;
 
-		case RTC_SET_SPARE_DATA:
-			if(copy_from_user((void *)&spare_data[0], (void*)arg, sizeof(spare_data)))
-			{
-				return -EFAULT;
-			}
+	case RTC_SET_SPARE_DATA:
+		if (copy_from_user((void *)&spare_data[0],
+				(void *)arg, sizeof(spare_data)))
+			return -EFAULT;
 
-			err = check_rtc_access_enable(rtc);
-			if (IS_ERR(err))
-				return PTR_ERR(err);
+		err = check_rtc_access_enable(rtc);
+		if (IS_ERR(err))
+			return PTR_ERR(err);
 
-			for(i = 0; i < 16; i++)
-			{
-				rtc_reg_write(rtc, (0x40+(i*4)), spare_data[i]);
-			}
+		for (i = 0; i < 16; i++)
+			rtc_reg_write(rtc, (0x40+(i*4)), spare_data[i]);
 
-		break;
+	break;
 
-		default:
-			return -ENOIOCTLCMD;
+	default:
+		return -ENOIOCTLCMD;
 	}
 
 	return 0;
 }
 
-static struct rtc_class_ops ma35d1_rtc_ops = {
+static const struct rtc_class_ops ma35d1_rtc_ops = {
 	.read_time = ma35d1_rtc_read_time,
 	.set_time = ma35d1_rtc_set_time,
 	.read_alarm = ma35d1_rtc_read_alarm,
@@ -348,11 +351,11 @@ static int ma35d1_rtc_probe(struct platform_device *pdev)
 	u32 val32;
 	int err;
 
-	ma35d1_rtc = devm_kzalloc(&pdev->dev, sizeof(struct ma35d1_rtc), GFP_KERNEL);
-	if (!ma35d1_rtc) {
-		dev_err(&pdev->dev, "kzalloc nuc900_rtc failed\n");
+	ma35d1_rtc = devm_kzalloc(&pdev->dev, sizeof(struct ma35d1_rtc),
+								GFP_KERNEL);
+	if (!ma35d1_rtc)
 		return -ENOMEM;
-	}
+
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	ma35d1_rtc->rtc_reg = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(ma35d1_rtc->rtc_reg))
@@ -370,13 +373,15 @@ static int ma35d1_rtc_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, ma35d1_rtc);
 
-	ma35d1_rtc->rtcdev = devm_rtc_device_register(&pdev->dev, pdev->name, &ma35d1_rtc_ops, THIS_MODULE);
+	ma35d1_rtc->rtcdev = devm_rtc_device_register(&pdev->dev,
+							pdev->name, &ma35d1_rtc_ops, THIS_MODULE);
 	if (IS_ERR(ma35d1_rtc->rtcdev)) {
 		dev_err(&pdev->dev, "rtc device register failed\n");
 		return PTR_ERR(ma35d1_rtc->rtcdev);
 	}
 
-	rtc_reg_write(ma35d1_rtc, REG_RTC_TSSR, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_TSSR) | MODE24));
+	rtc_reg_write(ma35d1_rtc, REG_RTC_TSSR,
+		(__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_TSSR) | MODE24));
 
 	ma35d1_rtc->irq_num = platform_get_irq(pdev, 0);
 
@@ -388,22 +393,27 @@ static int ma35d1_rtc_probe(struct platform_device *pdev)
 
 	ma35d1_rtc->LXT_Fail = 0;
 
-	if (of_property_read_u32_array(pdev->dev.of_node, "lxt-detect-enable", &val32, 1) != 0) {
+	if (of_property_read_u32_array(pdev->dev.of_node,
+					"lxt-detect-enable", &val32, 1) != 0) {
 		dev_err(&pdev->dev, "can not get lxt-detect-enable flag !\n");
 		return -EINVAL;
 	}
 
-	if(val32 == 1) {
+	if (val32 == 1) {
 		ma35d1_rtc->LXT_Detect = 1;
 		rtc_reg_write(ma35d1_rtc, REG_RTC_CDBR, 0x800080);
-		rtc_reg_write(ma35d1_rtc, REG_RTC_CLKDCTL, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_CLKDCTL) | 0x1));
-		rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) |
-				 TICKINTENB | CLKSTIEN | CLKFIEN));
+		rtc_reg_write(ma35d1_rtc, REG_RTC_CLKDCTL,
+			(__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_CLKDCTL) | 0x1));
+		rtc_reg_write(ma35d1_rtc, REG_RTC_RIER,
+			(__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) |
+			TICKINTENB | CLKSTIEN | CLKFIEN));
 	} else {
 		ma35d1_rtc->LXT_Detect = 0;
 		rtc_reg_write(ma35d1_rtc, REG_RTC_CDBR, 0x0);
-		rtc_reg_write(ma35d1_rtc, REG_RTC_CLKDCTL, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_CLKDCTL) &~ 0x1));
-		rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
+		rtc_reg_write(ma35d1_rtc, REG_RTC_CLKDCTL,
+			(__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_CLKDCTL) & ~0x1));
+		rtc_reg_write(ma35d1_rtc, REG_RTC_RIER,
+			(__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
 	}
 
 	device_init_wakeup(&pdev->dev, true);
@@ -423,11 +433,12 @@ static int __exit ma35d1_rtc_remove(struct platform_device *pdev)
 static int ma35d1_rtc_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct ma35d1_rtc *ma35d1_rtc = platform_get_drvdata(pdev);
-	
+
 	if (device_may_wakeup(&pdev->dev))
 		enable_irq_wake(ma35d1_rtc->irq_num);
 
-	rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) &~ TICKINTENB));
+	rtc_reg_write(ma35d1_rtc, REG_RTC_RIER,
+		(__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) & ~TICKINTENB));
 
 	return 0;
 }
@@ -439,7 +450,8 @@ static int ma35d1_rtc_resume(struct platform_device *pdev)
 	if (device_may_wakeup(&pdev->dev))
 		disable_irq_wake(ma35d1_rtc->irq_num);
 
-	rtc_reg_write(ma35d1_rtc, REG_RTC_RIER, (__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
+	rtc_reg_write(ma35d1_rtc, REG_RTC_RIER,
+		(__raw_readl(ma35d1_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
 
 	return 0;
 }

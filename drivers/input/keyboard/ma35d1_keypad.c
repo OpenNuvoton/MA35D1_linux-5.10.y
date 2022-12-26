@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2020 Nuvoton technology corporation.
  *
@@ -35,22 +36,22 @@
 #define KPI_KRE1		0x24
 #define KPI_PRESCALDIV	0x28
 
-// KPI_CONF
-#define KROW		(0x70000000)	// Keypad Matrix ROW number
-#define KCOL		(0x07000000)	// Keypad Matrix COL Number
-#define DB_EN		(0x00200000)	// Scan In Signal De-bounce Enable
-#define DB_CLKSEL	(0x000F0000)	// Scan In De-bounce sampling cycle selection
-#define PRESCALE	(0x0000FF00)	// Row Scan Cycle Pre-scale Value
-#define INPU		(0x00000040)	// key Scan In Pull-UP Enable Register
-#define WAKEUP		(0x00000020)	// Lower Power Wakeup Enable
-#define ODEN		(0x00000010)	// Open Drain Enable
-#define INTEN		(0x00000008)	// Key Interrupt Enable Control
-#define RKINTEN 	(0x00000004)	// Release Key Interrupt Enable Control
-#define PKINTEN 	(0x00000002)	// Press Key Interrupt Enable Control
-#define ENKP		(0x00000001)	// Keypad Scan Enable
+/* KPI_CONF */
+#define KROW		(0x70000000) /* Keypad Matrix ROW number */
+#define KCOL		(0x07000000) /* Keypad Matrix COL Number */
+#define DB_EN		(0x00200000) /* Scan In Signal De-bounce Enable */
+#define DB_CLKSEL	(0x000F0000) /* De-bounce sampling cycle selection */
+#define PRESCALE	(0x0000FF00) /* Row Scan Cycle Pre-scale Value */
+#define INPU		(0x00000040) /* key Scan In Pull-UP Enable Register */
+#define WAKEUP		(0x00000020) /* Lower Power Wakeup Enable */
+#define ODEN		(0x00000010) /* Open Drain Enable */
+#define INTEN		(0x00000008) /* Key Interrupt Enable Control */
+#define RKINTEN		(0x00000004) /* Release Key Interrupt Enable */
+#define PKINTEN		(0x00000002) /* Press Key Interrupt Enable Control */
+#define ENKP		(0x00000001) /* Keypad Scan Enable */
 
-// KPI_STATUS
-#define RROW7		(0x00800000)	// Release key row coordinate
+/* KPI_STATUS */
+#define RROW7		(0x00800000) /* Release key row coordinate */
 #define RROW6		(0x00400000)
 #define RROW5		(0x00200000)
 #define RROW4		(0x00100000)
@@ -58,7 +59,7 @@
 #define RROW2		(0x00040000)
 #define RROW1		(0x00020000)
 #define RROW0		(0x00010000)
-#define PROW7		(0x00008000)	// Press key row coordinate
+#define PROW7		(0x00008000) /* Press key row coordinate */
 #define PROW6		(0x00004000)
 #define PROW5		(0x00002000)
 #define PROW4		(0x00001000)
@@ -66,13 +67,13 @@
 #define PROW2		(0x00000400)
 #define PROW1		(0x00000200)
 #define PROW0		(0x00000100)
-#define PKEY_INT	(0x00000010)	// Press key interrupt
-#define RKEY_INT	(0x00000008)	// Release key interrupt
-#define KEY_INT		(0x00000004)	// Key Interrupt
-#define RST_3KEY	(0x00000002)	// 3-Keys Reset Flag
-#define PDWAKE		(0x00000001)	// Power Down Wakeup Flag
+#define PKEY_INT	(0x00000010) /* Press key interrupt */
+#define RKEY_INT	(0x00000008) /* Release key interrupt */
+#define KEY_INT		(0x00000004) /* Key Interrupt */
+#define RST_3KEY	(0x00000002) /* 3-Keys Reset Flag */
+#define PDWAKE		(0x00000001) /* Power Down Wakeup Flag */
 
-#define PROW 		(0x00000f00)	// Press Key Row Coordinate
+#define PROW		(0x00000f00) /* Press Key Row Coordinate */
 
 #define KPI_PRESCALE	(8)
 #define DEBOUNCE_BIT	(16)
@@ -82,7 +83,6 @@
 
 
 struct ma35d1_keypad {
-	//const struct ma35d1_keypad_platform_data *pdata;
 	struct clk *clk;
 	struct input_dev *input_dev;
 	void __iomem *mmio_base;
@@ -101,7 +101,8 @@ void ma35d1_keypad_mfp_set(struct platform_device *pdev)
 
 }
 
-static void ma35d1_keypad_scan_matrix(struct ma35d1_keypad *keypad, unsigned int status)
+static void ma35d1_keypad_scan_matrix(struct ma35d1_keypad *keypad,
+										unsigned int status)
 {
 	struct input_dev *input_dev = keypad->input_dev;
 	unsigned int i, j;
@@ -123,17 +124,22 @@ static void ma35d1_keypad_scan_matrix(struct ma35d1_keypad *keypad, unsigned int
 	__raw_writel(KeyEvent[2], (keypad->mmio_base + KPI_KRE0));
 	__raw_writel(KeyEvent[3], (keypad->mmio_base + KPI_KRE1));
 
-	for(j = 0; j < 4; j++){
-		if(KeyEvent[j] != 0){
-			if((j == 1) || (j == 3)) row_add = 4;
-			else row_add = 0;
+	for (j = 0; j < 4; j++) {
+		if (KeyEvent[j] != 0) {
+			if ((j == 1) || (j == 3))
+				row_add = 4;
+			else
+				row_add = 0;
 
-			if(j < 2) press_key = 1;
-			else press_key = 0;
+			if (j < 2)
+				press_key = 1;
+			else
+				press_key = 0;
 
-			for (i=0; i<32; i++){
-				if(KeyEvent[j] & (1<<i)){
-					code = MATRIX_SCAN_CODE( ((i/8) + row_add), (i % 8), row_shift);
+			for (i = 0; i < 32; i++) {
+				if (KeyEvent[j] & (1<<i)) {
+					code = MATRIX_SCAN_CODE(((i/8) + row_add),
+											(i % 8), row_shift);
 					key = keymap[code];
 
 					input_event(input_dev, EV_MSC, MSC_SCAN, code);
@@ -151,13 +157,12 @@ static irqreturn_t ma35d1_keypad_irq_handler(int irq, void *dev_id)
 
 	kstatus = __raw_readl(keypad->mmio_base + KPI_STATUS);
 
-	if (kstatus & (PKEY_INT|RKEY_INT)){
+	if (kstatus & (PKEY_INT|RKEY_INT)) {
 		ma35d1_keypad_scan_matrix(keypad, kstatus);
 
 		input_sync(keypad->input_dev);
-	}
-	else{
-		if(kstatus & PDWAKE)
+	} else {
+		if (kstatus & PDWAKE)
 			__raw_writel(PDWAKE, (keypad->mmio_base + KPI_STATUS));
 	}
 
@@ -171,10 +176,12 @@ static int ma35d1_keypad_open(struct input_dev *dev)
 
 	val = INPU | RKINTEN | PKINTEN | INTEN | ENKP;
 
-	val |= (((keypad->kpi_row) - 1) << 28) | (((keypad->kpi_col) - 1) << 24);
+	val |= (((keypad->kpi_row) - 1) << 28) |
+			(((keypad->kpi_col) - 1) << 24);
 
-	if(keypad->debounce_val > 0)
-		config = ((keypad->pre_scale - 1) << KPI_PRESCALE) | (keypad->debounce_val << DEBOUNCE_BIT) | DB_EN;
+	if (keypad->debounce_val > 0)
+		config = ((keypad->pre_scale - 1) << KPI_PRESCALE) |
+				(keypad->debounce_val << DEBOUNCE_BIT) | DB_EN;
 	else
 		config = ((keypad->pre_scale - 1) << KPI_PRESCALE);
 
@@ -182,7 +189,8 @@ static int ma35d1_keypad_open(struct input_dev *dev)
 
 	__raw_writel(val, keypad->mmio_base + KPI_CONF);
 
-	__raw_writel((keypad->pre_scale_divider - 1), keypad->mmio_base + KPI_PRESCALDIV);
+	__raw_writel((keypad->pre_scale_divider - 1),
+				keypad->mmio_base + KPI_PRESCALDIV);
 
 	return 0;
 }
@@ -235,7 +243,7 @@ static int ma35d1_keypad_probe(struct platform_device *pdev)
 	}
 
 	keypad->input_dev = input_dev;
-	keypad->irq = platform_get_irq(pdev, 0);;
+	keypad->irq = platform_get_irq(pdev, 0);
 
 	input_dev->name = pdev->name;
 	input_dev->id.bustype = BUS_HOST;
@@ -254,13 +262,15 @@ static int ma35d1_keypad_probe(struct platform_device *pdev)
 	if (error)
 		return -ENOENT;
 
-	error = matrix_keypad_parse_properties(&pdev->dev, &(keypad->kpi_row), &(keypad->kpi_col));
+	error = matrix_keypad_parse_properties(&pdev->dev,
+					&(keypad->kpi_row), &(keypad->kpi_col));
 	if (error) {
 		dev_err(&pdev->dev, "failed to parse kp params\n");
 		return error;
 	}
 
-	error = matrix_keypad_build_keymap(NULL, NULL, keypad->kpi_row, keypad->kpi_col, NULL, input_dev);
+	error = matrix_keypad_build_keymap(NULL, NULL, keypad->kpi_row,
+									keypad->kpi_col, NULL, input_dev);
 	if (error) {
 		dev_err(&pdev->dev, "failed to build keymap\n");
 		goto failed_put_clk;
@@ -273,11 +283,14 @@ static int ma35d1_keypad_probe(struct platform_device *pdev)
 		goto failed_put_clk;
 	}
 
-	of_property_read_u32(pdev->dev.of_node, "debounce-period", &(keypad->debounce_val));
+	of_property_read_u32(pdev->dev.of_node, "debounce-period",
+									&(keypad->debounce_val));
 
-	of_property_read_u32(pdev->dev.of_node, "per-scale", &(keypad->pre_scale));
+	of_property_read_u32(pdev->dev.of_node, "per-scale",
+									&(keypad->pre_scale));
 
-	of_property_read_u32(pdev->dev.of_node, "per-scalediv", &(keypad->pre_scale_divider));
+	of_property_read_u32(pdev->dev.of_node, "per-scalediv",
+									&(keypad->pre_scale_divider));
 
 	__set_bit(EV_REP, input_dev->evbit);
 	input_set_capability(input_dev, EV_MSC, MSC_SCAN);
@@ -331,11 +344,13 @@ static int ma35d1_keypad_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static int ma35d1_keypad_suspend(struct platform_device *pdev, pm_message_t state)
+static int ma35d1_keypad_suspend(struct platform_device *pdev,
+									pm_message_t state)
 {
 	struct ma35d1_keypad *keypad = platform_get_drvdata(pdev);
 
-	__raw_writel(__raw_readl(keypad->mmio_base + KPI_CONF) | WAKEUP, keypad->mmio_base + KPI_CONF);
+	__raw_writel(__raw_readl(keypad->mmio_base + KPI_CONF) |
+					WAKEUP, keypad->mmio_base + KPI_CONF);
 	enable_irq_wake(keypad->irq);
 
 	return 0;
@@ -345,7 +360,8 @@ static int ma35d1_keypad_resume(struct platform_device *pdev)
 {
 	struct ma35d1_keypad *keypad = platform_get_drvdata(pdev);
 
-	__raw_writel(__raw_readl(keypad->mmio_base + KPI_CONF) & ~(WAKEUP), keypad->mmio_base + KPI_CONF);
+	__raw_writel(__raw_readl(keypad->mmio_base + KPI_CONF) & ~(WAKEUP),
+					keypad->mmio_base + KPI_CONF);
 	disable_irq_wake(keypad->irq);
 
 	return 0;
