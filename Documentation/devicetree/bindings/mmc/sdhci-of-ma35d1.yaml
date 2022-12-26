@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: GPL-2.0
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/mmc/sdhci-of-ma35d1.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Nuvoton MA35D1 Cores Mobile Storage Host Controller
+
+allOf:
+  - $ref: "synopsys-dw-mshc-common.yaml#"
+
+maintainers:
+  - schung <schung@nuvoton.com>
+
+properties:
+  compatible:
+    oneOf:
+    	- const: nuvoton,ma35d1-sdhci
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  clocks:
+    minItems: 1
+    maxItems: 2
+    description:
+		Array of clocks required for SDHCI; requires at least one for
+		core clock.
+  clock-names:
+    minItems: 2
+    items:
+      - const: core
+    description:
+		Array of names corresponding to clocks property; shall be
+    	"core" for core clock and "bus" for optional bus clock.
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - clocks
+  - clock-names
+
+unevaluatedProperties: false
+
+examples:
+	sdhci0: sdhci@40180000 {
+		compatible = "nuvoton,ma35d1-sdhci";
+ 		reg = <0x0 0x40180000 0x0 0x2000>;
+ 		interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
+   		clocks = <&clk sdh0_gate>;
+ 		clock-names = "core";
+  		bus-width = <4>;
+ 		max-frequency = <100000000>;
+  		dhci-caps-mask = <0x4 0x0>;  /* No support DDR50 mode */
+  		no-1-8-v;
+ 		cd-gpios = <&gpioc 6 GPIO_ACTIVE_LOW>;
+  		wp-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
+  		status = "disabled";
+ 		assigned-clocks = <&clk sdh0_mux>;
+		assigned-clock-parents = <&clk syspll>;
+        };
+
+	sdhci1:sdhci@40190000 {
+		compatible = "nuvoton,ma35d1-sdhci";
+		nuvoton,ma35d1-sys = <&sys>;
+		reg = <0x0 0x40190000 0x0 0x2000>;
+		interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
+		resets = <&reset MA35D1_RESET_SDH1>;
+		clocks = <&clk sdh1_gate>;
+		clock-names = "core";
+		bus-width = <8>;
+		max-frequency = <200000000>;
+		sdhci-caps-mask = <0x4 0x0>;  /* No support DDR50 mode */
+		status = "disabled";
+		cd-gpios = <&gpioj 5 GPIO_ACTIVE_LOW>;
+		wp-gpios = <&gpioj 4 GPIO_ACTIVE_LOW>;
+		assigned-clocks = <&clk sdh1_mux>;
+		assigned-clock-parents = <&clk apll>;
+        };
+

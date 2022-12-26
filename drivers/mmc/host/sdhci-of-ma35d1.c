@@ -17,6 +17,7 @@
 #include <linux/regmap.h>
 #include <linux/mfd/syscon.h>
 #include <linux/reset.h>
+#include <linux/gpio/consumer.h>
 #include "sdhci-pltfm.h"
 
 #define MSHC_CTRL 0x508
@@ -163,11 +164,10 @@ void ma35d1_set_clock(struct sdhci_host *host, unsigned int clock)
 int ma35d1_execute_tuning(struct mmc_host *mmc, u32 opcode)
 {
 	struct sdhci_host *host = mmc_priv(mmc);
-        struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
-        struct ma35d1_priv *priv = sdhci_pltfm_priv(pltfm_host);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct ma35d1_priv *priv = sdhci_pltfm_priv(pltfm_host);
 
-        if (!IS_ERR(priv->rst)) 
-	{
+	if (!IS_ERR(priv->rst)) {
 		int idx;
 		u32 value[REG_RESTORE_NUM];
 		int reg[REG_RESTORE_NUM] = {
@@ -180,23 +180,23 @@ int ma35d1_execute_tuning(struct mmc_host *mmc, u32 opcode)
 			SDHCI_TIMEOUT_CONTROL,
 		};
 
-		for(idx=0; idx<(REG_RESTORE_NUM-1); idx++)
+		for (idx = 0; idx < (REG_RESTORE_NUM-1); idx++)
 			value[idx] = sdhci_readl(host, reg[idx]);
 		value[(REG_RESTORE_NUM-1)] = sdhci_readb(host, reg[(REG_RESTORE_NUM-1)]);
 
-                reset_control_assert(priv->rst);
-                reset_control_deassert(priv->rst);
+		reset_control_assert(priv->rst);
+		reset_control_deassert(priv->rst);
 
-		for(idx=0; idx<(REG_RESTORE_NUM-1); idx++)
+		for (idx = 0; idx < (REG_RESTORE_NUM-1); idx++)
 			sdhci_writel(host, value[idx], reg[idx]);
 		sdhci_writeb(host, value[(REG_RESTORE_NUM-1)], reg[(REG_RESTORE_NUM-1)]);
 
 		sdhci_writew(host, sdhci_readw(host, MSHC_CTRL)&~CMD_CONFLICT_CHECK, MSHC_CTRL);
 		sdhci_writew(host, (sdhci_readw(host, MBIU_CTRL)&~BURST_INCR_MASK)|
 				(BURST_INCR8_EN|BURST_INCR16_EN), MBIU_CTRL);
-        }
+	}
 
-	return sdhci_execute_tuning(mmc,opcode);
+	return sdhci_execute_tuning(mmc, opcode);
 }
 static const struct sdhci_ops sdhci_ma35d1_ops = {
 	.set_clock		= ma35d1_set_clock,
@@ -213,6 +213,20 @@ static const struct sdhci_pltfm_data sdhci_ma35d1_pdata = {
 	.quirks = SDHCI_QUIRK_CAP_CLOCK_BASE_BROKEN,
 	.quirks2 = SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
 };
+
+static void ma35d1_shutdown(struct platform_device *pdev)
+{
+	struct gpio_desc *gpio;
+
+	gpio = devm_gpiod_get_optional(&pdev->dev, "power", GPIOD_OUT_LOW);
+	ma35d1_reg_unlock();
+	if (gpio) {
+		gpiod_set_value_cansleep(gpio, 1);
+		udelay(1);
+	}
+	ma35d1_reg_lock();
+}
+
 
 static int ma35d1_probe(struct platform_device *pdev)
 {
@@ -279,16 +293,14 @@ static int ma35d1_probe(struct platform_device *pdev)
 		regmap_write(priv->regmap, REG_SYS_MISCFCR0, reg);
 
 		err = ma35d1_sdhci_init_pinctrl(&pdev->dev, priv);
-		if (err == 0){
+		if (err == 0) {
 			host->mmc_host_ops.start_signal_voltage_switch =
 				ma35d1_start_signal_voltage_switch;
 			ma35d1_sdhci_set_padctrl(host, MMC_SIGNAL_VOLTAGE_330);
 		}
 	}
 
-	
 	host->mmc_host_ops.execute_tuning = ma35d1_execute_tuning;
-
 	err = sdhci_add_host(host);
 	if (err)
 		goto err_clk;
@@ -334,7 +346,8 @@ static struct platform_driver sdhci_ma35d1_driver = {
 		.of_match_table = sdhci_ma35d1_dt_ids,
 	},
 	.probe	= ma35d1_probe,
-	.remove	= ma35d1_remove,
+	.remove = ma35d1_remove,
+	.shutdown = ma35d1_shutdown,
 };
 module_platform_driver(sdhci_ma35d1_driver);
 
