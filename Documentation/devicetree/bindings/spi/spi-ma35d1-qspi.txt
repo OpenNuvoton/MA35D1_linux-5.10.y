@@ -22,7 +22,7 @@ Required Properties:
 - bus_num: bus number.
 
 
-Example: including SPI NOR and NAND 
+Example: including SPI NOR and NAND
 	qspi0: qspi0@40680000 {
 		compatible = "nuvoton,ma35d1-qspi";
 		reg = <0x0 0x40680000 0x0 0x10000>;
@@ -63,7 +63,7 @@ Example: including SPI NOR and NAND
 	};
 
 	qspi1: qspi1@40690000 {
-		compatible = "nuvoton,nu3500-qspi";
+		compatible = "nuvoton,ma35d1-qspi";
 		reg = <0x0 0x40690000 0x0 0x10000>;
 		interrupts = <GIC_SPI 58 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk qspi1_gate>;
@@ -99,4 +99,26 @@ Example: including SPI NOR and NAND
 			};
 		};
 	};
+
+	qspi0: spi@40680000 {
+		compatible = "nuvoton,ma35d1-qspi-slave";
+		reg = <0x0 0x40680000 0x0 0x10000>;
+		interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk QSPI0_GATE>;
+		dmas = <&pdma1 0>,<&pdma1 1>;
+		dma-names = "tx","rx";
+		pdma_reqsel_tx = <54>;
+		pdma_reqsel_rx = <55>;
+		use_pdma = <0>;
+		num_cs = <2>;
+		lsb = <0>;
+		sleep = <0>;
+		txbitlen = <8>;
+		quad = <0>;
+		bus_num = <0>;
+		spimode = <0>;
+		divider = <5>;
+		mrxphase = <0>;
+		status = "disabled";
+	}
 

@@ -38,3 +38,20 @@ Example:
 		spi-max-frequency = <10000000>;
 		status = "ok";
 	};
+
+	spi0: spi0@40600000 {
+		compatible = "nuvoton,ma35d1-spi-slave";
+		reg = <0x0 0x40600000 0x0 0x10000>;
+		interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk spi0_gate>;
+		num_cs = <2>;
+		lsb = <0>;
+		txneg = <1>;
+		clkpol = <0>;
+		rxneg = <0>;
+		sleep = <0>;
+		txbitlen = <8>;
+		bus_num = <2>;
+		spi-max-frequency = <10000000>;
+		status = "ok";
+	};

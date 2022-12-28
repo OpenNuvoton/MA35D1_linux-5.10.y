@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Copyright (c) 2020 Nuvoton Technology Corp.
+ * Copyright (c) 2022 Nuvoton Technology Corp.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -28,6 +28,8 @@
 #include <asm/irq.h>
 #include <linux/spi/spi_bitbang.h>
 
+#define _DUMP_RECEIVED_DATA /* dump received data */
+
 /* spi registers offset */
 #define REG_CTL		0x00
 #define REG_CLKDIV	0x04
@@ -35,6 +37,7 @@
 #define REG_PDMACTL	0x0C
 #define REG_FIFOCTL	0x10
 #define REG_STATUS	0x14
+#define REG_STATUS2	0x18
 #define REG_TX		0x20
 #define REG_RX		0x30
 
@@ -65,17 +68,20 @@
 #define SSINAIEN	(0x01 << 13)
 #define SSACTIF		(0x01 << 2)
 #define SSINAIF		(0x01 << 3)
+#define SLVBEIF		(0x01 << 6)
+#define SLVURIF		(0x01 << 7)
 #define RXTHIF		(0x01 << 10)
 #define TXTHIF		(0x01 << 18)
 #define TXUFIF		(0x01 << 19)
 
-static volatile int slave_done_state=0;
+static int slave_done_state;
 static DECLARE_WAIT_QUEUE_HEAD(slave_done);
 
-static int SPI_SlaveDataLen = 256;
-static int SPI_SlaveData[256];
-static int TransmittedCnt = 0;
-static int InTransmitted = 0;
+static int SPI0_SlaveDataLen = 256;
+static int SPI0_SlaveTxData[256];
+static int SPI0_SlaveRxData[256];
+static int TransmittedCnt;
+static int ReceivedCnt;
 
 struct ma35d1_spi_info {
 	unsigned int num_cs;
@@ -88,6 +94,7 @@ struct ma35d1_spi_info {
 	unsigned int clkpol;
 	int bus_num;
 	unsigned int hz;
+	unsigned int spimode;
 };
 
 struct ma35d1_spi {
@@ -127,7 +134,7 @@ static inline void ma35d1_slave_select(struct spi_device *spi, unsigned int ssr)
 	else
 		val |= SELECTLEV;
 
-	if(spi->chip_select == 0) {
+	if (spi->chip_select == 0) {
 		if (!ssr)
 			val &= ~SELECTSLAVE0;
 		else
@@ -139,7 +146,8 @@ static inline void ma35d1_slave_select(struct spi_device *spi, unsigned int ssr)
 			val |= SELECTSLAVE1;
 	}
 
-	while (__raw_readl(hw->regs + REG_STATUS) & BUSY); //wait busy
+	while (__raw_readl(hw->regs + REG_STATUS) & BUSY)
+		;
 
 	__raw_writel(val, hw->regs + REG_SSCTL);
 
@@ -160,13 +168,13 @@ static inline void ma35d1_spi_chipsel(struct spi_device *spi, int value)
 }
 
 static inline void ma35d1_setup_txbitlen(struct ma35d1_spi *hw,
-        unsigned int txbitlen)
+	unsigned int txbitlen)
 {
 	unsigned int val;
 
 	val = __raw_readl(hw->regs + REG_CTL);
 	val &= ~0x1f00;
-	if(txbitlen != 32)
+	if (txbitlen != 32)
 		val |= (txbitlen << 8);
 
 	__raw_writel(val, hw->regs + REG_CTL);
@@ -349,35 +357,43 @@ static irqreturn_t ma35d1_spi_irq(int irq, void *dev)
 	status = __raw_readl(hw->regs + REG_STATUS);
 	__raw_writel(status, hw->regs + REG_STATUS);
 
+	if (status & (SLVBEIF|SLVURIF)) {
+		__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXRST | RXRST),
+				hw->regs + REG_FIFOCTL);
+		while (__raw_readl(hw->regs + REG_STATUS) & TXRXRST)
+			;
+
+		while (!(__raw_readl(hw->regs + REG_STATUS) & TXFULL))
+			__raw_writel(0x5a, hw->regs + REG_TX); /* fill dummy data */
+
+	}
+
 	if (status & RXTHIF) {
-		if (InTransmitted == 0) {
-			ma35d1_disable_rxth_int(hw);
-			slave_done_state = 1;
-			wake_up_interruptible(&slave_done);
-			InTransmitted = 1;
+		while (!(__raw_readl(hw->regs + REG_STATUS) & RXEMPTY)) {
+			SPI0_SlaveRxData[ReceivedCnt++] = __raw_readl(hw->regs + REG_RX);
+
+			if (!(__raw_readl(hw->regs + REG_STATUS) & TXFULL)) {
+				__raw_writel(SPI0_SlaveTxData[TransmittedCnt++], hw->regs + REG_TX);
+				if (TransmittedCnt >= SPI0_SlaveDataLen) {
+					ma35d1_disable_txth_int(hw);
+					TransmittedCnt = 0;
+					break;
+				}
+			}
+
 		}
+
+		slave_done_state = 1;
+		wake_up_interruptible(&slave_done);
 	}
 	if (status & TXTHIF) {
-		while(!(__raw_readl(hw->regs + REG_STATUS) & TXFULL)) {//TXFULL
-			__raw_writel(SPI_SlaveData[TransmittedCnt++], hw->regs + REG_TX);
-			if (TransmittedCnt >= SPI_SlaveDataLen) {
+		while (!(__raw_readl(hw->regs + REG_STATUS) & TXFULL)) {
+			__raw_writel(SPI0_SlaveTxData[TransmittedCnt++], hw->regs + REG_TX);
+			if (TransmittedCnt >= SPI0_SlaveDataLen) {
 				ma35d1_disable_txth_int(hw);
-				InTransmitted = 0;
 				TransmittedCnt = 0;
 				break;
 			}
-		}
-	}
-	if (status & SSINAIF) {
-		/* Check if transmition complete */
-		if (InTransmitted == 1) {
-			pr_debug("Master pull SS high, but slave TX doesn't complete!\n");
-			__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXRST | RXRST),
-			             hw->regs + REG_FIFOCTL); //TXRX reset
-			while (__raw_readl(hw->regs + REG_STATUS) & TXRXRST); //TXRXRST
-			ma35d1_enable_rxth_int(hw);
-			InTransmitted = 0;
-			TransmittedCnt = 0;
 		}
 	}
 
@@ -385,7 +401,7 @@ static irqreturn_t ma35d1_spi_irq(int irq, void *dev)
 }
 
 static int ma35d1_spi_update_state(struct spi_device *spi,
-                                    struct spi_transfer *t)
+					struct spi_transfer *t)
 {
 	struct ma35d1_spi *hw = (struct ma35d1_spi *)to_hw(spi);
 	unsigned int clk;
@@ -397,15 +413,17 @@ static int ma35d1_spi_update_state(struct spi_device *spi,
 	bpw = t ? t->bits_per_word : spi->bits_per_word;
 	hz  = t ? t->speed_hz : spi->max_speed_hz;
 
-	if(hw->pdata->txbitlen != bpw)
+	if (hw->pdata->txbitlen != bpw)
 		hw->pdata->txbitlen = bpw;
 
-	if(hw->pdata->hz != hz) {
+	if (hw->pdata->hz != hz) {
 		clk = clk_get_rate(hw->clk);
 		div = DIV_ROUND_UP(clk, hz) - 1;
 		hw->pdata->hz = hz;
 		hw->pdata->divider = div;
 	}
+
+	spi->mode = hw->pdata->spimode;
 
 	//Mode 0: CPOL=0, CPHA=0; active high
 	//Mode 1: CPOL=0, CPHA=1; active low
@@ -435,7 +453,7 @@ static int ma35d1_spi_update_state(struct spi_device *spi,
 }
 
 static int ma35d1_spi_setupxfer(struct spi_device *spi,
-                                 struct spi_transfer *t)
+				struct spi_transfer *t)
 {
 	struct ma35d1_spi *hw = (struct ma35d1_spi *)to_hw(spi);
 	unsigned long flags;
@@ -479,11 +497,31 @@ static int ma35d1_spi_setup(struct spi_device *spi)
 
 static void ma35d1_init_spi(struct ma35d1_spi *hw)
 {
+	unsigned long flags;
+
 	spin_lock_init(&hw->lock);
+
+	spin_lock_irqsave(&hw->lock, flags);
+
+	if (hw->pdata->spimode & SPI_CPOL)
+		hw->pdata->clkpol = 1;
+	else
+		hw->pdata->clkpol = 0;
+
+	if ((hw->pdata->spimode == SPI_MODE_0) || (hw->pdata->spimode == SPI_MODE_3)) {
+		hw->pdata->txneg = 1;
+		hw->pdata->rxneg = 0;
+	} else {
+		hw->pdata->txneg = 0;
+		hw->pdata->rxneg = 1;
+	}
+
+	spin_unlock_irqrestore(&hw->lock, flags);
 
 	ma35d1_enable_slave(hw);
 	ma35d1_enable_rxth_int(hw);
 	ma35d1_enable_ssinact_int(hw);
+
 }
 
 static struct ma35d1_spi_info *ma35d1_spi_parse_dt(struct device *dev)
@@ -492,10 +530,8 @@ static struct ma35d1_spi_info *ma35d1_spi_parse_dt(struct device *dev)
 	u32 temp;
 
 	sci = devm_kzalloc(dev, sizeof(*sci), GFP_KERNEL);
-	if (!sci) {
-		dev_err(dev, "memory allocation for spi_info failed\n");
+	if (!sci)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	if (of_property_read_u32(dev->of_node, "num_cs", &temp)) {
 		dev_warn(dev, "can't get num_cs from dt\n");
@@ -539,27 +575,53 @@ static struct ma35d1_spi_info *ma35d1_spi_parse_dt(struct device *dev)
 		sci->bus_num = temp;
 	}
 
+	if (of_property_read_u32(dev->of_node, "spimode", &temp)) {
+		dev_warn(dev, "can't get spimode from dt\n");
+		sci->spimode = 0;
+	} else {
+		sci->spimode = temp;
+	}
+
 	return sci;
 }
 
 /* In Thread, only prepare data and enable TXTHIEN.
-   The data will be transmitted in IRQ
+ * The data will be transmitted in IRQ
  */
 static int SPI_Slave_Thread_TXRX(struct ma35d1_spi *hw)
 {
-	unsigned char rx;
 	int i;
 
-	while(1) {
+	slave_done_state = 0;
+	TransmittedCnt = 0;
+	ReceivedCnt = 0;
+
+	__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXRST | RXRST),
+			hw->regs + REG_FIFOCTL);
+	while (__raw_readl(hw->regs + REG_STATUS) & TXRXRST)
+		;
+
+	while (!(__raw_readl(hw->regs + REG_STATUS) & TXFULL))
+		__raw_writel(0x5a, hw->regs + REG_TX); /* fill dummy data to prevent Tx uderrun */
+
+	for (i = 0; i < SPI0_SlaveDataLen; i++)
+		SPI0_SlaveTxData[i] = i;
+
+	while (1) {
 
 		wait_event_interruptible(slave_done, (slave_done_state != 0));
-		rx = __raw_readl(hw->regs + REG_RX);
-		pr_debug("Receive [0x%x] \n", rx);
 
-		switch (rx) {
+#ifdef _DUMP_RECEIVED_DATA /* dump received data */
+		pr_info("\n");
+		for (i = 0; i < SPI0_SlaveDataLen; i++)
+			pr_info("[%d] 0x%x\n", i, SPI0_SlaveRxData[i]);
+		pr_info("\n");
+#endif
+
+		switch (SPI0_SlaveRxData[0]) {
 		case 0x9f:
-			for (i = 0; i < SPI_SlaveDataLen; i++)
-				SPI_SlaveData[i] = i;
+			for (i = 0; i < SPI0_SlaveDataLen; i++)
+				SPI0_SlaveTxData[i] = i;
 
 			ma35d1_enable_txth_int(hw);
 			break;
@@ -567,7 +629,6 @@ static int SPI_Slave_Thread_TXRX(struct ma35d1_spi *hw)
 			break;
 		}
 
-		InTransmitted = 0;
 		slave_done_state = 0;
 		ma35d1_enable_rxth_int(hw);
 	}
@@ -602,7 +663,7 @@ static int ma35d1_spi_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, hw);
 	master->mode_bits	= (SPI_MODE_0 | SPI_TX_DUAL | SPI_RX_DUAL | SPI_CS_HIGH
-	                       | SPI_LSB_FIRST | SPI_CPHA | SPI_CPOL);
+				| SPI_LSB_FIRST | SPI_CPHA | SPI_CPOL);
 
 	master->dev.of_node        = pdev->dev.of_node;
 	master->num_chipselect     = hw->pdata->num_cs;
@@ -627,13 +688,6 @@ static int ma35d1_spi_probe(struct platform_device *pdev)
 		goto err_pdata;
 	}
 
-	hw->irq = platform_get_irq(pdev, 0);
-	if (hw->irq < 0) {
-		dev_err(&pdev->dev, "No IRQ specified\n");
-		err = -ENOENT;
-		goto err_pdata;
-	}
-
 	err = request_irq(hw->irq, ma35d1_spi_irq, 0, pdev->name, hw);
 	if (err) {
 		dev_err(&pdev->dev, "Cannot claim IRQ\n");
@@ -643,7 +697,7 @@ static int ma35d1_spi_probe(struct platform_device *pdev)
 	hw->clk = of_clk_get(pdev->dev.of_node, 0);
 	if (IS_ERR(hw->clk)) {
 		dev_err(&pdev->dev, "unable to get SYS clock, err=%d\n",
-		        status);
+			status);
 		goto err_clk;
 	}
 	clk_prepare_enable(hw->clk);
@@ -651,7 +705,8 @@ static int ma35d1_spi_probe(struct platform_device *pdev)
 	ma35d1_init_spi(hw);
 
 	__raw_writel(__raw_readl(hw->regs + REG_CTL) | SPIEN, hw->regs + REG_CTL); /* enable SPI */
-	while ((__raw_readl(hw->regs + REG_STATUS) & SPIENSTS) == 0); //SPIENSTS
+	while ((__raw_readl(hw->regs + REG_STATUS) & SPIENSTS) == 0)
+		;
 
 	kthread_run((int (*)(void *))SPI_Slave_Thread_TXRX, hw, "SPI_SLAVE_Thread_TXRX");
 
@@ -686,8 +741,8 @@ static int ma35d1_spi_suspend(struct device *dev)
 {
 	struct ma35d1_spi *hw = dev_get_drvdata(dev);
 
-	while (__raw_readl(hw->regs + REG_STATUS) & 1) //wait busy
-		msleep(1);
+	while (__raw_readl(hw->regs + REG_STATUS) & BUSY) //wait busy
+		msleep(20);
 
 	// disable interrupt
 	__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~(UNITIEN)), hw->regs + REG_CTL);
