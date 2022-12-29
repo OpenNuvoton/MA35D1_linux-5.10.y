@@ -48,13 +48,13 @@
 
 static int heartbeat;
 module_param(heartbeat, int, 0);
-MODULE_PARM_DESC(heartbeat, "Watchdog heartbeats in seconds. "
-	"(default = " __MODULE_STRING(WDT_HEARTBEAT) ")");
+MODULE_PARM_DESC(heartbeat, "Watchdog heartbeats in seconds. (default = "
+	__MODULE_STRING(WDT_HEARTBEAT) ")");
 
 static bool nowayout = WATCHDOG_NOWAYOUT;
 module_param(nowayout, bool, 0);
-MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
-	"(default=" __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
+MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started (default="
+	__MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
 struct ma35d1_wdt {
 	struct watchdog_device	wdog;
@@ -87,22 +87,21 @@ static int ma35d1wdt_start(struct watchdog_device *wdd)
 		val |= INTEN;
 		val |= WKEN;
 
-		if(wdd->timeout < 2) {
+		if (wdd->timeout < 2)
 			val |= 0x5 << 8;
-		} else if (wdd->timeout < 8) {
+		else if (wdd->timeout < 8)
 			val |= 0x6 << 8;
-		} else {
+		else
 			val |= 0x7 << 8;
-		}
+
 	} else {
 
-		if(wdd->timeout < 2) {
+		if (wdd->timeout < 2)
 			val |= 0x5 << 8;
-		} else if (wdd->timeout < 11) {
+		else if (wdd->timeout < 11)
 			val |= 0x6 << 8;
-		} else {
+		else
 			val |= 0x7 << 8;
-		}
 	}
 
 	local_irq_save(flags);
@@ -140,22 +139,22 @@ static int ma35d1wdt_set_timeout(struct watchdog_device *wdd, unsigned int timeo
 
 	if (ma35d1_wdt->wkupen == 1) {
 
-		if (timeout < 2) {
+		if (timeout < 2)
 			val |= 0x5 << 8;
-		} else if (timeout < 8) {
+		else if (timeout < 8)
 			val |= 0x6 << 8;
-		} else {
+		else
 			val |= 0x7 << 8;
-		}
+
 	} else {
 
-		if (timeout < 2) {
+		if (timeout < 2)
 			val |= 0x5 << 8;
-		} else if (timeout < 11) {
+		else if (timeout < 11)
 			val |= 0x6 << 8;
-		} else {
+		else
 			val |= 0x7 << 8;
-		}
+
 	}
 
 	local_irq_save(flags);
@@ -191,9 +190,9 @@ static irqreturn_t ma35d1_wdt_interrupt(int irq, void *dev_id)
 	__raw_writel(RESET_COUNTER, ma35d1_wdt->base+REG_WDT_RSTCNT);
 
 	ma35d1_reg_unlock();
-	if (__raw_readl(ma35d1_wdt->base+REG_WDT_CTL) & IF) {
+	if (__raw_readl(ma35d1_wdt->base+REG_WDT_CTL) & IF)
 		__raw_writel(__raw_readl(ma35d1_wdt->base+REG_WDT_CTL) | IF, ma35d1_wdt->base+REG_WDT_CTL);
-	}
+
 	ma35d1_reg_lock();
 
 	return IRQ_HANDLED;
@@ -308,9 +307,9 @@ static int __maybe_unused ma35d1wdt_suspend(struct platform_device *dev, pm_mess
 		ma35d1_reg_lock();
 		local_irq_restore(flags);
 
-		if (devm_request_irq(&dev->dev, ma35d1_wdt->irq, ma35d1_wdt_interrupt, 0, dev_name(&dev->dev), ma35d1_wdt)) {
+		if (devm_request_irq(&dev->dev, ma35d1_wdt->irq, ma35d1_wdt_interrupt, 0, dev_name(&dev->dev), ma35d1_wdt))
 			return -EBUSY;
-		}
+
 		enable_irq_wake(ma35d1_wdt->irq);
 	}
 
