@@ -82,17 +82,17 @@ static const struct watchdog_info ma35d1wwdt_info = {
 };
 
 static struct watchdog_ops ma35d1wwdt_ops = {
-	.owner 	= THIS_MODULE,
-	.start 	= ma35d1wwdt_start,
-	.stop 	= ma35d1wwdt_stop,
-	.ping 	= ma35d1wwdt_ping,
+	.owner = THIS_MODULE,
+	.start = ma35d1wwdt_start,
+	.stop = ma35d1wwdt_stop,
+	.ping = ma35d1wwdt_ping,
 	.get_timeleft = ma35d1wwdt_get_timeleft,
 };
 
 static struct watchdog_device ma35d1_wdd = {
-	.status	= WATCHDOG_NOWAYOUT_INIT_STATUS,
-	.info 	= &ma35d1wwdt_info,
-	.ops 	= &ma35d1wwdt_ops,
+	.status = WATCHDOG_NOWAYOUT_INIT_STATUS,
+	.info = &ma35d1wwdt_info,
+	.ops = &ma35d1wwdt_ops,
 	.timeout = 2,
 };
 
@@ -162,7 +162,8 @@ static int ma35d1wwdt_remove(struct platform_device *pdev)
 	watchdog_unregister_device(&ma35d1_wdd);
 	// There's no way out~~~~
 	/* You can check-out any time you like
-	   But you can never leave! */
+	 * But you can never leave!
+	 */
 
 	return 0;
 }
@@ -170,12 +171,12 @@ static int ma35d1wwdt_remove(struct platform_device *pdev)
 #ifdef CONFIG_PM
 static int ma35d1wwdt_suspend(struct platform_device *dev, pm_message_t state)
 {
-        return 0;
+	return 0;
 }
 
 static int ma35d1wwdt_resume(struct platform_device *dev)
 {
-        return 0;
+	return 0;
 }
 
 #else
@@ -191,11 +192,11 @@ MODULE_DEVICE_TABLE(of, ma35d1_wwdt_of_match);
 
 
 static struct platform_driver ma35d1wwdt_driver = {
-	.probe		= ma35d1wwdt_probe,
-	.remove		= ma35d1wwdt_remove,
-	.suspend        = ma35d1wwdt_suspend,
-        .resume         = ma35d1wwdt_resume,
-	.driver		= {
+	.probe	= ma35d1wwdt_probe,
+	.remove = ma35d1wwdt_remove,
+	.suspend = ma35d1wwdt_suspend,
+	.resume = ma35d1wwdt_resume,
+	.driver = {
 		.name	= "ma35d1-wwdt",
 		.of_match_table = of_match_ptr(ma35d1_wwdt_of_match),
 		.owner	= THIS_MODULE,
