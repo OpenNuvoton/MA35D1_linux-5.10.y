@@ -194,7 +194,7 @@ static void ma35d1_Rx_dma_callback(void *arg)
 			memcpy((void *)(p->pdma_rx_vir_addr2 + count), rx_tmp_buf, i);
 
 		copied_count = tty_insert_flip_string(tty_port,
-						((unsigned char *)p->pdma_rx_vir_addr2), count);
+					((unsigned char *)p->pdma_rx_vir_addr2), count + i);
 	} else {
 		p->dest_mem_p.phy_addr = p->pdma_rx_phy_addr2;
 		p->dest_mem_p.vir_addr = p->pdma_rx_vir_addr2;
@@ -222,7 +222,7 @@ static void ma35d1_Rx_dma_callback(void *arg)
 			memcpy((void *)(p->pdma_rx_vir_addr1 + count), rx_tmp_buf, i);
 
 		copied_count = tty_insert_flip_string(tty_port,
-						((unsigned char *)p->pdma_rx_vir_addr1), count);
+					((unsigned char *)p->pdma_rx_vir_addr1), count + i);
 	}
 
 	if (copied_count != (count + i)) {
