@@ -204,10 +204,19 @@
 &i2c1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c1>;
-	status = "disable";
+	status = "disabled";
+
+	lt8618: hmi-bridge@72 {
+		compatible = "nvt, lt8618";
+		reg = <0x72>;
+		reset-gpios = <&gpiom 12 0x00>;
+		clocks = <&clk DCU_GATE>;
+		nuvoton,disp = <&display>;
+		status = "disabled";
+	};
 
 	lt8718: edp-bridge@66 {
-		compatible = "nvt, lt8718";
+		compatible = "lontium,lt8718";
 		reg = <0x66>;
 		reset-gpios = <&gpiom 12 0x00>;
 		clocks = <&clk DCUP_DIV>;
@@ -216,15 +225,16 @@
 		bl-gpios = <&gpiok 7 GPIO_ACTIVE_HIGH>;
 		pwr-gpios = <&gpiok 5 GPIO_ACTIVE_HIGH>;
 		bl-brightness = <100>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	lt8918: mipi-bridge@40 {
-		compatible = "nvt, lt8918";
+		compatible = "lontium,lt8918";
 		reg = <0x40>;
+		reset-gpios = <&gpiom 12 0x00>;
 		clocks = <&clk DCUP_DIV>;
 		nuvoton,disp = <&display>;
-		status = "disable";
+		status = "disabled";
 	};
 };
 

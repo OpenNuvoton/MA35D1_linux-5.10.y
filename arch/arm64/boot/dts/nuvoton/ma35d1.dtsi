@@ -1767,16 +1767,30 @@
 				vsync-active = <1>;
 			};
 
-			timing6: mipi_1024x600 {
-				clock-frequency = <54000000>;
-				hactive = <1024>;
-				vactive = <600>;
-				hsync-len = <20>;
-				hfront-porch = <160>;
-				hback-porch = <140>;
-				vsync-len = <3>;
-				vfront-porch = <12>;
-				vback-porch = <20>;
+			timing6: hdmi_1920x1080 {
+				clock-frequency = <148500000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <44>;
+				hfront-porch = <88>;
+				hback-porch = <148>;
+				vsync-len = <5>;
+				vfront-porch  = <4>;
+				vback-porch = <36>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+
+			timing7: edp_1920x1080 {
+				clock-frequency = <150000000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <160>;
+				hfront-porch = <32>;
+				hback-porch = <48>;
+				vsync-len = <31>;
+				vfront-porch  = <5>;
+				vback-porch = <3>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 			};
