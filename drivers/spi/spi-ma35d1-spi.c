@@ -518,12 +518,12 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 				if (((len % 4) == 0) && (((unsigned long)txbuf % 4) == 0) &&
 					((rxbuf == NULL) || (((unsigned long)rxbuf % 4) == 0))) {
 					pdma->slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-					pdma->sgrx.dma_length = (len - non_tx_align_len) >> 2; /* divide 4 */
+					pdma->sgtx.dma_length = (len - non_tx_align_len) >> 2; /* divide 4 */
 					__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK))
 						| BYTE_REORDER), hw->regs + REG_CTL); //32 bits, byte reorder
 				} else {
 					pdma->slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
-					pdma->sgrx.dma_length = len;
+					pdma->sgtx.dma_length = len;
 				}
 
 				pdma->slave_config.direction = DMA_MEM_TO_DEV;
