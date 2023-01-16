@@ -1763,8 +1763,8 @@
 				vsync-len = <2>;
 				vfront-porch  = <15>;
 				vback-porch = <18>;
-				hsync-active = <1>;
-				vsync-active = <1>;
+				hsync-active = <0>;
+				vsync-active = <0>;
 			};
 
 			timing6: hdmi_1920x1080 {
