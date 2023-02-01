@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright © 2020 Nuvoton technology corporation.
+ * Copyright © 2023 Nuvoton technology corporation.
  *
  */
 
@@ -17,6 +17,13 @@
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/ma35d1-sys.h>
 
+/*
+ * SYS_USBPMISCR register bit definition
+ */
+#define PHY0POR		(1 << 0)  /* PHY Power-On Reset Control Bit */
+#define PHY0SUSPEND	(1 << 1)  /* PHY Suspend; 0: suspend, 1: operaion */
+#define PHY0COMN	(1 << 2)  /* PHY Common Block Power-Down Control */
+#define PHY0DEVCKSTB	(1 << 10) /* PHY 60 MHz UTMI clock stable bit */
 
 struct ma35d1_usb_phy {
 	struct device *dev;
@@ -24,11 +31,11 @@ struct ma35d1_usb_phy {
 	struct clk *clk;
 };
 
-
 static int ma35d1_usb_phy_power_on(struct phy *phy)
 {
 	struct ma35d1_usb_phy *p_phy = phy_get_drvdata(phy);
 	unsigned long timeout;
+	unsigned int val;
 	int ret;
 
 	ret = clk_prepare_enable(p_phy->clk);
@@ -37,26 +44,43 @@ static int ma35d1_usb_phy_power_on(struct phy *phy)
 		return ret;
 	}
 
-	regmap_update_bits(p_phy->sysreg, REG_SYS_USBPMISCR, 0x7, 0x3);
+	regmap_read(p_phy->sysreg, REG_SYS_USBPMISCR, &val);
+	if (val & PHY0SUSPEND) {
+		/*
+		 * USB PHY0 is in operation mode already
+		 * make sure USB PHY 60 MHz UTMI Interface Clock ready
+		 */
+		timeout = jiffies + msecs_to_jiffies(200);
+		while (time_before(jiffies, timeout)) {
+			regmap_read(p_phy->sysreg, REG_SYS_USBPMISCR, &val);
+			if (val & PHY0DEVCKSTB)
+				return 0;
+			usleep_range(1000, 1500);
+		}
+	}
 
+	/*
+	 * reset USB PHY0.
+	 * wait until USB PHY0 60 MHz UTMI Interface Clock ready
+	 */
+	regmap_update_bits(p_phy->sysreg, REG_SYS_USBPMISCR, 0x7, (PHY0POR |
+			   PHY0SUSPEND));
 	timeout = jiffies + msecs_to_jiffies(200);
 	while (time_before(jiffies, timeout)) {
-		unsigned int val;
-
 		regmap_read(p_phy->sysreg, REG_SYS_USBPMISCR, &val);
-		if ((val & 0x400) == 0)
+		if (val & PHY0DEVCKSTB)
 			break;
 		usleep_range(1000, 1500);
 	}
 
-	regmap_update_bits(p_phy->sysreg, REG_SYS_USBPMISCR, 0x7, 0x2);
+	/* make USB PHY0 enter operation mode */
+	regmap_update_bits(p_phy->sysreg, REG_SYS_USBPMISCR, 0x7, PHY0SUSPEND);
 
+	/* make sure USB PHY 60 MHz UTMI Interface Clock ready */
 	timeout = jiffies + msecs_to_jiffies(200);
 	while (time_before(jiffies, timeout)) {
-		unsigned int val;
-
 		regmap_read(p_phy->sysreg, REG_SYS_USBPMISCR, &val);
-		if (val & 0x400)
+		if (val & PHY0DEVCKSTB)
 			return 0;
 		usleep_range(1000, 1500);
 	}
@@ -73,7 +97,6 @@ static int ma35d1_usb_phy_power_off(struct phy *phy)
 	struct ma35d1_usb_phy *p_phy = phy_get_drvdata(phy);
 
 	clk_disable_unprepare(p_phy->clk);
-
 	return 0;
 }
 
@@ -125,7 +148,6 @@ static int ma35d1_usb_phy_probe(struct platform_device *pdev)
 			PTR_ERR(provider));
 		return PTR_ERR(provider);
 	}
-
 	return 0;
 }
 
