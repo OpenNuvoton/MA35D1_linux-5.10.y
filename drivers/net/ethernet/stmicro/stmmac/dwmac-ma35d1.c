@@ -66,7 +66,7 @@ static struct nvt_priv_data *nvt_gmac_setup(struct platform_device *pdev,
 	ret = of_get_phy_mode(pdev->dev.of_node, &bsp_priv->phy_mode);
 	if (ret) {
 		dev_err(dev, "missing phy mode property\n");
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 	}
 
 	switch (bsp_priv->phy_mode) {
