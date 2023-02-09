@@ -339,7 +339,7 @@
 		clock-names = "hclk", "cclk";
 		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
 
-		status = "disable";
+		status = "disabled";
 	};
 
 	can1: can@403D0000 {
@@ -354,7 +354,7 @@
 		clock-names = "hclk", "cclk";
 		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
 
-		status = "disable";
+		status = "disabled";
 	};
 
 	can2: can@403E0000 {
@@ -369,7 +369,7 @@
 		clock-names = "hclk", "cclk";
 		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
 
-		status = "disable";
+		status = "disabled";
 	};
 
 	can3: can@403F0000 {
@@ -384,7 +384,7 @@
 		clock-names = "hclk", "cclk";
 		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
 
-		status = "disable";
+		status = "disabled";
 	};
 
 	ehci0: ehci@40140000 {
@@ -547,7 +547,7 @@
 		clocks = <&clk I2C1_GATE>;
 		clock-frequency = <100000>;
 		resets = <&reset MA35D1_RESET_I2C1>;
-		status = "disable";
+		status = "disabled";
 		#address-cells = <1>;
 		#size-cells = <0>;
 	};
@@ -585,7 +585,7 @@
 		resets = <&reset MA35D1_RESET_I2C4>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		status = "disable";
+		status = "disabled";
 	};
 
 	i2c5: i2c@40850000 {
@@ -597,7 +597,7 @@
 		resets = <&reset MA35D1_RESET_I2C5>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		status = "disable";
+		status = "disabled";
 	};
 
 	i2s0: i2s@40480000 {
@@ -609,19 +609,19 @@
 		powerdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>; /* PD13 */
 		pdma_reqsel_tx = <86>;
 		pdma_reqsel_rx = <87>;
-		status = "disable";
+		status = "disabled";
 	};
 
 	i2s_pcm: i2s_pcm {
 		compatible = "nuvoton,ma35d1-audio-pcm";
-		status = "disable";
+		status = "disabled";
 	};
 
 	sound: sound {
 		compatible = "nuvoton,ma35d1-audio";
 		i2s-controller = <&i2s0>;
 		i2s-platform = <&i2s_pcm>;
-		status = "disable";
+		status = "disabled";
 	};
 
 	hwsem: hwspinlock@40380000 {
@@ -679,7 +679,7 @@
 		reset-names = "stmmaceth";
 		mac-id = <0>;
 		clk_csr = <4>;
-		status = "disable";
+		status = "disabled";
 		phy-handle = <&eth_phy0>;
 		mdio0 {
 			compatible = "snps,dwmac-mdio";
@@ -706,7 +706,7 @@
 		reset-names = "stmmaceth";
 		mac-id = <1>;
 		clk_csr = <4>;
-		status = "disable";
+		status = "disabled";
 		phy-handle = <&eth_phy1>;
 		mdio1 {
 			compatible = "snps,dwmac-mdio";
