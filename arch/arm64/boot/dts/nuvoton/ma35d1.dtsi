@@ -1027,6 +1027,7 @@
 		reg = <0x0 0x40180000 0x0 0x2000>;
 		interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk SDH0_GATE>;
+		resets = <&reset MA35D1_RESET_SDH0>;
 		clock-names = "core";
 		bus-width = <4>;
 		max-frequency = <100000000>;
