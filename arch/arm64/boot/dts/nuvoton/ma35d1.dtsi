@@ -1033,7 +1033,6 @@
 		max-frequency = <100000000>;
 		dhci-caps-mask = <0x4 0x0>;  /* No support DDR50 mode */
 		no-1-8-v;
-		cd-gpios = <&gpioc 6 GPIO_ACTIVE_LOW>;
 		wp-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 		assigned-clocks = <&clk SDH0_MUX>;
@@ -1052,7 +1051,6 @@
 		max-frequency = <200000000>;
 		sdhci-caps-mask = <0x4 0x0>;  /* No support DDR50 mode */
 		status = "disabled";
-		cd-gpios = <&gpioj 5 GPIO_ACTIVE_LOW>;
 		wp-gpios = <&gpioj 4 GPIO_ACTIVE_LOW>;
 		assigned-clocks = <&clk SDH1_MUX>;
 		assigned-clock-parents = <&clk APLL>;
