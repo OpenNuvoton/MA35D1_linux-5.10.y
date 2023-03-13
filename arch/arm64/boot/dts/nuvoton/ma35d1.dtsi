@@ -436,6 +436,7 @@
 		interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
 		memory-region = <&vc8k_buf>;
 		pp_out_enable = "yes";
+		pp_wait_vsync = <0>;  /* timeout(ms) of waiting VSYNC when PP enabled */
 		fb_width = <1024>;
 		fb_height = <600>;
 		fb_fmt = "RGB888";   /* RGB888, RGB565, or YUV420P */
