@@ -904,7 +904,7 @@ static int ma35d1serial_startup(struct uart_port *port)
 	if (up->uart_pdma_enable_flag == 1)
 		up->baud_rate = 0;
 
-	spin_lock(&up->port.lock);
+	spin_unlock(&up->port.lock);
 
 	return 0;
 }
