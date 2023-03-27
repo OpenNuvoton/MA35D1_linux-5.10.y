@@ -848,6 +848,8 @@ static int ma35d1serial_startup(struct uart_port *port)
 
 	dma_cap_mask_t mask;
 
+	spin_lock(&up->port.lock);
+
 	if (up->uart_pdma_enable_flag == 1) {
 		dma_cap_zero(mask);
 		dma_cap_set(DMA_SLAVE, mask);
@@ -901,6 +903,8 @@ static int ma35d1serial_startup(struct uart_port *port)
 
 	if (up->uart_pdma_enable_flag == 1)
 		up->baud_rate = 0;
+
+	spin_lock(&up->port.lock);
 
 	return 0;
 }
@@ -1228,6 +1232,8 @@ static void ma35d1serial_console_write(struct console *co, const char *s,
 	unsigned long flags;
 	unsigned int ier;
 
+	spin_lock(&up->port.lock);
+
 	local_irq_save(flags);
 
 	/*
@@ -1247,6 +1253,8 @@ static void ma35d1serial_console_write(struct console *co, const char *s,
 	serial_out(up, UART_REG_IER, ier);
 
 	local_irq_restore(flags);
+
+	spin_unlock(&up->port.lock);
 }
 
 static int __init ma35d1serial_console_setup(struct console *co,
