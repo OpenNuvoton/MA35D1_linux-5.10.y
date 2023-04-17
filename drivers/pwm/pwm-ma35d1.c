@@ -91,6 +91,8 @@ static void ma35d1_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 	spin_lock_irqsave(&ma35d1->lock, flags);
 
+	__raw_writel(__raw_readl(ma35d1->regs + REG_PWM_POEN)
+			& ~(1 << ch), ma35d1->regs + REG_PWM_POEN);
 	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CNTEN)
 			& ~(1 << ch)), ma35d1->regs + REG_PWM_CNTEN);
 
