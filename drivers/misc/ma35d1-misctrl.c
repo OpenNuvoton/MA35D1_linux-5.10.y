@@ -36,6 +36,7 @@
 #define SET_EPLL_RESTORE	0x120F
 #define SET_SYS_SPD_LOW		0x1301
 #define SET_SYS_SPD_RESTORE	0x1302
+#define FORCE_CHIP_RESET	0x1401
 
 struct ma35d1_misctrl {
 	int minor;
@@ -57,61 +58,53 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 
 	switch (cmd) {
 	case SET_CPU_FREQ_500M:
-		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 500, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 500, 0, 0, 0, 0, 0, 0, &res);
 		break;
         case SET_CPU_FREQ_600M:
-		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 600, 0, 0, 0, 0,
-				0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 600, 0, 0, 0, 0, 0, 0, &res);
 		break;
 	case SET_CPU_FREQ_800M:
-		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 800, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 800, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	case SET_CPU_FREQ_1000M:
-		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 1000, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_CPU_CLK, 1000, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	case GET_PMIC_VOLT:
-		arm_smccc_smc(MA35D1_SIP_PMIC, MA35d1_SIP_PMIC_CPU, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_PMIC, MA35d1_SIP_PMIC_CPU, 0, 0, 0, 0, 0, 0, &res);
 		return res.a0;
 
 	case SET_PMIC_VOLT:
-		arm_smccc_smc(MA35D1_SIP_PMIC, MA35d1_SIP_PMIC_CPU, arg, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_PMIC, MA35d1_SIP_PMIC_CPU, arg, 0, 0, 0, 0, 0, &res);
 		return 0;
 
 	case SET_EPLL_DIV_BY_2:
-		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_2, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_2, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	case SET_EPLL_DIV_BY_4:
-		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_4, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_4, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	case SET_EPLL_DIV_BY_8:
-		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_8, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_DIV_8, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	case SET_EPLL_RESTORE:
-		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_RESTORE, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_EPLL, MA35d1_SIP_EPLL_RESTORE, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	case SET_SYS_SPD_LOW:
-		arm_smccc_smc(MA35D1_SIP_LSPD, 1, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_LSPD, 1, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	case SET_SYS_SPD_RESTORE:
-		arm_smccc_smc(MA35D1_SIP_LSPD, 0, 0, 0, 0, 0,
-			      0, 0, &res);
+		arm_smccc_smc(MA35D1_SIP_LSPD, 0, 0, 0, 0, 0, 0, 0, &res);
+		break;
+
+	case FORCE_CHIP_RESET:
+		arm_smccc_smc(MA35D1_SIP_CHIP_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	default:

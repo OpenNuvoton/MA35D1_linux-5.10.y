@@ -646,8 +646,8 @@
 	};
 
 	misctrl {
-		compatible	= "nuvoton,ma35d1-misctrl";
-		status = "disabled";
+		compatible = "nuvoton,ma35d1-misctrl";
+		status = "okay";
 	};
 
 	rproc {

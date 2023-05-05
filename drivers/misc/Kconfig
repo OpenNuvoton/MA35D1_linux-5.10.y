@@ -477,6 +477,7 @@ config MA35D1_EBI
 config MA35D1_MISCTRL
 	tristate "Nuvoton MA35D1 MISC control support"
 	depends on ARCH_MA35D1
+	default y
 	help
 	  This driver provides support for Nuvoton MA35D1 MISC control.
 
