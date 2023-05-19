@@ -1262,6 +1262,7 @@ static void __init clk_disable_unused_subtree(struct clk_core *core)
 	 * sequence.  call .disable_unused if available, otherwise fall
 	 * back to .disable
 	 */
+#ifndef CONFIG_COMMON_CLK_FIXED_UNUSED
 	if (clk_core_is_enabled(core)) {
 		trace_clk_disable(core);
 		if (core->ops->disable_unused)
@@ -1270,6 +1271,7 @@ static void __init clk_disable_unused_subtree(struct clk_core *core)
 			core->ops->disable(core->hw);
 		trace_clk_disable_complete(core);
 	}
+#endif
 
 unlock_out:
 	clk_enable_unlock(flags);

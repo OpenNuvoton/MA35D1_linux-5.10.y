@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2020 Nuvoton Technology Corp.
+ * Copyright (C) 2023 Nuvoton Technology Corp.
+ *
+ * Author: Shan-Chun Hung <schung@nuvoton.com>
  */
 
 #include <linux/err.h>
@@ -10,7 +12,6 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/pinctrl/pinctrl.h>
-
 #include "pinctrl-nvt.h"
 
 static const struct pinctrl_pin_desc ma35d1_pins[] = {
@@ -1695,7 +1696,6 @@ static const struct pinctrl_pin_desc ma35d1_pins[] = {
 		NVT_MUX(0x9, "EADC0_ST"),
 		NVT_MUX(0xA, "CLKO"),
 		NVT_MUX(0xB, "TM6")),
-
 	NVT_PIN(216, PN8, 0xEC, 0x0,
 		NVT_MUX(0x0, "GPN8"),
 		NVT_MUX(0x1, "EPWM2_CH4"),
@@ -1772,7 +1772,6 @@ static const struct of_device_id ma35d1_pinctrl_of_match[] = {
 	{}
 };
 
-
 const struct dev_pm_ops ma35d1_pinctrl_pm_ops = {
 	SET_LATE_SYSTEM_SLEEP_PM_OPS(nvt_pinctrl_suspend,
 					nvt_pinctrl_resume)
@@ -1798,3 +1797,7 @@ static int __init ma35d1_pinctrl_init(void)
 	return platform_driver_register(&ma35d1_pinctrl_driver);
 }
 arch_initcall(ma35d1_pinctrl_init);
+
+MODULE_LICENSE("GPL v2");
+MODULE_AUTHOR("schung@nuvoton.com");
+MODULE_DESCRIPTION("Nuvoton MA35D1 Pinctrl and GPIO driver");

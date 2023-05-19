@@ -1,6 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2020 Nuvoton Technology Corp.
+ * Nuvoton MA35D1 pintctrl driver
+ *
+ * Copyright (C) 2023 Nuvoton Technology Corp.
+ *
+ * Author: Shan-Chun Hung <schung@nuvoton.com>
  */
 
 #include <linux/err.h>
@@ -26,44 +30,40 @@
 #include "../pinctrl-utils.h"
 #include "pinctrl-nvt.h"
 
-#define NVT_MUX_MASK	0xF
+#define MFP_MUX_MASK		0xF
+#define MFP_BASE		0x80
+#define MAX_GPIO_OFFSET		0x10
+#define MAX_GPIO_PORT		14
 
-#define GPIO_PORT_NUM	14
-#define GPIO_OFFSET	0x10
+/* GPIO control registers */
+#define GPIO_MODE		0x00
+#define GPIO_DINOFF		0x04
+#define GPIO_DOUT		0x08
+#define GPIO_PIN		0x10
+#define GPIO_INTSRC		0x20
+#define GPIO_SMTEN		0x24
+#define GPIO_SLEWCTL		0x28
+#define GPIO_SPW		0x2c
+#define GPIO_PUSEL		0x30
+#define GPIO_DS			0x38
+#define GPIO_UDS		0x3C
 
-#define GPIO_MODE	0x00
-#define GPIO_DINOFF	0x04
-#define GPIO_DOUT	0x08
-#define GPIO_PIN	0x10
-#define GPIO_INTSRC	0x20
-#define GPIO_SMTEN	0x24
-#define GPIO_SLEWCTL	0x28
-#define GPIO_SPW	0x2c
-#define GPIO_PUSEL	0x30
-#define GPIO_DS		0x38
-#define GPIO_UDS	0x3C
+/* GPIO mode control */
+#define GPIO_MODE_INPUT			0x0
+#define GPIO_MODE_OUTPUT		0x1
+#define GPIO_MODE_OPEN_DRAIN		0x2
+#define GPIO_MODE_QUASI			0x3
 
-/*!< Input Mode */
-#define GPIO_MODE_INPUT 0x0UL
-/*!< Output Mode */
-#define GPIO_MODE_OUTPUT 0x1UL
-/*!< Open-Drain Mode */
-#define GPIO_MODE_OPEN_DRAIN 0x2UL
-/*!< Quasi-bidirectional Mode */
-#define GPIO_MODE_QUASI 0x3UL
-
-/*!< GPIO PUSEL setting for Pull-up Mode */
-#define GPIO_PUSEL_DISABLE 0x0UL
-/*!< GPIO PUSEL setting for Pull-up Mode */
-#define GPIO_PUSEL_PULL_UP 0x1UL
-/*!< GPIO PUSEL setting for Pull-down Mode */
-#define GPIO_PUSEL_PULL_DOWN 0x2UL
-/*!< GPIO PUSEL Mask */
-#define GPIO_PUSEL_MASK 0x3UL
-
-/*!< Generate the MODE mode setting for each pin  */
+/* Generate the MODE mode setting for each pin */
 #define GPIO_SET_MODE(pin, mode) ((mode) << ((pin)<<1))
 
+/* GPIO pull-up and pull-down selection control */
+#define GPIO_PUSEL_DISABLE		0x0
+#define GPIO_PUSEL_PULL_UP		0x1
+#define GPIO_PUSEL_PULL_DOWN		0x2
+#define GPIO_PUSEL_MASK			0x3
+
+/* Each pin data input/output is mapped throught by address mapping */
 #define GPIO_PIN_DATA(base, pin) \
 	(*((unsigned int *)((base+0x800) + ((pin)<<2))))
 
@@ -129,6 +129,8 @@ struct nvt_pin_bank {
 	struct irq_chip irqc;
 	u32 irqtype;
 	u32 irqinten;
+	struct regmap *regmap;
+	struct device *dev;
 	spinlock_t lock;
 };
 
@@ -254,7 +256,6 @@ static void nvt_dt_free_map(struct pinctrl_dev *pctldev,
 	devm_kfree(pctldev->dev, map);
 }
 
-
 static const struct pinctrl_ops nvt_pctrl_ops = {
 	.get_groups_count = nvt_get_groups_count,
 	.get_group_name = nvt_get_group_name,
@@ -304,7 +305,7 @@ static int nvt_pinmux_set_mux(struct pinctrl_dev *pctldev,
 
 	for (i = 0; i < grp->npins; i++) {
 		regmap_read(npctl->regmap, setting->offset, &reg);
-		reg &= ~(NVT_MUX_MASK << setting->shift);
+		reg &= ~(MFP_MUX_MASK << setting->shift);
 		reg |= setting->muxval << setting->shift;
 		regmap_write(npctl->regmap, setting->offset, reg);
 		setting++;
@@ -330,11 +331,12 @@ static int nvt_gpio_core_direction_in(struct gpio_chip *gc,
 	void __iomem *base = bank->reg_base;
 
 	spin_lock_irqsave(&bank->lock, flags);
-	value = __raw_readl(base + GPIO_MODE);
+	value = readl(base + GPIO_MODE);
 	value &= ~GPIO_SET_MODE(gpio_num, GPIO_MODE_QUASI);
 	value |= GPIO_SET_MODE(gpio_num, GPIO_MODE_INPUT);
-	__raw_writel(value, base + GPIO_MODE);
+	writel(value, base + GPIO_MODE);
 	spin_unlock_irqrestore(&bank->lock, flags);
+
 	return 0;
 }
 
@@ -363,31 +365,50 @@ static int nvt_gpio_core_direction_out(struct gpio_chip *gc,
 	struct nvt_pin_bank *bank = gpiochip_get_data(gc);
 	void __iomem *base = bank->reg_base;
 
-	value = __raw_readl(base + GPIO_DOUT);
+	value = readl(base + GPIO_DOUT);
 	if (val)
-		__raw_writel(value|(1<<gpio_num), base + GPIO_DOUT);
+		writel(value|(1<<gpio_num), base + GPIO_DOUT);
 	else
-		__raw_writel(value&~(1<<gpio_num), base + GPIO_DOUT);
+		writel(value&~(1<<gpio_num), base + GPIO_DOUT);
+
 	spin_lock_irqsave(&bank->lock, flags);
-	value = __raw_readl(base + GPIO_MODE);
+	value = readl(base + GPIO_MODE);
 	value &= ~GPIO_SET_MODE(gpio_num, GPIO_MODE_QUASI);
 	value |= GPIO_SET_MODE(gpio_num, GPIO_MODE_OUTPUT);
-	__raw_writel(value, base + GPIO_MODE);
+	writel(value, base + GPIO_MODE);
 	spin_unlock_irqrestore(&bank->lock, flags);
-	return 0;
-}
-
-static int nvt_gpio_core_to_request(struct gpio_chip *chip,
-	unsigned int offset)
-{
 
 	return 0;
 }
 
-static void nvt_gpio_core_to_free(struct gpio_chip *chip,
-	unsigned int offset)
+static int nvt_gpio_core_to_request(struct gpio_chip *gc,
+	unsigned int gpio_num)
 {
 
+	unsigned int num, value;
+	unsigned int reg, reg_offset;
+	struct nvt_pin_bank *bank = gpiochip_get_data(gc);
+
+	regmap_read(bank->regmap, MFP_BASE+(bank->bank_num * 0x08), &reg);
+	reg_offset = bank->bank_num * 0x08;
+	num = gpio_num;
+
+	if (gpio_num > 7) {
+		num -= 8;
+		reg_offset = reg_offset + 0x04;
+	}
+
+	regmap_read(bank->regmap, MFP_BASE+reg_offset, &reg);
+	value = (reg & (0xf<<(num*4)))>>(num*4);
+
+	if (value != 0) {
+		dev_warn(bank->dev, "Check P%c%02d's multi-function = 0x%x\n",
+			(char)(65 + bank->bank_num), gpio_num, value);
+	}
+
+	regmap_write(bank->regmap, MFP_BASE+reg_offset, reg & ~(0xf<<(num*4)));
+
+	return 0;
 }
 
 static int nvt_gpio_core_to_irq(struct gpio_chip *chip,
@@ -405,10 +426,10 @@ static void nvt_irq_gpio_mask(struct irq_data *d)
 	    gpiochip_get_data(irq_data_get_irq_chip_data(d));
 
 	num = (d->hwirq);
-	__raw_writel(__raw_readl((unsigned int *)(bank->reg_base + 0x1C)) &
+	writel(readl((unsigned int *)(bank->reg_base + 0x1C)) &
 		     ~(0x1 << (num + 16)),
 		     (unsigned int *)(bank->reg_base + 0x1C));
-	__raw_writel(__raw_readl((unsigned int *)(bank->reg_base + 0x1C)) &
+	writel(readl((unsigned int *)(bank->reg_base + 0x1C)) &
 		     ~(0x1 << num), (unsigned int *)(bank->reg_base + 0x1C));
 }
 
@@ -420,13 +441,13 @@ static void nvt_irq_gpio_unmask(struct irq_data *d)
 
 	num = (d->hwirq);
 	tmp = bank->irqtype & (0x1 << (num));
-	__raw_writel(__raw_readl((unsigned int *)(bank->reg_base + 0x18)) | tmp,
+	writel(readl((unsigned int *)(bank->reg_base + 0x18)) | tmp,
 		     (unsigned int *)(bank->reg_base + 0x18));
 	tmp = bank->irqinten & (0x1 << (num + 16));
-	__raw_writel(__raw_readl((unsigned int *)(bank->reg_base + 0x1C)) | tmp,
+	writel(readl((unsigned int *)(bank->reg_base + 0x1C)) | tmp,
 		     (unsigned int *)(bank->reg_base + 0x1C));
 	tmp = bank->irqinten & (0x1 << num);
-	__raw_writel(__raw_readl((unsigned int *)(bank->reg_base + 0x1C)) | tmp,
+	writel(readl((unsigned int *)(bank->reg_base + 0x1C)) | tmp,
 		     (unsigned int *)(bank->reg_base + 0x1C));
 }
 
@@ -438,26 +459,27 @@ static int nvt_irq_irqtype(struct irq_data *d, unsigned int type)
 
 	num = (d->hwirq);
 	if (type == IRQ_TYPE_PROBE) {
-		__raw_writel(__raw_readl
+		writel(readl
 			((unsigned int *)(bank->reg_base +
 			0x18)) & ~(0x1 << num),
 			(unsigned int *)(bank->reg_base + 0x18));
-		__raw_writel(__raw_readl
+		writel(readl
 			((unsigned int *)(bank->reg_base +
 			0x1C)) | (0x1 << num) | ((0x1 << num) << 16),
 			(unsigned int *)(bank->reg_base + 0x1C));
 		bank->irqtype &= ~(0x1 << num);
 		bank->irqinten |= (0x1 << num);
 		bank->irqinten |= (0x1 << (num + 16));
+
 		return 0;
 	}
 
 	if (type & IRQ_TYPE_LEVEL_MASK) {
-		__raw_writel(__raw_readl
+		writel(readl
 			((unsigned int *)(bank->reg_base + 0x18)) |
 			(0x1 << num),
 			(unsigned int *)(bank->reg_base + 0x18));
-		__raw_writel(__raw_readl
+		writel(readl
 			((unsigned int *)(bank->reg_base +
 			0x1C)) & ~((0x1 << num) | ((0x1<<num)<<16)),
 			(unsigned int *)(bank->reg_base + 0x1C));
@@ -466,7 +488,7 @@ static int nvt_irq_irqtype(struct irq_data *d, unsigned int type)
 		bank->irqinten &= ~(0x1 << (num + 16));
 
 		if (type == IRQ_TYPE_LEVEL_HIGH) {
-			__raw_writel(__raw_readl
+			writel(readl
 				     ((unsigned int *)(bank->reg_base + 0x1C)) |
 				     ((0x1 << num) << 16),
 				     (unsigned int *)(bank->reg_base + 0x1C));
@@ -475,30 +497,31 @@ static int nvt_irq_irqtype(struct irq_data *d, unsigned int type)
 		}
 
 		if (type == IRQ_TYPE_LEVEL_LOW) {
-			__raw_writel(__raw_readl
+			writel(readl
 				((unsigned int *)(bank->reg_base + 0x1C)) |
 				(0x1 << num),
 				(unsigned int *)(bank->reg_base + 0x1C));
 			bank->irqinten |= (0x1 << num);
+
 			return 0;
 		}
 
 	} else {
-		__raw_writel(__raw_readl
+		writel(readl
 			((unsigned int *)(bank->reg_base + 0x18)) &
 			~(0x1 << num),
 			(unsigned int *)(bank->reg_base + 0x18));
 		bank->irqtype &= ~(0x1 << num);
 
 		if (type & IRQ_TYPE_EDGE_RISING) {
-			__raw_writel(__raw_readl
+			writel(readl
 				((unsigned int *)(bank->reg_base +
 				0x1C)) | ((0x1 << num) << 16),
 				(unsigned int *)(bank->reg_base + 0x1C));
 			bank->irqinten |= (0x1 << (num + 16));
 
 		} else {
-			__raw_writel(__raw_readl
+			writel(readl
 				((unsigned int *)(bank->reg_base +
 				0x1C)) & ~((0x1 << num) << 16),
 				(unsigned int *)(bank->reg_base + 0x1C));
@@ -506,14 +529,14 @@ static int nvt_irq_irqtype(struct irq_data *d, unsigned int type)
 		}
 
 		if (type & IRQ_TYPE_EDGE_FALLING) {
-			__raw_writel(__raw_readl
+			writel(readl
 				     ((unsigned int *)(bank->reg_base +
 							0x1C)) | (0x1 << num),
 				     (unsigned int *)(bank->reg_base + 0x1C));
 			bank->irqinten |= (0x1 << num);
 
 		} else {
-			__raw_writel(__raw_readl
+			writel(readl
 				     ((unsigned int *)(bank->reg_base +
 							0x1C)) & ~(0x1 << num),
 				     (unsigned int *)(bank->reg_base + 0x1C));
@@ -521,16 +544,6 @@ static int nvt_irq_irqtype(struct irq_data *d, unsigned int type)
 		}
 	}
 
-	return 0;
-}
-
-static void nvt_irq_gpio_ack(struct irq_data *d)
-{
-
-}
-
-static int nvt_irq_gpio_set_wake(struct irq_data *d, unsigned int on)
-{
 	return 0;
 }
 
@@ -544,10 +557,10 @@ static void nvt_irq_demux_intgroup(struct irq_desc *desc)
 
 	chained_irq_enter(irqchip, desc);
 
-	isr = __raw_readl(bank->reg_base + GPIO_INTSRC);
+	isr = readl(bank->reg_base + GPIO_INTSRC);
 
 	if (isr != 0) {
-		__raw_writel(isr, bank->reg_base + (0x40 * i) + GPIO_INTSRC);
+		writel(isr, bank->reg_base + (0x40 * i) + GPIO_INTSRC);
 
 		for (j = 0; j < 16; j++) {
 			if (isr & 0x1) {
@@ -585,7 +598,6 @@ static int nvt_gpiolib_register(struct platform_device *pdev,
 		bank->chip.of_gpio_n_cells = 2;
 		bank->chip.parent = &pdev->dev;
 		bank->chip.request = nvt_gpio_core_to_request;
-		bank->chip.free = nvt_gpio_core_to_free;
 		bank->chip.direction_input = nvt_gpio_core_direction_in;
 		bank->chip.direction_output = nvt_gpio_core_direction_out;
 		bank->chip.get = nvt_gpio_core_get;
@@ -595,6 +607,7 @@ static int nvt_gpiolib_register(struct platform_device *pdev,
 		bank->chip.ngpio = bank->nr_pins;
 		bank->chip.can_sleep = false;
 		bank->chip.of_node = bank->of_node;
+		spin_lock_init(&bank->lock);
 
 		if (bank->irq > 0) {
 			struct gpio_irq_chip *girq;
@@ -604,12 +617,10 @@ static int nvt_gpiolib_register(struct platform_device *pdev,
 			girq->chip->name = bank->name;
 			girq->chip->irq_disable = nvt_irq_gpio_mask;
 			girq->chip->irq_enable = nvt_irq_gpio_unmask;
-			girq->chip->irq_ack = nvt_irq_gpio_ack;
+			girq->chip->irq_set_type = nvt_irq_irqtype;
 			girq->chip->irq_mask = nvt_irq_gpio_mask;
 			girq->chip->irq_unmask = nvt_irq_gpio_unmask;
-			girq->chip->irq_set_type = nvt_irq_irqtype;
-			girq->chip->irq_set_wake = nvt_irq_gpio_set_wake;
-			girq->chip->flags = IRQCHIP_MASK_ON_SUSPEND;
+			girq->chip->flags = IRQCHIP_MASK_ON_SUSPEND | IRQCHIP_SKIP_SET_WAKE;
 			girq->parent_handler = nvt_irq_demux_intgroup;
 			girq->num_parents = 1;
 			girq->parents = devm_kcalloc(&pdev->dev, 1,
@@ -631,6 +642,7 @@ static int nvt_gpiolib_register(struct platform_device *pdev,
 			goto fail;
 		}
 	}
+
 	return 0;
 
 fail:
@@ -639,6 +651,7 @@ fail:
 			continue;
 		gpiochip_remove(&bank->chip);
 	}
+
 	return ret;
 }
 
@@ -659,7 +672,7 @@ static int nvt_get_bank_data(struct nvt_pin_bank *bank,
 	}
 
 	bank->irq = irq_of_parse_and_map(bank->of_node, 0);
-	bank->nr_pins = GPIO_OFFSET;
+	bank->nr_pins = MAX_GPIO_OFFSET;
 
 	bank->clk = of_clk_get(bank->of_node, 0);
 	if (IS_ERR(bank->clk))
@@ -678,14 +691,16 @@ static int nvt_pinctrl_get_soc_data(struct nvt_pinctrl *pctl,
 	int i;
 
 	ctrl = pctl->ctrl;
-	ctrl->nr_banks = GPIO_PORT_NUM;
+	ctrl->nr_banks = MAX_GPIO_PORT;
 	ctrl->pin_banks = devm_kcalloc(&pdev->dev, ctrl->nr_banks,
 				       sizeof(*ctrl->pin_banks), GFP_KERNEL);
 	if (!ctrl->pin_banks)
 		return -ENOMEM;
 
-	for (i = 0; i < ctrl->nr_banks; i++)
+	for (i = 0; i < ctrl->nr_banks; i++) {
+		ctrl->pin_banks[i].bank_num = i;
 		ctrl->pin_banks[i].name = gpio_port_name[i];
+	}
 
 	for_each_child_of_node(node, np) {
 		if (!of_find_property(np, "gpio-controller", NULL))
@@ -695,7 +710,8 @@ static int nvt_pinctrl_get_soc_data(struct nvt_pinctrl *pctl,
 		for (i = 0; i < ctrl->nr_banks; ++i, ++bank) {
 			if (!strcmp(bank->name, np->name)) {
 				bank->of_node = np;
-
+				bank->regmap = pctl->regmap;
+				bank->dev = &pdev->dev;
 				if (!nvt_get_bank_data(bank, pctl))
 					bank->valid = true;
 
@@ -710,8 +726,8 @@ static int nvt_pinctrl_get_soc_data(struct nvt_pinctrl *pctl,
 static void nvt_gpio_cla_port(unsigned int gpio_num,
 	unsigned int *group, unsigned int *num)
 {
-	*group = gpio_num / GPIO_OFFSET;
-	*num = gpio_num % GPIO_OFFSET;
+	*group = gpio_num / MAX_GPIO_OFFSET;
+	*num = gpio_num % MAX_GPIO_OFFSET;
 }
 
 static int nvt_pinconf_set_output(struct nvt_pinctrl *npctl,
@@ -724,12 +740,12 @@ static int nvt_pinconf_set_output(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_MODE);
+	value = readl(base + GPIO_MODE);
 	value &= ~GPIO_SET_MODE(port_num, GPIO_MODE_QUASI);
 	value |= GPIO_SET_MODE(port_num, GPIO_MODE_OUTPUT);
-	__raw_writel(value, base + GPIO_MODE);
-	return 0;
+	writel(value, base + GPIO_MODE);
 
+	return 0;
 }
 
 static int nvt_pinconf_get_output(struct nvt_pinctrl *npctl,
@@ -742,7 +758,7 @@ static int nvt_pinconf_get_output(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_MODE);
+	value = readl(base + GPIO_MODE);
 	value = (value >> (port_num << 1)) & 0x3;
 	if (value == GPIO_MODE_OUTPUT)
 		return 1;
@@ -760,7 +776,7 @@ static int nvt_pinconf_get_pull(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_PUSEL);
+	value = readl(base + GPIO_PUSEL);
 	value = (value >> (port_num << 1)) & 0x3;
 	switch (value) {
 	case GPIO_PUSEL_PULL_UP:
@@ -785,7 +801,7 @@ static int nvt_pinconf_set_pull(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_PUSEL);
+	value = readl(base + GPIO_PUSEL);
 	value &= ~GPIO_SET_MODE(port_num, GPIO_PUSEL_MASK);
 	switch (pull_up) {
 	case PIN_CONFIG_BIAS_PULL_UP:
@@ -799,7 +815,7 @@ static int nvt_pinconf_set_pull(struct nvt_pinctrl *npctl,
 		value |= GPIO_SET_MODE(port_num, GPIO_PUSEL_DISABLE);
 		break;
 	}
-	__raw_writel(value, base + GPIO_PUSEL);
+	writel(value, base + GPIO_PUSEL);
 
 	return 0;
 }
@@ -813,7 +829,7 @@ static int nvt_pinconf_get_schmitt_enable(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_SMTEN);
+	value = readl(base + GPIO_SMTEN);
 	value = (value>>port_num)&0x1;
 	return value;
 }
@@ -828,10 +844,11 @@ static int nvt_pinconf_set_schmitt(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_SMTEN);
+	value = readl(base + GPIO_SMTEN);
 	value &= ~(1<<port_num);
 	value |= ((schmitt&0x1)<<port_num);
-	__raw_writel(value, base + GPIO_SMTEN);
+	writel(value, base + GPIO_SMTEN);
+
 	return 0;
 }
 
@@ -844,8 +861,9 @@ static int nvt_pinconf_get_slew_rate(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_SLEWCTL);
+	value = readl(base + GPIO_SLEWCTL);
 	value = (value >> (port_num << 1)) & 0x3;
+
 	return value;
 }
 
@@ -858,10 +876,11 @@ static int nvt_pinconf_set_slew_rate(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_SLEWCTL);
+	value = readl(base + GPIO_SLEWCTL);
 	value &= ~GPIO_SET_MODE(port_num, 0x3);
 	value |= GPIO_SET_MODE(port_num, rate & 0x3);
-	__raw_writel(value, base + GPIO_SLEWCTL);
+	writel(value, base + GPIO_SLEWCTL);
+
 	return 0;
 }
 
@@ -878,10 +897,11 @@ static int nvt_pinconf_set_power_source(struct nvt_pinctrl *npctl,
 		v = 1;
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_SPW);
+	value = readl(base + GPIO_SPW);
 	value &= ~(0x1<<port_num);
 	value |= (v<<port_num);
-	__raw_writel(value, base + GPIO_SPW);
+	writel(value, base + GPIO_SPW);
+
 	return 0;
 }
 
@@ -894,7 +914,7 @@ static int nvt_pinconf_get_power_source(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	value = __raw_readl(base + GPIO_SPW);
+	value = readl(base + GPIO_SPW);
 	if ((value>>port_num)&0x1)
 		return 3300;
 	else
@@ -914,10 +934,10 @@ static int nvt_pinconf_get_drive_strength(struct nvt_pinctrl *npctl,
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
 	if (port_num > 8) {
-		value = __raw_readl(base + GPIO_DS);
+		value = readl(base + GPIO_DS);
 		*strength = (value>>(port_num*4))&0x7;
 	} else {
-		value = __raw_readl(base + GPIO_UDS);
+		value = readl(base + GPIO_UDS);
 		*strength = (value>>((port_num-8)*4))&0x7;
 	}
 
@@ -936,15 +956,15 @@ static int nvt_pinconf_set_drive_strength(struct nvt_pinctrl *npctl,
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
 
 	if (port_num < 8) {
-		value = __raw_readl(base + GPIO_DS);
+		value = readl(base + GPIO_DS);
 		value = value & ~(0x7<<(port_num*4));
 		value = value | ((strength&0x7)<<(port_num*4));
-		__raw_writel(value, base + GPIO_DS);
+		writel(value, base + GPIO_DS);
 	} else {
-		value = __raw_readl(base + GPIO_UDS);
+		value = readl(base + GPIO_UDS);
 		value = value & ~(0x7<<((port_num-8)*4));
 		value = value | ((strength&0x7)<<((port_num-8)*4));
-		__raw_writel(value, base + GPIO_UDS);
+		writel(value, base + GPIO_UDS);
 	}
 
 	return 0;
@@ -1037,6 +1057,7 @@ static int nvt_pinconf_set(struct pinctrl_dev *pctldev,
 		return -ENOTSUPP;
 		}
 	}
+
 	return 0;
 }
 
@@ -1262,6 +1283,7 @@ int nvt_pinctrl_probe(struct platform_device *pdev,
 	}
 
 	dev_info(&pdev->dev, "initialized NVT pinctrl driver\n");
+
 	return nvt_gpiolib_register(pdev, npctl);
 }
 

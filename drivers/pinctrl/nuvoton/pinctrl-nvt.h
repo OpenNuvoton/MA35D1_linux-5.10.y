@@ -1,6 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2020 Nuvoton Technology Corp.
+ * Copyright (C) 2023 Nuvoton Technology Corp.
+ *
+ * Author: Shan-Chun Hung <schung@nuvoton.com>
  */
 
 #ifndef __PINCTRL_NVT_H__
@@ -43,8 +45,6 @@ struct nvt_pinctrl_soc_info {
 	int (*get_pin_num)(int offset, int shift);
 };
 
-
-
 #define NVT_PIN(num, n, o, s,  ...) {		\
 	.number = num,					\
 	.name = #n,					\
@@ -60,7 +60,6 @@ struct nvt_pinctrl_soc_info {
 	.name = _name,					\
 	.muxval = _val,					\
 }
-
 
 int nvt_pinctrl_probe(struct platform_device *pdev, const struct nvt_pinctrl_soc_info *info);
 int nvt_pinctrl_suspend(struct device *dev);
