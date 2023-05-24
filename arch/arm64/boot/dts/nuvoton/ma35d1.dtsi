@@ -170,10 +170,27 @@
 		
 		/* PDMA Setting*/
 		dmas = <&pdma2 2>,<&pdma3 3>;
-        	dma-names = "tx", "rx";
-                /*pdma-enable = <1>;*/ /* enable PDMA */
+		dma-names = "tx", "rx";
+		/*pdma-enable = <1>;*/ /* enable PDMA */
 		pdma-enable = <0>; /* Disable PDMA */
 
+		status = "disabled";
+	};
+
+	puart1:serial@80710000 {
+		compatible = "nuvoton,ma35d1-puart";
+		reg = <0x0 0x40710000 0x0 0x10000>;
+		port-number = <1>;
+		/* PDMA Setting*/
+		pdma-port = <0>;
+		pdma-tx-ch = <0>;
+		pdma-rx-ch = <1>;
+		interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>, /* uart interrupt */
+					 <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>; /* pdma interrupt */
+		interrupt-names = "puart_uart", "puart_dma";
+		clocks = <&clk UART1_GATE>, /* enable uart clock */
+				 <&clk PDMA0_GATE>; /* enable pdma clock */
+		clock-names = "puart_clk", "pdma_clk";
 		status = "disabled";
 	};
 
