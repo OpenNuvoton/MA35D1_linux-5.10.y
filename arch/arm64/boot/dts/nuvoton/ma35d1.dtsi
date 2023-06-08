@@ -1684,6 +1684,7 @@
 		//RGB interface
 		bits-per-pixel = <32>;
 		pixel-fmt = <6>; //4:RGB565 6:RGB888 8:UYVY 17:NV12
+		swizzle = <0>;//0: argb, 2:abgr
 		bus-width = <24>;
 
 		buffer-num = <3>;
