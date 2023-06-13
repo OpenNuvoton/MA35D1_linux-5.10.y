@@ -809,6 +809,7 @@ static int ma35d1_clocks_probe(struct platform_device *pdev)
 		iounmap(clk_base);
 	}
 
+	clk_prepare_enable(hws[VPLL]->clk);
 	clk_prepare_enable(hws[DCU_GATE]->clk);
 
 	return ret;
