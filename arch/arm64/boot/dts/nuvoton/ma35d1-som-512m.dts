@@ -22,6 +22,25 @@
 		bootargs = "root=/dev/mmcblk1p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=512M";
 	};
 
+	reserved-memory {
+		display_buf: display_buf@0 {
+			reg = <0x0 0x8C800000 0x0 0x3000000>; /* 48MiB */
+			no-map;
+		};
+		vc8k_buf: vc8k_buf@0 {
+			reg = <0x0 0x8A800000 0x0 0x2000000>; /* 32MiB */
+			no-map;
+		};
+		gc520l_buf: gc520l_buf@0 {
+			reg = <0x0 0x8A000000 0x0 0x800000>; /* 8MiB */
+			no-map;
+		};
+		rproc_buf: rproc_buf@0 {
+			reg = <0x0 0x80020000 0x0 0x60000>; /* 384KB */
+			no-map;
+		};
+	};
+
 	gpio_keys_test {
 		compatible = "gpio-keys";
 		status = "okay";
@@ -284,10 +303,12 @@
 };
 
 &vc8k {
+	memory-region = <&vc8k_buf>;
 	status = "okay";
 };
 
 &gc520l {
+	memory-region = <&gc520l_buf>;
 	status = "okay";
 };
 

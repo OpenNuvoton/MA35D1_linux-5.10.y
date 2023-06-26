@@ -103,18 +103,6 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
-		display_buf: display_buf@0 {
-			reg = <0x0 0x8C800000 0x0 0x3000000>; /* 48MiB */
-			no-map;
-		};
-		vc8k_buf: vc8k_buf@0 {
-			reg = <0x0 0x8A800000 0x0 0x2000000>; /* 32MiB */
-			no-map;
-		};
-		gc520l_buf: gc520l_buf@0 {
-			reg = <0x0 0x8A000000 0x0 0x800000>; /* 8MiB */
-			no-map;
-		};
 		rproc_buf: rproc_buf@0 {
 			reg = <0x0 0x80020000 0x0 0x60000>; /* 384KB */
 			no-map;
@@ -451,14 +439,13 @@
 		clocks = <&clk VC8K_GATE>;
 		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
-		memory-region = <&vc8k_buf>;
 		pp_out_enable = "yes";
 		pp_wait_vsync = <0>;  /* timeout(ms) of waiting VSYNC when PP enabled */
 		fb_width = <1024>;
 		fb_height = <600>;
 		fb_fmt = "RGB888";   /* RGB888, RGB565, or YUV420P */
 		use_dev_coherent = <1>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	/* Crypto engine */
@@ -1665,7 +1652,6 @@
 		interrupts = <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk GFX_GATE>;
 		resets = <&reset MA35D1_RESET_GFX>;
-		memory-region = <&gc520l_buf>;
 		status = "disabled";
 	};
 
