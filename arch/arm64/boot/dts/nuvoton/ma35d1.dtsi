@@ -1671,7 +1671,7 @@
 		bits-per-pixel = <32>;
 		pixel-fmt = <6>; //4:RGB565 6:RGB888 8:UYVY 17:NV12
 		swizzle = <0>;//0:ARGB, 1:RGBA, 2:ABGR, 3:BGRA
-		bus-width = <24>;
+		dpi-config = <5>;//0:D16CFG1, 1:D16CFG2, 2:D16CFG3, 3:D18CFG1, 4:D18CFG2, 5:D24
 
 		buffer-num = <3>;
 		colorkey-en = <1>;
