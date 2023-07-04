@@ -560,7 +560,7 @@ static void nvt_irq_demux_intgroup(struct irq_desc *desc)
 	isr = readl(bank->reg_base + GPIO_INTSRC);
 
 	if (isr != 0) {
-		writel(isr, bank->reg_base + (0x40 * i) + GPIO_INTSRC);
+		writel(isr, bank->reg_base + GPIO_INTSRC);
 
 		for (j = 0; j < 16; j++) {
 			if (isr & 0x1) {
@@ -933,7 +933,7 @@ static int nvt_pinconf_get_drive_strength(struct nvt_pinctrl *npctl,
 
 	nvt_gpio_cla_port(pin_id, &group_num, &port_num);
 	base = npctl->ctrl->pin_banks[group_num].reg_base;
-	if (port_num > 8) {
+	if (port_num < 8) {
 		value = readl(base + GPIO_DS);
 		*strength = (value>>(port_num*4))&0x7;
 	} else {
