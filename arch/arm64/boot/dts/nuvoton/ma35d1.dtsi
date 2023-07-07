@@ -1663,6 +1663,7 @@
 		clocks = <&clk DCU_GATE>, <&clk DCUP_DIV>;
 		clock-names = "dcu_gate", "dcup_div";
 		resets = <&reset MA35D1_RESET_DISP>;
+		//pwr-gpios = <&gpiok 5 GPIO_ACTIVE_HIGH>; //LVDS pwr-enable pin
 		status = "disabled";
 
 		reset_offset_en = "no";
@@ -1757,21 +1758,7 @@
 				vsync-active = <1>;
 			};
 
-			timing5: mipi_1920x1200 {
-				clock-frequency = <148000000>;
-				hactive = <1920>;
-				vactive = <1200>;
-				hsync-len = <16>;
-				hfront-porch = <32>;
-				hback-porch = <16>;
-				vsync-len = <2>;
-				vfront-porch  = <15>;
-				vback-porch = <18>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-			};
-
-			timing6: hdmi_1920x1080 {
+			timing5: hdmi_1920x1080 {
 				clock-frequency = <148500000>;
 				hactive = <1920>;
 				vactive = <1080>;
@@ -1785,8 +1772,22 @@
 				vsync-active = <1>;
 			};
 
+			timing6: mipi_1920x1200 {
+				clock-frequency = <148000000>;
+				hactive = <1920>;
+				vactive = <1200>;
+				hsync-len = <16>;
+				hfront-porch = <32>;
+				hback-porch = <16>;
+				vsync-len = <2>;
+				vfront-porch  = <15>;
+				vback-porch = <18>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+
 			timing7: edp_1920x1080 {
-				clock-frequency = <150000000>;
+				clock-frequency = <148000000>;
 				hactive = <1920>;
 				vactive = <1080>;
 				hsync-len = <160>;
@@ -1795,6 +1796,20 @@
 				vsync-len = <31>;
 				vfront-porch  = <5>;
 				vback-porch = <3>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+			};
+
+			timing8: lvds_1920x1200 {
+				clock-frequency = <148000000>;
+				hactive = <1920>;
+				vactive = <1200>;
+				hsync-len = <16>;
+				hfront-porch = <32>;
+				hback-porch = <16>;
+				vsync-len = <2>;
+				vfront-porch  = <15>;
+				vback-porch = <18>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 			};
