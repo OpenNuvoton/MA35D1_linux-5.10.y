@@ -1,8 +1,5 @@
 /*
- *  linux/drivers/remoteproc/ma35d1_rproc.c
- *
  *  MA35D1 remote processors driver
- *
  *
  *  Copyright (C) 2020 Nuvoton Technology Corp.
  *
@@ -32,19 +29,18 @@ enum ma35d1_rproc_messages {
 	RPROC_ECHO_REPLY	= 0xFF000000,
 };
 
-
 struct ma35d1_rproc {
-	struct device           *dev;
-	struct rproc            *rproc;
-	struct reset_control    *m4_rst;
-	void   __iomem          *da_to_va_addr_1;
-	void   __iomem          *da_to_va_addr_2;
-	u32    da_to_va_offset;
-	void   *sram_va;
-	void   *ddr_va;
-	uint32_t sram_size;
-	uint32_t ddr_size;
-	uint32_t ddr_addr;
+	struct device *dev;
+	struct rproc *rproc;
+	struct reset_control *m4_rst;
+	void __iomem *da_to_va_addr_1;
+	void __iomem *da_to_va_addr_2;
+	u32  da_to_va_offset;
+	void *sram_va;
+	void *ddr_va;
+	u32 sram_size;
+	u32 ddr_size;
+	u32 ddr_addr;
 };
 
 static int ma35d1_rproc_start(struct rproc *rproc)
@@ -88,7 +84,7 @@ static void *ma35d1_m4_rproc_da_to_va_ddr(struct rproc *rproc, u64 da, int len)
 	if (len <= 0)
 		return NULL;
 
-	if(da >= nproc->sram_size)
+	if (da >= nproc->sram_size)
 		da = da - nproc->sram_size;
 	else
 		return NULL;
@@ -128,21 +124,22 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 		dev_dbg(dev, "phdr: type %d da 0x%x memsz 0x%x filesz 0x%x file_offset 0x%x fw_size 0x%zx\n",
 				 phdr->p_type, da, memsz, filesz, offset, fw->size);
 
-		if(((da+filesz) >= total_size) && (da < 0x20000)){
-			dev_err(dev, "bad phdr address 0x%x~0x%x over RTP memory size 0x%x \n", da, (da+filesz), total_size);
+		if (((da + filesz) >= total_size) && (da < 0x20000)) {
+			dev_err(dev, "bad phdr address 0x%x~0x%x over RTP memory size 0x%x\n",
+				da, (da+filesz), total_size);
 			ret = -EINVAL;
 			break;
 		}
 
-		if((da > rtp_ddr_addr) && ((da-rtp_ddr_addr+filesz) >= total_size)) {
-			dev_err(dev, "bad phdr address 0x%x~0x%x over RTP memory size 0x%x \n", da, (da-rtp_ddr_addr+filesz), total_size);
+		if ((da > rtp_ddr_addr) && ((da - rtp_ddr_addr + filesz) >= total_size)) {
+			dev_err(dev, "bad phdr address 0x%x~0x%x over RTP memory size 0x%x\n",
+				da, (da-rtp_ddr_addr+filesz), total_size);
 			ret = -EINVAL;
 			break;
 		}
 
 		if (filesz > memsz) {
-			dev_err(dev, "bad phdr filesz 0x%x memsz 0x%x\n",
-				filesz, memsz);
+			dev_err(dev, "bad phdr filesz 0x%x memsz 0x%x\n", filesz, memsz);
 			ret = -EINVAL;
 			break;
 		}
@@ -155,7 +152,7 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 		}
 
 		/* grab the kernel address for this device address */
-		if((da < nproc->sram_size) && ((da + filesz) <= nproc->sram_size)) {
+		if ((da < nproc->sram_size) && ((da + filesz) <= nproc->sram_size)) {
 			ptr = rproc_da_to_va(rproc, da, filesz);
 			if (!ptr) {
 				dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, filesz);
@@ -163,12 +160,13 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 				break;
 			}
 
-			for(j = 0; j <= phdr->p_filesz; j++) {
-				*((volatile unsigned char *)(ptr+j)) = *((volatile unsigned char *)(elf_data + phdr->p_offset+j));
-			}
-		} else if((da < nproc->sram_size) && ((da + filesz) > nproc->sram_size) && ((da + filesz) < total_size)) {
+			for (j = 0; j <= phdr->p_filesz; j++)
+				*((volatile u8 *)(ptr+j)) = *((volatile u8 *)(elf_data + phdr->p_offset+j));
+
+		} else if ((da < nproc->sram_size) && ((da + filesz) > nproc->sram_size) &&
+			   ((da + filesz) < total_size)) {
 			uint32_t sram_remaining = nproc->sram_size - da;
-			uint32_t file_remaining = filesz - sram_remaining;
+			u32 file_remaining = filesz - sram_remaining;
 
 			ptr = rproc_da_to_va(rproc, da, sram_remaining);
 			if (!ptr) {
@@ -177,9 +175,8 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 				break;
 			}
 
-			for(j = 0; j < sram_remaining; j++) {
-				*((volatile unsigned char *)(ptr+j)) = *((volatile unsigned char *)(elf_data + phdr->p_offset+j));
-			}
+			for (j = 0; j < sram_remaining; j++)
+				*((volatile u8 *)(ptr+j)) = *((volatile u8 *)(elf_data + phdr->p_offset+j));
 
 			ptr = ma35d1_m4_rproc_da_to_va_ddr(rproc, (da + sram_remaining), file_remaining);
 			if (!ptr) {
@@ -187,32 +184,28 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 				ret = -EINVAL;
 				break;
 			}
-
-			for(j = 0; j < file_remaining; j++) {
-				*((volatile unsigned char *)(ptr+j)) = 
-					*((volatile unsigned char *)(elf_data + phdr->p_offset + sram_remaining +j));
+			for (j = 0; j < file_remaining; j++) {
+				*((volatile u8 *)(ptr + j)) =
+					*((volatile u8 *)(elf_data + phdr->p_offset +
+							  sram_remaining + j));
 			}
-		}
-		else if((da > nproc->sram_size) && ((da + filesz) < total_size)) {
+		} else if ((da >= nproc->sram_size) && ((da + filesz) < total_size)) {
 			ptr = ma35d1_m4_rproc_da_to_va_ddr(rproc, da, filesz);
 			if (!ptr) {
 				dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, filesz);
 				ret = -EINVAL;
 				break;
 			}
-
-			for(j = 0; j < filesz; j++) {
-				*((volatile unsigned char *)(ptr+j)) = *((volatile unsigned char *)(elf_data + phdr->p_offset +j));
+			for (j = 0; j < filesz; j++) {
+				*((volatile u8 *)(ptr + j)) =
+					*((volatile u8 *)(elf_data + phdr->p_offset + j));
 			}
-		}
-		else
+		} else {
 			dev_err(dev, "bad address 0x%x ~ 0x%x\n", da, (da + filesz));
+		}
 	}
-
 	return ret;
 }
-
-
 
 static int ma35d1_rproc_parse_fw(struct rproc *rproc, const struct firmware *fw)
 {
@@ -266,21 +259,20 @@ static int ma35d1_rproc_probe(struct platform_device *pdev)
 	nproc->da_to_va_offset = 0;
 
 	node = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
-	if(np) {
+	if (np) {
 		ret = of_address_to_resource(node, 0, &r);
-		if(ret == 0) {
+		if (ret == 0) {
 			nproc->ddr_addr = r.start;
 			nproc->ddr_size  = resource_size(&r);
 			nproc->da_to_va_addr_2 = memremap(nproc->ddr_addr, nproc->ddr_size, MEMREMAP_WT);
-		} 
+		}
 	}
 
 	platform_set_drvdata(pdev, rproc);
 
 	nproc->m4_rst = devm_reset_control_get(&pdev->dev, NULL); // error
-	if (IS_ERR(nproc->m4_rst)) {
+	if (IS_ERR(nproc->m4_rst))
 		dev_err(nproc->dev, "Error: Missing rproc controller reset\n");
-	}
 
 	ret = rproc_add(rproc);
 	if (ret)
