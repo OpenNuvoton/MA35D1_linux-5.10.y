@@ -14,12 +14,58 @@ struct m_can_plat_priv {
 	void __iomem *mram_base;
 };
 
+#define REG_READ_TIME 2
+
+static u32 iomap_read_reg(struct m_can_classdev *cdev, int reg)
+{
+	struct m_can_plat_priv *priv = cdev->device_data;
+
+	u32 u32ReadReg = 0x0;
+	u32 u32ReadReg_1 = 0x0;
+	u32 u32TimeOutCnt = 0x0;
+	u32 u32TimeOutCnt_1 = 0x0;
+
+	do{
+		u32ReadReg = readl(priv->base + reg);
+
+		if(u32ReadReg != 0x0) {
+
+			while(1) {
+				u32ReadReg_1 = readl(priv->base + reg);
+
+				if(u32ReadReg_1 == u32ReadReg) {
+					u32TimeOutCnt_1++;
+				}
+				else {
+					u32ReadReg = u32ReadReg_1;
+					u32TimeOutCnt_1 = 0;
+				}
+
+				if(u32TimeOutCnt_1 > REG_READ_TIME) {
+					return u32ReadReg;
+				}
+			}
+		}
+
+		u32TimeOutCnt++;
+
+		if(u32TimeOutCnt > 10) {
+			break;
+		}
+	}while(u32ReadReg == 0x0);
+
+	return u32ReadReg;
+}
+
+
+#if 0
 static u32 iomap_read_reg(struct m_can_classdev *cdev, int reg)
 {
 	struct m_can_plat_priv *priv = cdev->device_data;
 
 	return readl(priv->base + reg);
 }
+#endif
 
 static u32 iomap_read_fifo(struct m_can_classdev *cdev, int offset)
 {

@@ -323,31 +323,10 @@ enum m_can_reg {
 
 #define CANFD_READ_REG_TIMEOUT    48                 /*!< CANFD read register time-out count */
 
-#if 1
-static inline u32 m_can_read(struct m_can_classdev *cdev, enum m_can_reg reg)
-{
-	u32 u32ReadReg = 0x0;
-	u32 u32TimeOutCnt = 0x0;
-	u32ReadReg = 0UL;
-
-	do{
-		u32ReadReg = cdev->ops->read_reg(cdev, reg);
-		u32TimeOutCnt++;
-		if(u32TimeOutCnt > 50) {
-			break;
-		}
-	}while(u32ReadReg == 0x0);
-	
-	return u32ReadReg;
-}
-#endif
-
-#if 0
 static inline u32 m_can_read(struct m_can_classdev *cdev, enum m_can_reg reg)
 {
 	return cdev->ops->read_reg(cdev, reg);
 }
-#endif
 
 static inline void m_can_write(struct m_can_classdev *cdev, enum m_can_reg reg,
 			       u32 val)
