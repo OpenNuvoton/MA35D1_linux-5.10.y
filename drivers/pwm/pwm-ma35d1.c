@@ -19,6 +19,8 @@
 #include <linux/clk.h>
 #include <linux/of.h>
 #include <linux/io.h>
+#include <linux/interrupt.h>
+#include <linux/wait.h>
 #include <linux/pwm.h>
 
 
@@ -42,14 +44,58 @@
 #define REG_PWM_CMPDAT3		(0x5C)
 #define REG_PWM_CMPDAT4		(0x60)
 #define REG_PWM_CMPDAT5		(0x64)
+#define REG_PWM_CNT0		(0x90)
+#define REG_PWM_CNT1		(0x94)
+#define REG_PWM_CNT2		(0x98)
+#define REG_PWM_CNT3		(0x9C)
 #define REG_PWM_WGCTL0		(0xB0)
 #define REG_PWM_WGCTL1		(0xB4)
 #define REG_PWM_POLCTL		(0xD4)
 #define REG_PWM_POEN		(0xD8)
+#define REG_PWM_CAPINEN		(0x200)
+#define REG_PWM_CAPCTL		(0x204)
+#define REG_PWM_CAPSTS		(0x208)
+#define REG_PWM_RCAPDAT0	(0x20C)
+#define REG_PWM_RCAPDAT1	(0x214)
+#define REG_PWM_RCAPDAT2	(0x21C)
+#define REG_PWM_RCAPDAT3	(0x224)
+#define REG_PWM_FCAPDAT0	(0x210)
+#define REG_PWM_FCAPDAT1	(0x218)
+#define REG_PWM_FCAPDAT2	(0x220)
+#define REG_PWM_FCAPDAT3	(0x228)
+#define REG_PWM_CAPIEN		(0x250)
+#define REG_PWM_CAPIF		(0x254)
 
 #define WGCTL_MASK		0x3
 #define WGCTL_HIGH		0x2
 #define WGCTL_LOW		0x1
+
+#define CAP_CLK_PSC		9
+
+/*
+ * Each capture input can be programmed to detect rising-edge, falling-edge,
+ * either edge or neither egde.
+ */
+enum ma35d1_cpt_edge {
+	CPT_EDGE_DISABLED,
+	CPT_EDGE_RISING,
+	CPT_EDGE_FALLING,
+	CPT_EDGE_BOTH,
+};
+
+struct ma35d1_cpt_ddata {
+	u32 snapshot[3];
+	unsigned int index;
+	struct mutex lock;
+	wait_queue_head_t wait;
+};
+
+struct ma35d1_pwm_compat_data {
+	unsigned int pwm_num_devs;
+	unsigned int cpt_num_devs;
+	unsigned int max_pwm_cnt;
+	unsigned int max_prescale;
+};
 
 struct ma35d1_chip {
 	struct platform_device	*pdev;
@@ -61,6 +107,133 @@ struct ma35d1_chip {
 
 #define to_ma35d1_chip(chip)	container_of(chip, struct ma35d1_chip, chip)
 
+static void CalPeriodTime(struct pwm_chip *chip, uint32_t u32Ch, struct pwm_capture *result)
+{
+	struct ma35d1_chip *ma35d1 = to_ma35d1_chip(chip);
+	uint16_t u32Count[4];
+	uint32_t u32i;
+	uint16_t u16RisingTime, u16FallingTime, u16HighPeriod, u16LowPeriod, u16TotalPeriod;
+	unsigned int effective_ticks;
+
+	/* Clear Capture Falling Indicator (Time A) */
+	__raw_writel(0x100 << u32Ch, ma35d1->regs + REG_PWM_CAPIF);
+
+	/* Wait for Capture Falling Indicator  */
+	while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x100 << u32Ch)) == 0);
+
+	/* Clear Capture Falling Indicator (Time B)*/
+	__raw_writel(0x100 << u32Ch, ma35d1->regs + REG_PWM_CAPIF);
+
+	u32i = 0;
+
+	while(u32i < 4) {
+		/* Wait for Capture Falling Indicator */
+		while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x101 << u32Ch)) != (0x101 << u32Ch));
+
+		/* Clear Capture Falling and Rising Indicator */
+		__raw_writel(0x101 << u32Ch, ma35d1->regs + REG_PWM_CAPIF);
+
+		/* Get Capture Falling Latch Counter Data */
+		u32Count[u32i++] = __raw_readl(ma35d1->regs + REG_PWM_FCAPDAT0 + (u32Ch * 8));
+
+		/* Wait for Capture Rising Indicator */
+		//while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x101 << u32Ch)) != (0x101 << u32Ch));
+		while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x1 << u32Ch)) != (0x1 << u32Ch));
+
+		/* Clear Capture Rising Indicator */
+		__raw_writel(0x1 << u32Ch, ma35d1->regs + REG_PWM_CAPIF);
+
+		/* Get Capture Rising Latch Counter Data */
+		u32Count[u32i++] = __raw_readl(ma35d1->regs + REG_PWM_RCAPDAT0 + (u32Ch * 8));
+	}
+
+	//printk("Count[0] = %d, Count[1] = %d, Count[2] = %d, Count[3] = %d\n", u32Count[0], u32Count[1], u32Count[2], u32Count[3]);
+
+	u16RisingTime = u32Count[1];
+
+	u16FallingTime = u32Count[0];
+
+	u16HighPeriod = u32Count[1] - u32Count[2];
+
+	u16LowPeriod = 0x10000 - u32Count[1];
+
+	u16TotalPeriod = 0x10000 - u32Count[2];
+
+	//printk("\nCapture Result: Rising Time = %d, Falling Time = %d \nHigh Period = %d, Low Period = %d, Total Period = %d.\n\n",
+	//      u16RisingTime, u16FallingTime, u16HighPeriod, u16LowPeriod, u16TotalPeriod);
+
+	effective_ticks = clk_get_rate(ma35d1->clk);
+	result->period = u16TotalPeriod * NSEC_PER_SEC / effective_ticks * (CAP_CLK_PSC + 1);
+	result->duty_cycle = u16HighPeriod * NSEC_PER_SEC / effective_ticks * (CAP_CLK_PSC + 1);
+
+}
+
+static int ma35d1_pwm_capture(struct pwm_chip *chip, struct pwm_device *pwm,
+                              struct pwm_capture *result, unsigned long timeout)
+{
+	struct ma35d1_chip *ma35d1 = to_ma35d1_chip(chip);
+	int ch = (pwm->hwpwm + chip->base) % ma35d1->chip.npwm;
+	unsigned long flags;
+
+	struct ma35d1_cpt_ddata *ddata = pwm_get_chip_data(pwm);
+	struct device *dev = ma35d1->chip.dev;
+
+	int ret = 0;
+
+	if (pwm->hwpwm >= 6 /*cdata->cpt_num_devs*/) {
+		dev_err(dev, "device %u is not valid\n", pwm->hwpwm);
+		return -EINVAL;
+	}
+
+	spin_lock_irqsave(&ma35d1->lock, flags);
+	ddata->index = 0;
+
+	/* Set PSC */
+	if (ch < 2)
+		__raw_writel(CAP_CLK_PSC, ma35d1->regs + REG_PWM_CLKPSC01);
+	else if (ch < 4)
+		__raw_writel(CAP_CLK_PSC, ma35d1->regs + REG_PWM_CLKPSC23);
+	else if (ch < 6)
+		__raw_writel(CAP_CLK_PSC, ma35d1->regs + REG_PWM_CLKPSC45);
+
+	/* Set to down count type */
+	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CTL1) & ~(3 << (ch << 1)))
+	             | (1 << (ch << 1)), ma35d1->regs + REG_PWM_CTL1);
+
+	/* Set period */
+	__raw_writel(0xFFFF, ma35d1->regs + REG_PWM_PERIOD0 + (ch * 4));
+
+	/* Enable CNTEN */
+	__raw_writel(__raw_readl(ma35d1->regs + REG_PWM_CNTEN)
+	             | (1 << ch), ma35d1->regs + REG_PWM_CNTEN);
+
+	/* Enable capture input enable */
+	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CAPINEN) | (0x1 << ch)),
+	             ma35d1->regs + REG_PWM_CAPINEN);
+	/* Enable capture function */
+	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CAPCTL) | (0x1 << ch)),
+	             ma35d1->regs + REG_PWM_CAPCTL);
+	/* Enable falling capture reload */
+	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CAPCTL) | (0x1000000 << ch)),
+	             ma35d1->regs + REG_PWM_CAPCTL);
+
+	/* Wait until capture channel start to count */
+	while (__raw_readl(ma35d1->regs + REG_PWM_CNT0 + (ch *4)) == 0);
+
+	CalPeriodTime(chip, ch, result);
+
+	/* Disable capture input enable */
+	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CAPINEN) & ~(0x1 << ch)),
+	             ma35d1->regs + REG_PWM_CAPINEN);
+	/* Disable falling capture reload and capture function enable */
+	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CAPCTL) & ~(0x1000001 << ch)),
+	             ma35d1->regs + REG_PWM_CAPCTL);
+
+	spin_unlock_irqrestore(&ma35d1->lock, flags);
+
+	return ret;
+}
+
 static int ma35d1_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
 	struct ma35d1_chip *ma35d1 = to_ma35d1_chip(chip);
@@ -70,13 +243,13 @@ static int ma35d1_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 	spin_lock_irqsave(&ma35d1->lock, flags);
 
 	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_WGCTL0) & ~(WGCTL_MASK << (ch*2)))
-			| (WGCTL_HIGH << (ch*2)), ma35d1->regs + REG_PWM_WGCTL0);
+	             | (WGCTL_HIGH << (ch*2)), ma35d1->regs + REG_PWM_WGCTL0);
 	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_WGCTL1) & ~(WGCTL_MASK << (ch*2)))
-			| (WGCTL_LOW << (ch*2)), ma35d1->regs + REG_PWM_WGCTL1);
+	             | (WGCTL_LOW << (ch*2)), ma35d1->regs + REG_PWM_WGCTL1);
 	__raw_writel(__raw_readl(ma35d1->regs + REG_PWM_POEN)
-			| (1 << ch), ma35d1->regs + REG_PWM_POEN);
+	             | (1 << ch), ma35d1->regs + REG_PWM_POEN);
 	__raw_writel(__raw_readl(ma35d1->regs + REG_PWM_CNTEN)
-			| (1 << ch), ma35d1->regs + REG_PWM_CNTEN);
+	             | (1 << ch), ma35d1->regs + REG_PWM_CNTEN);
 
 	spin_unlock_irqrestore(&ma35d1->lock, flags);
 
@@ -92,15 +265,15 @@ static void ma35d1_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 	spin_lock_irqsave(&ma35d1->lock, flags);
 
 	__raw_writel(__raw_readl(ma35d1->regs + REG_PWM_POEN)
-			& ~(1 << ch), ma35d1->regs + REG_PWM_POEN);
+	             & ~(1 << ch), ma35d1->regs + REG_PWM_POEN);
 	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CNTEN)
-			& ~(1 << ch)), ma35d1->regs + REG_PWM_CNTEN);
+	              & ~(1 << ch)), ma35d1->regs + REG_PWM_CNTEN);
 
 	spin_unlock_irqrestore(&ma35d1->lock, flags);
 }
 
 static int ma35d1_pwm_set_polarity(struct pwm_chip *chip, struct pwm_device *pwm,
-					enum pwm_polarity polarity)
+                                   enum pwm_polarity polarity)
 {
 	struct ma35d1_chip *ma35d1 = to_ma35d1_chip(chip);
 	int ch = (pwm->hwpwm + chip->base) % ma35d1->chip.npwm;
@@ -110,10 +283,10 @@ static int ma35d1_pwm_set_polarity(struct pwm_chip *chip, struct pwm_device *pwm
 
 	if (polarity == PWM_POLARITY_NORMAL)
 		__raw_writel(__raw_readl(ma35d1->regs + REG_PWM_POLCTL)
-				& ~(1 << ch), ma35d1->regs + REG_PWM_POLCTL);
+		             & ~(1 << ch), ma35d1->regs + REG_PWM_POLCTL);
 	else
 		__raw_writel(__raw_readl(ma35d1->regs + REG_PWM_POLCTL)
-				| (1 << ch), ma35d1->regs + REG_PWM_POLCTL);
+		             | (1 << ch), ma35d1->regs + REG_PWM_POLCTL);
 
 	spin_unlock_irqrestore(&ma35d1->lock, flags);
 
@@ -121,7 +294,7 @@ static int ma35d1_pwm_set_polarity(struct pwm_chip *chip, struct pwm_device *pwm
 }
 
 static int ma35d1_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
-				int duty_ns, int period_ns)
+                             int duty_ns, int period_ns)
 {
 	struct ma35d1_chip *ma35d1 = to_ma35d1_chip(chip);
 	unsigned long period, duty, prescale;
@@ -177,6 +350,7 @@ static int ma35d1_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 }
 
 static struct pwm_ops ma35d1_pwm_ops = {
+	.capture = ma35d1_pwm_capture,
 	.enable = ma35d1_pwm_enable,
 	.disable = ma35d1_pwm_disable,
 	.config = ma35d1_pwm_config,
@@ -189,6 +363,7 @@ static int ma35d1_pwm_probe(struct platform_device *pdev)
 	struct ma35d1_chip *ma35d1;
 	int err, ret;
 	struct resource *r;
+	unsigned int i;
 
 	ma35d1 = devm_kzalloc(&pdev->dev, sizeof(*ma35d1), GFP_KERNEL);
 	if (ma35d1 == NULL)
@@ -220,6 +395,19 @@ static int ma35d1_pwm_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		dev_err(&pdev->dev, "failed to register pwm\n");
 		goto err;
+	}
+
+	for (i = 0; i < 6 /*cdata->cpt_num_devs*/; i++) {
+		struct ma35d1_cpt_ddata *ddata;
+
+		ddata = devm_kzalloc(&pdev->dev, sizeof(*ddata), GFP_KERNEL);
+		if (!ddata)
+			return -ENOMEM;
+
+		init_waitqueue_head(&ddata->wait);
+		mutex_init(&ddata->lock);
+
+		pwm_set_chip_data(&ma35d1->chip.pwms[i], ddata);
 	}
 
 	return 0;
