@@ -505,7 +505,7 @@ static inline int ma35d1_nand_dma_transfer(struct nand_chip *chip,
 			dev_err(nand->dev, "dma mapping error\n");
 			return -EINVAL;
 		}
-		nand->dma_buf = (unsigned char *) dma_addr;
+		nand->dma_buf = (unsigned char *) addr;
 
 		writel((unsigned long)dma_addr, nand->base+REG_NFI_DMASA);
 		writel(readl(nand->base+REG_NFI_NANDCTL) | 0x2, nand->base+REG_NFI_NANDCTL);
