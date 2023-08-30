@@ -71,6 +71,7 @@
 #define WGCTL_LOW		0x1
 
 #define CAP_CLK_PSC		9
+#define TIMEOUT_CNT		1000000
 
 /*
  * Each capture input can be programmed to detect rising-edge, falling-edge,
@@ -107,19 +108,23 @@ struct ma35d1_chip {
 
 #define to_ma35d1_chip(chip)	container_of(chip, struct ma35d1_chip, chip)
 
-static void CalPeriodTime(struct pwm_chip *chip, uint32_t u32Ch, struct pwm_capture *result)
+static int CalPeriodTime(struct pwm_chip *chip, uint32_t u32Ch, struct pwm_capture *result)
 {
 	struct ma35d1_chip *ma35d1 = to_ma35d1_chip(chip);
 	uint16_t u32Count[4];
 	uint32_t u32i;
 	uint16_t u16RisingTime, u16FallingTime, u16HighPeriod, u16LowPeriod, u16TotalPeriod;
 	unsigned int effective_ticks;
+	unsigned long timeout_cnt = 0;
 
 	/* Clear Capture Falling Indicator (Time A) */
 	__raw_writel(0x100 << u32Ch, ma35d1->regs + REG_PWM_CAPIF);
 
 	/* Wait for Capture Falling Indicator  */
-	while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x100 << u32Ch)) == 0);
+	while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x100 << u32Ch)) == 0) {
+		if (++timeout_cnt > TIMEOUT_CNT)
+			return -1;
+	}
 
 	/* Clear Capture Falling Indicator (Time B)*/
 	__raw_writel(0x100 << u32Ch, ma35d1->regs + REG_PWM_CAPIF);
@@ -127,8 +132,12 @@ static void CalPeriodTime(struct pwm_chip *chip, uint32_t u32Ch, struct pwm_capt
 	u32i = 0;
 
 	while(u32i < 4) {
+		timeout_cnt = 0;
 		/* Wait for Capture Falling Indicator */
-		while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x101 << u32Ch)) != (0x101 << u32Ch));
+		while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x101 << u32Ch)) != (0x101 << u32Ch)) {
+			if (++timeout_cnt > TIMEOUT_CNT)
+				return -1;
+		}
 
 		/* Clear Capture Falling and Rising Indicator */
 		__raw_writel(0x101 << u32Ch, ma35d1->regs + REG_PWM_CAPIF);
@@ -136,9 +145,13 @@ static void CalPeriodTime(struct pwm_chip *chip, uint32_t u32Ch, struct pwm_capt
 		/* Get Capture Falling Latch Counter Data */
 		u32Count[u32i++] = __raw_readl(ma35d1->regs + REG_PWM_FCAPDAT0 + (u32Ch * 8));
 
+		timeout_cnt = 0;
 		/* Wait for Capture Rising Indicator */
 		//while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x101 << u32Ch)) != (0x101 << u32Ch));
-		while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x1 << u32Ch)) != (0x1 << u32Ch));
+		while ((__raw_readl(ma35d1->regs + REG_PWM_CAPIF) & (0x1 << u32Ch)) != (0x1 << u32Ch)) {
+			if (++timeout_cnt > TIMEOUT_CNT)
+				return -1;
+		}
 
 		/* Clear Capture Rising Indicator */
 		__raw_writel(0x1 << u32Ch, ma35d1->regs + REG_PWM_CAPIF);
@@ -166,6 +179,7 @@ static void CalPeriodTime(struct pwm_chip *chip, uint32_t u32Ch, struct pwm_capt
 	result->period = u16TotalPeriod * NSEC_PER_SEC / effective_ticks * (CAP_CLK_PSC + 1);
 	result->duty_cycle = u16HighPeriod * NSEC_PER_SEC / effective_ticks * (CAP_CLK_PSC + 1);
 
+	return 0;
 }
 
 static int ma35d1_pwm_capture(struct pwm_chip *chip, struct pwm_device *pwm,
@@ -178,6 +192,7 @@ static int ma35d1_pwm_capture(struct pwm_chip *chip, struct pwm_device *pwm,
 	struct ma35d1_cpt_ddata *ddata = pwm_get_chip_data(pwm);
 	struct device *dev = ma35d1->chip.dev;
 
+	int timeout_err = 0;
 	int ret = 0;
 
 	if (pwm->hwpwm >= 6 /*cdata->cpt_num_devs*/) {
@@ -220,7 +235,11 @@ static int ma35d1_pwm_capture(struct pwm_chip *chip, struct pwm_device *pwm,
 	/* Wait until capture channel start to count */
 	while (__raw_readl(ma35d1->regs + REG_PWM_CNT0 + (ch *4)) == 0);
 
-	CalPeriodTime(chip, ch, result);
+	timeout_err = CalPeriodTime(chip, ch, result);
+	if (timeout_err) {
+		result->period = 0;
+		result->duty_cycle = 0;
+	}
 
 	/* Disable capture input enable */
 	__raw_writel((__raw_readl(ma35d1->regs + REG_PWM_CAPINEN) & ~(0x1 << ch)),
