@@ -24,6 +24,8 @@ static u32 iomap_read_reg(struct m_can_classdev *cdev, int reg)
 	u32 u32ReadReg_1 = 0x0;
 	u32 u32TimeOutCnt = 0x0;
 
+	local_irq_disable();
+
 	u32ReadReg = readl(priv->base + reg);
 
 	do{
@@ -38,6 +40,8 @@ static u32 iomap_read_reg(struct m_can_classdev *cdev, int reg)
 		}
 
 	}while(u32TimeOutCnt < REG_READ_TIME);
+
+	local_irq_enable();
 	
 	return u32ReadReg;
 }
