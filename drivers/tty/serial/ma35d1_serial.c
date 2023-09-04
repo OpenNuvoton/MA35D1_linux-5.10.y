@@ -111,6 +111,8 @@ struct uart_ma35d1_port {
 	unsigned int console_line;
 	unsigned int console_int;
 
+	int max_count;
+
 	/* We provide a per-port pm hook. */
 	void    (*pm)(struct uart_port *port,
 			unsigned int state, unsigned int old);
@@ -559,8 +561,6 @@ static void ma35d1serial_enable_ms(struct uart_port *port)
 
 }
 
-static int max_count;
-
 static void
 receive_chars(struct uart_ma35d1_port *up)
 {
@@ -614,13 +614,13 @@ receive_chars(struct uart_ma35d1_port *up)
 			continue;
 
 		uart_insert_char(&up->port, fsr, RX_OVER_IF, ch, flag);
-		max_count++;
+		up->max_count++;
 		dcnt = (serial_in(up, UART_REG_FSR) >> 8) & 0x3f;
-		if (max_count > 1023) {
+		if (up->max_count > 1023) {
 			spin_lock(&up->port.lock);
 			tty_flip_buffer_push(&up->port.state->port);
 			spin_unlock(&up->port.lock);
-			max_count = 0;
+			up->max_count = 0;
 			if ((isr & TOUT_IF) && (dcnt == 0))
 				goto tout_end;
 		}
@@ -636,7 +636,7 @@ receive_chars(struct uart_ma35d1_port *up)
 	tty_flip_buffer_push(&up->port.state->port);
 	spin_unlock(&up->port.lock);
 tout_end:
-	max_count = 0;
+	up->max_count = 0;
 }
 
 static void transmit_chars(struct uart_ma35d1_port *up)
@@ -1371,6 +1371,8 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 		return -EINVAL;
 
 	up = &ma35d1serial_ports[i];
+
+	up->max_count = 0;
 
 	up->port.line = i;
 
