@@ -64,7 +64,7 @@
 #define ADC_CONF_TEN		(1 << 0)
 #define ADC_CONF_ZEN		(1 << 1)
 #define ADC_CONF_NACEN		(1 << 2)
-#define ADC_CONF_HSPEED		(1 << 22)
+#define ADC_CONF_SPEED		(1 << 22)
 
 #define ADC_CONF_CHSEL_POS	12
 #define ADC_CONF_CHSEL_MSK	(7 << 12)
@@ -763,11 +763,13 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	}
 
 	clk_set_rate(priv->clk, priv->clk_rate);
-	// Set to high speed mode if clock rate is higher than 3.2MHz
-	if (priv->clk_rate > 3200000)
-		__raw_writel(ADC_CONF_HSPEED, priv->base + REG_ADC_CONF);
+	// Set to high speed mode if clock rate is higher than 200kHz
+	if (priv->clk_rate < 200000)
+		__raw_writel(__raw_readl(priv->base + REG_ADC_CONF) |
+					ADC_CONF_SPEED, priv->base + REG_ADC_CONF);
 	else
-		__raw_writel(0, priv->base + REG_ADC_CONF);
+		__raw_writel(__raw_readl(priv->base + REG_ADC_CONF) &
+					~ADC_CONF_SPEED, priv->base + REG_ADC_CONF);
 
 	__raw_writel(ADC_CTL_ADEN, priv->base + REG_ADC_CTL);
 
