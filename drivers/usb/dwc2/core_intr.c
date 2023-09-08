@@ -369,10 +369,10 @@ static void dwc2_wakeup_from_lpm_l1(struct dwc2_hsotg *hsotg)
 				break;
 
 			udelay(1);
-		} while (++i < 500);
+		} while (++i < 200);
 
-		if (i == 500) {
-			dev_err(hsotg->dev, "Failed to exit L1 sleep state in 500us.\n");
+		if (i == 200) {
+			dev_err(hsotg->dev, "Failed to exit L1 sleep state in 200us.\n");
 			return;
 		}
 		dwc2_gadget_init_lpm(hsotg);

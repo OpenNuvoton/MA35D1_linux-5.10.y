@@ -379,6 +379,11 @@ static void dwc2_set_default_params(struct dwc2_hsotg *hsotg)
 	p->external_id_pin_ctl = false;
 	p->ipg_isoc_en = false;
 	p->service_interval = false;
+	p->lpm = false;
+	p->lpm_clock_gating = false;
+	p->besl = false;
+	p->hird_threshold_en = false;
+	p->hird_threshold = 0;
 	p->max_packet_count = hw->max_packet_count;
 	p->max_transfer_size = hw->max_transfer_size;
 	p->ahbcfg = GAHBCFG_HBSTLEN_INCR << GAHBCFG_HBSTLEN_SHIFT;
