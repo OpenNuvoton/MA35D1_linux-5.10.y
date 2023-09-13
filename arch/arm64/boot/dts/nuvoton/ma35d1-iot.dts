@@ -398,11 +398,11 @@
 	i2s0 {
 		pinctrl_i2s0: i2s0grp{
 			nuvoton,pins =
-				<SYS_GPN_MFPH_PN15MFP_I2S0_MCLK	&pcfg_default>,
-				<SYS_GPK_MFPH_PK12MFP_I2S0_LRCK	&pcfg_default>,
-				<SYS_GPK_MFPH_PK13MFP_I2S0_BCLK	&pcfg_default>,
-				<SYS_GPK_MFPH_PK14MFP_I2S0_DI	&pcfg_default>,
-				<SYS_GPK_MFPH_PK15MFP_I2S0_DO	&pcfg_default>;
+				<SYS_GPG_MFPH_PG11MFP_I2S0_MCLK	&pcfg_default>,
+				<SYS_GPG_MFPH_PG12MFP_I2S0_LRCK	&pcfg_default>,
+				<SYS_GPG_MFPH_PG13MFP_I2S0_BCLK	&pcfg_default>,
+				<SYS_GPG_MFPH_PG14MFP_I2S0_DI	&pcfg_default>,
+				<SYS_GPG_MFPH_PG15MFP_I2S0_DO	&pcfg_default>;
 		};
 	};
 
