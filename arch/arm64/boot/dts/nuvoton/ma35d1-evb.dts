@@ -340,6 +340,12 @@
 	pinctrl-0 = <&pinctrl_can3>;
 };
 
+&keypad {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_keypad>;
+};
+
 &epwm1 {
 	status = "okay";
 	pinctrl-names = "default";
@@ -665,6 +671,20 @@
 			nuvoton,pins =
 				<SYS_GPL_MFPH_PL10MFP_CAN3_RXD	&pcfg_default>,
 				<SYS_GPL_MFPH_PL11MFP_CAN3_TXD	&pcfg_default>;
+		};
+	};
+
+	keypad {
+		pinctrl_keypad: keypad_grp{
+			nuvoton,pins =
+				<SYS_GPF_MFPL_PF0MFP_KPI_COL0	&pcfg_keypad>,
+				<SYS_GPF_MFPL_PF1MFP_KPI_COL1	&pcfg_keypad>,
+				<SYS_GPF_MFPL_PF2MFP_KPI_COL2	&pcfg_keypad>,
+				<SYS_GPF_MFPL_PF3MFP_KPI_COL3	&pcfg_keypad>,
+				<SYS_GPF_MFPL_PF4MFP_KPI_ROW0	&pcfg_keypad>,
+				<SYS_GPF_MFPL_PF5MFP_KPI_ROW1	&pcfg_keypad>,
+				<SYS_GPF_MFPL_PF6MFP_KPI_ROW2	&pcfg_keypad>,
+				<SYS_GPF_MFPL_PF7MFP_KPI_ROW3	&pcfg_keypad>;
 		};
 	};
 

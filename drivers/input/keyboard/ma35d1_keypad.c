@@ -92,6 +92,7 @@ struct ma35d1_keypad {
 	unsigned int debounce_val;
 	unsigned int pre_scale;
 	unsigned int pre_scale_divider;
+	unsigned int mask_col;
 };
 
 
@@ -123,6 +124,11 @@ static void ma35d1_keypad_scan_matrix(struct ma35d1_keypad *keypad,
 	__raw_writel(KeyEvent[1], (keypad->mmio_base + KPI_KPE1));
 	__raw_writel(KeyEvent[2], (keypad->mmio_base + KPI_KRE0));
 	__raw_writel(KeyEvent[3], (keypad->mmio_base + KPI_KRE1));
+
+	KeyEvent[0] = KeyEvent[0] & keypad->mask_col;
+	KeyEvent[1] = KeyEvent[1] & keypad->mask_col;
+	KeyEvent[2] = KeyEvent[2] & keypad->mask_col;
+	KeyEvent[3] = KeyEvent[3] & keypad->mask_col;
 
 	for (j = 0; j < 4; j++) {
 		if (KeyEvent[j] != 0) {
@@ -210,6 +216,7 @@ static int ma35d1_keypad_probe(struct platform_device *pdev)
 	struct resource *res;
 	int irq;
 	int error = 0;
+	u32 i;
 	struct clk *clk;
 
 	keypad = devm_kzalloc(&pdev->dev, sizeof(*keypad), GFP_KERNEL);
@@ -274,6 +281,17 @@ static int ma35d1_keypad_probe(struct platform_device *pdev)
 	if (error) {
 		dev_err(&pdev->dev, "failed to build keymap\n");
 		goto failed_put_clk;
+	}
+
+	if (keypad->kpi_col == 0x0) keypad->mask_col = 0x0;
+	else {
+		keypad->mask_col = 1;
+		for (i = 0; i < keypad->kpi_col; i++) {
+			keypad->mask_col = keypad->mask_col *2;
+		}
+		keypad->mask_col = keypad->mask_col - 1;
+		keypad->mask_col = (keypad->mask_col) | (keypad->mask_col << 8) |
+						(keypad->mask_col << 16) | (keypad->mask_col << 24);
 	}
 
 	error = request_irq(keypad->irq, ma35d1_keypad_irq_handler,

@@ -1025,6 +1025,14 @@
 			power-source = <1800>; /* 1800:1.8v , 3300:3.3v */
 			drive-strength = <7>; /* 0 ~ 7 */
 		};
+
+		pcfg_keypad: pcfg-keypad {
+			slew-rate = <0>; /* 0:normal, 1:high */
+			input-schmitt-disable;  /* input-schmitt-disable, input-schmitt-enable */
+			bias-pull-up; /* bias-disable, bias-pull-up, bias-pull-down  */
+			power-source = <3300>; /* 1800:1.8v , 3300:3.3v */
+			drive-strength = <0>; /* 0 ~ 7 */
+		};
 	};
 
 	sdhci0: sdhci@40180000 {
