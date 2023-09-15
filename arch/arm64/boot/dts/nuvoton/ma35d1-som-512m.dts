@@ -286,6 +286,7 @@
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2s0>;
+	powerdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>; /* PD13 */
 };
 
 &i2s_pcm {
