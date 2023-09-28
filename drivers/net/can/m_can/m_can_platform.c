@@ -12,6 +12,7 @@
 struct m_can_plat_priv {
 	void __iomem *base;
 	void __iomem *mram_base;
+	spinlock_t	lock;
 };
 
 #define REG_READ_TIME 3
@@ -23,8 +24,9 @@ static u32 iomap_read_reg(struct m_can_classdev *cdev, int reg)
 	u32 u32ReadReg = 0x0;
 	u32 u32ReadReg_1 = 0x0;
 	u32 u32TimeOutCnt = 0x0;
+	unsigned long flags;
 
-	local_irq_disable();
+	spin_lock_irqsave(&priv->lock, flags);
 
 	u32ReadReg = readl(priv->base + reg);
 
@@ -41,7 +43,7 @@ static u32 iomap_read_reg(struct m_can_classdev *cdev, int reg)
 
 	}while(u32TimeOutCnt < REG_READ_TIME);
 
-	local_irq_enable();
+	spin_unlock_irqrestore(&priv->lock, flags);
 	
 	return u32ReadReg;
 }
@@ -112,6 +114,8 @@ static int m_can_plat_probe(struct platform_device *pdev)
 	ret = m_can_class_get_clocks(mcan_class);
 	if (ret)
 		goto probe_fail;
+
+	spin_lock_init(&priv->lock);
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "m_can");
 	addr = devm_ioremap_resource(&pdev->dev, res);
