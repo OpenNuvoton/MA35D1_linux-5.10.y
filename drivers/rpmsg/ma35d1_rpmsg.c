@@ -116,6 +116,7 @@ static void ma35d1_rpmsg_recv_from_remote(struct mbox_client *cl, void *msg)
 static void ma35d1_rpmsg_ept_release(struct kref *kref)
 {
 	struct rpmsg_endpoint *ept = container_of(kref, struct rpmsg_endpoint, refcount);
+
 	kfree(to_ma35d1_rpmsg_endpoint(ept));
 }
 
@@ -141,7 +142,7 @@ static int ma35d1_rpmsg_send(struct rpmsg_endpoint *ept, void *data, int len)
 	if (ret < 0)
 		dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
 
-	return ret;
+	return mbox_flush(priv->mbox_chan, 50);
 }
 
 static int ma35d1_rpmsg_trysend(struct rpmsg_endpoint *ept, void *data, int len)
@@ -161,7 +162,7 @@ static int ma35d1_rpmsg_trysend(struct rpmsg_endpoint *ept, void *data, int len)
 	if (ret < 0)
 		dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
 
-	return ret;
+	return mbox_flush(priv->mbox_chan, 50);
 }
 
 static __poll_t ma35d1_rpmsg_poll(struct rpmsg_endpoint *ept, struct file *filp, poll_table *wait)
@@ -220,6 +221,7 @@ static struct rpmsg_endpoint *ma35d1_rpmsg_create_ept(struct rpmsg_device *rpdev
 static void ma35d1_rpmsg_release(struct device *dev)
 {
 	struct ma35d1_rpmsg_priv *priv = to_ma35d1_rpmsg_priv(dev);
+
 	kfree(priv);
 }
 
@@ -252,7 +254,7 @@ static void ma35d1_rpmsg_mbox_set(struct ma35d1_rpmsg_priv *priv)
 	priv->mbox_client.tx_done        = NULL;
 	priv->mbox_client.tx_block       = false;
 	priv->mbox_client.knows_txdone   = false;
-	priv->mbox_client.tx_tout        = 1;
+	priv->mbox_client.tx_tout        = 10;
 
 	priv->mbox_chan = mbox_request_channel(&priv->mbox_client, 0);
 	if (IS_ERR(priv->mbox_chan)) {

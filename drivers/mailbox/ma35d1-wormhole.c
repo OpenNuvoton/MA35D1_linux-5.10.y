@@ -46,6 +46,7 @@
 #define INTSTS_RX0IF		0x01000000
 #define GINTTRG_TRGGI0		0x00000001
 #define TXCTL_CH0SND		0x00000001
+#define TXCTL_CH0RC		0x00010000
 #define TXSTS_CH0RDY		0x00000001
 #define RXCTL_CH0ACK		0x00000001
 #define RXSTS_CH0RDY		0x00000001
@@ -59,7 +60,6 @@ struct nvt_wh {
 	struct mbox_chan	*chan;
 };
 
-
 struct nvt_priv {
 	struct device		*dev;
 	void __iomem		*base;
@@ -68,9 +68,6 @@ struct nvt_priv {
 	bool			wake;
 	struct mbox_controller	mbox;
 };
-
-
-
 
 static irqreturn_t wormhole_isr(int irq, void *data)
 {
@@ -126,9 +123,12 @@ static int wormhole_send_data(struct mbox_chan *chan, void *data)
 
 			for (i = 0; i < DATA_COUNT; i++)
 				iowrite32(*d++, base + sizeof(u32) * i);
+
 			iowrite32(TXCTL_CH0SND << wh->ch, priv->base + TXCTL);
-		} else
+
+		} else {
 			return -EBUSY;
+		}
 	} else if (wh->ch < DATA_CHANS + GINT_CHANS) {
 		// Don't have data to send, simply trigger GI event
 		iowrite32(GINTTRG_TRGGI0 << (wh->ch - DATA_CHANS), priv->base + GINTTRG);
@@ -140,6 +140,26 @@ static int wormhole_send_data(struct mbox_chan *chan, void *data)
 		return -EIO;	// Do not support Tx function on status channel
 	}
 	return 0;
+}
+
+static int wormhole_flush_data(struct mbox_chan *chan, unsigned long timeout)
+{
+	struct nvt_priv *priv = container_of(chan->mbox, struct nvt_priv, mbox);
+	struct nvt_wh *wh = (struct nvt_wh *)chan->con_priv;
+
+	timeout = jiffies + msecs_to_jiffies(timeout);
+
+	while (time_before(jiffies, timeout)) {
+		if (ioread32(priv->base + TXSTS) & (TXSTS_CH0RDY << wh->ch))
+			return 0;
+		udelay(1);
+	}
+	printk("%s - timeout!\n", __func__);
+
+	/* recall TX */
+	iowrite32(TXCTL_CH0RC << wh->ch, priv->base + TXCTL);
+
+	return -ETIME;
 }
 
 static int wormhole_startup(struct mbox_chan *chan)
@@ -196,9 +216,9 @@ static bool wormhole_peek_data(struct mbox_chan *chan)
 	return false; // No data in Rx or general interrupt channel
 }
 
-
 static const struct mbox_chan_ops wormhole_ops = {
 	.send_data = wormhole_send_data,
+	.flush = wormhole_flush_data,
 	.startup = wormhole_startup,
 	.shutdown = wormhole_shutdown,
 	.peek_data = wormhole_peek_data,
