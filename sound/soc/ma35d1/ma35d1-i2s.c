@@ -37,6 +37,7 @@ static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 				struct snd_soc_dai *dai)
 {
 	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(dai->dev);
+	unsigned channels = params_channels(params);
 	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
 
 	switch (params_width(params)) {
@@ -66,6 +67,13 @@ static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 	default:
 		return -EINVAL;
 	}
+
+	/* set MONO if channel number is 1 */
+	if (channels == 1)
+		val |= MONO;
+	else
+		val &= ~MONO;
+
 	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
 	return 0;
 }

@@ -67,12 +67,6 @@ static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct sn
 	if (ret < 0)
 		return ret;
 
-	/* set MONO if channel number is 1 */
-	if (cpu_dai->channels == 1) {
-		val |= MONO;
-		AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
-	}
-
 	return 0;
 }
 
