@@ -400,6 +400,7 @@
 		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>;
 		oc-active-level = <0>;    /* 1: active-high; 0: active low */
+		nuvoton,rcalcode0 = <7>;  /* Port 0 PHY Internal Resistor Trim Code (0 ~ 15) */
 		status = "okay";
 	};
 
@@ -411,6 +412,7 @@
 		nuvoton,sys = <&sys>;
 		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 		oc-active-level = <0>;    /* 1: active-high; 0: active low */
+		nuvoton,rcalcode1 = <7>;  /* Port 1 PHY Internal Resistor Trim Code (0 ~ 15) */
 		status = "okay";
 	};
 
