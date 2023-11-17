@@ -741,9 +741,9 @@ static int ccap_try_fmt_vid_cap(struct file *file, void *priv,
 			pix->priv = 8;
 			parameter |= OUTFMT_Y;
 		} else if (pix->pixelformat == V4L2_PIX_FMT_RGB555) {
-			parameter |= OUTFMT_RGB555 | INORD_GBRG;
+			parameter |= OUTFMT_RGB555 | INORD_RGGB;
 		} else if (pix->pixelformat == V4L2_PIX_FMT_RGB565)
-			parameter |= OUTFMT_RGB565 | INORD_GBRG;
+			parameter |= OUTFMT_RGB565 | INORD_RGGB;
 
 		if (ccap_dev->sd_format->mbus_code ==
 		    MEDIA_BUS_FMT_RGB565_2X8_LE)
