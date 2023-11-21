@@ -292,6 +292,7 @@ static int wormhole_probe(struct platform_device *pdev)
 	if (of_property_read_bool(node, "enable-wakeup")) {
 		device_init_wakeup(dev, true);
 		priv->wake = true;
+		iowrite32(WKCTK_GI_WKEN | WKCTK_RXTX_WKEN, priv->base + WKCTL);
 	} else {
 		device_init_wakeup(dev, false);
 		priv->wake = false;

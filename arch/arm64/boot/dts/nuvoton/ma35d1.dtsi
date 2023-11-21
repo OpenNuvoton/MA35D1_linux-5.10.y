@@ -646,6 +646,7 @@
 		clock-names = "wh0_gate";
 		interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
 		wakeup-source;
+		enable-wakeup;
 		#mbox-cells = <1>;
 		status = "okay";
 	};
