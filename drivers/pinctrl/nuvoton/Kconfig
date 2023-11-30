@@ -28,3 +28,17 @@ config PINCTRL_MA35D1
 	select PINCTRL_NUVOTON
 	help
 	  Say Y here to enable the MA35D1 pinctrl driver
+
+config PINCTRL_MA35D0
+	bool "MA35D0 pinctrl driver"
+	depends on ARCH_MA35D0 && OF
+	select PINCTRL_NUVOTON
+	help
+	  Say Y here to enable the MA35D0 pinctrl driver
+
+config PINCTRL_MA35H0
+	bool "MA35H0 pinctrl driver"
+	depends on ARCH_MA35H0 && OF
+	select PINCTRL_NUVOTON
+	help
+	  Say Y here to enable the MA35H0 pinctrl driver

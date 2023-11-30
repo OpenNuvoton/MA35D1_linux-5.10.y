@@ -355,6 +355,18 @@ config MTD_NAND_MA35D1
 	help
 	  Enables support for NAND Flash chips on the Nuvoton MA35D1
 
+config MTD_NAND_MA35D0
+	tristate "Nuvoton MA35D0 NAND controller"
+	depends on ARCH_MA35D0
+	help
+	  Enables support for NAND Flash chips on the Nuvoton MA35D0
+
+config MTD_NAND_MA35H0
+	tristate "Nuvoton MA35H0 NAND controller"
+	depends on ARCH_MA35H0
+	help
+	  Enables support for NAND Flash chips on the Nuvoton MA35H0
+
 config MTD_NAND_FSMC
 	tristate "ST Micros FSMC NAND controller"
 	depends on OF && HAS_IOMEM

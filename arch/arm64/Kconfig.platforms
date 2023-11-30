@@ -339,5 +339,28 @@ config ARCH_MA35D1
 	help
 	  This enables support for Nuvoton MA35D1 SOC Family.
 
+config ARCH_MA35D0
+	bool "Nuvoton MA35D0 SOC Family"
+	select PINCTRL
+	select PINCTRL_MA35D0
+	select PM
+	select GPIOLIB
+	select SOC_BUS
+	select VIDEOMODE_HELPERS
+	select FB_MODE_HELPERS
+	help
+	  This enables support for Nuvoton MA35D0 SOC Family.
+
+config ARCH_MA35H0
+	bool "Nuvoton MA35H0 SOC Family"
+	select PINCTRL
+	select PINCTRL_MA35H0
+	select PM
+	select GPIOLIB
+	select SOC_BUS
+	select VIDEOMODE_HELPERS
+	select FB_MODE_HELPERS
+	help
+	  This enables support for Nuvoton MA35H0 SOC Family.
 
 endmenu

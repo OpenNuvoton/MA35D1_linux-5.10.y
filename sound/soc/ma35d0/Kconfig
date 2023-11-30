@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-2.0-only
+##
+## MA35D0 series I2S API
+##
+config SND_SOC_MA35D0
+	tristate "SoC Audio for MA35D0 series"
+	depends on ARCH_MA35D0
+	help
+	  This option enables support for I2S on the MA35D0 SoC.
+
+##
+## Boards
+##
+config SND_SOC_MA35D0EVB
+	tristate "MA35D0 I2S support for demo board"
+	depends on SND_SOC_MA35D0
+	select SND_SOC_NAU8822
+	select SND_SOC_GENERIC_DMAENGINE_PCM
+	help
+	  Select this option to enable audio (I2S) on the
+	  MA35D0 demoboard.
+
+choice
+	prompt "I2S Mode Selection"
+	depends on SND_SOC_MA35D0EVB
+	default MA35D0_I2S_MASTER_MODE
+
+config MA35D0_I2S_MASTER_MODE
+	bool "Master Mode"
+
+config MA35D0_I2S_SLAVE_MODE
+	bool "Slave Mode"
+
+endchoice
+

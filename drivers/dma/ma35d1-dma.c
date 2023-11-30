@@ -181,7 +181,7 @@ static void ma35d1_set_dma_timeout(struct ma35d1_chan *ch)
 
 		val = readl(ch->base + PDMA_TOUTPSC1);
 		val |=
-		    ((d->pcfg.timeout_prescaler & 0x7) << (4 * (ch->ch_num - 8)));
+		    ((d->pcfg.timeout_counter & 0x7) << (4 * (ch->ch_num - 8)));
 		writel(val, ch->base + PDMA_TOUTPSC1);
 	}
 
@@ -191,7 +191,7 @@ static void ma35d1_set_dma_timeout(struct ma35d1_chan *ch)
 
 	val = readl(ch->base + (4 * (ch->ch_num / 2)));
 	val |=
-	    ((d->pcfg.timeout_counter & 0xffff) << (16 * (ch->ch_num % 2)));
+	    ((d->pcfg.timeout_prescaler & 0xffff) << (16 * (ch->ch_num % 2)));
 	writel(val, ch->base + PDMA_TOC + (4 * (ch->ch_num / 2)));
 
 	/* Enable time-out funciton */

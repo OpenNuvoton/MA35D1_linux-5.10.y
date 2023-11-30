@@ -542,6 +542,34 @@ config SPI_MA35D1_SPI
 	  This driver provides support for Nuvoton MA35D1
 	  SPI controller in master mode.
 
+config SPI_MA35D0_QSPI
+	tristate "Nuvoton MA35D0 QSPI Controller"
+	depends on ARCH_MA35D0
+	help
+	  This driver provides support for Nuvoton MA35D0
+	  QSPI controller in master mode.
+
+config SPI_MA35D0_SPI
+	tristate "Nuvoton MA35D0 SPI Controller"
+	depends on ARCH_MA35D0
+	help
+	  This driver provides support for Nuvoton MA35D0
+	  SPI controller in master mode.
+
+config SPI_MA35H0_QSPI
+	tristate "Nuvoton MA35H0 QSPI Controller"
+	depends on ARCH_MA35H0
+	help
+	  This driver provides support for Nuvoton MA35H0
+	  QSPI controller in master mode.
+
+config SPI_MA35H0_SPI
+	tristate "Nuvoton MA35H0 SPI Controller"
+	depends on ARCH_MA35H0
+	help
+	  This driver provides support for Nuvoton MA35H0
+	  SPI controller in master mode.
+
 config SPI_LANTIQ_SSC
 	tristate "Lantiq SSC SPI controller"
 	depends on LANTIQ || X86 || COMPILE_TEST

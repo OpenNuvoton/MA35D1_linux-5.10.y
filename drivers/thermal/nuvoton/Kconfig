@@ -5,3 +5,17 @@ config MA35D1_THERMAL
 	help
 	  This enables the thermal sysfs driver for the TSENS device. It shows
 	  up in Sysfs as a thermal zone.
+
+config MA35D0_THERMAL
+	tristate "MA35D0 Temperature Sensor"
+	depends on ARCH_MA35D0
+	help
+	  This enables the thermal sysfs driver for the TSENS device. It shows
+	  up in Sysfs as a thermal zone.
+
+config MA35H0_THERMAL
+	tristate "MA35H0 Temperature Sensor"
+	depends on ARCH_MA35H0
+	help
+	  This enables the thermal sysfs driver for the TSENS device. It shows
+	  up in Sysfs as a thermal zone.

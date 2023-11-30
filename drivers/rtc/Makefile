@@ -184,5 +184,5 @@ obj-$(CONFIG_RTC_DRV_X1205)	+= rtc-x1205.o
 obj-$(CONFIG_RTC_DRV_XGENE)	+= rtc-xgene.o
 obj-$(CONFIG_RTC_DRV_ZYNQMP)	+= rtc-zynqmp.o
 obj-$(CONFIG_RTC_DRV_MA35D1)	+= rtc-ma35d1.o
-
-
+obj-$(CONFIG_RTC_DRV_MA35D0)	+= rtc-ma35d0.o
+obj-$(CONFIG_RTC_DRV_MA35H0)	+= rtc-ma35h0.o

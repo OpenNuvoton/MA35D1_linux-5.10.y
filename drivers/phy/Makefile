@@ -9,6 +9,8 @@ obj-$(CONFIG_PHY_LPC18XX_USB_OTG)	+= phy-lpc18xx-usb-otg.o
 obj-$(CONFIG_PHY_XGENE)			+= phy-xgene.o
 obj-$(CONFIG_PHY_PISTACHIO_USB)		+= phy-pistachio-usb.o
 obj-$(CONFIG_PHY_MA35D1_USB)		+= phy-ma35d1-usb.o
+obj-$(CONFIG_PHY_MA35D0_USB)		+= phy-ma35d0-usb.o
+obj-$(CONFIG_PHY_MA35H0_USB)		+= phy-ma35h0-usb.o
 obj-$(CONFIG_USB_LGM_PHY)		+= phy-lgm-usb.o
 obj-y					+= allwinner/	\
 					   amlogic/	\

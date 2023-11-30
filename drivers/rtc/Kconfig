@@ -1896,9 +1896,24 @@ config RTC_DRV_STM32
 
 config RTC_DRV_MA35D1
 	tristate "MA35D1 RTC driver"
+	depends on ARCH_MA35D1
 	help
 	  If you say yes here you get support for the RTC subsystem of the
 	  MA35D1 used in embedded systems.
+
+config RTC_DRV_MA35D0
+	tristate "MA35D0 RTC driver"
+	depends on ARCH_MA35D0
+	help
+	  If you say yes here you get support for the RTC subsystem of the
+	  MA35D0 used in embedded systems.
+
+config RTC_DRV_MA35H0
+	tristate "MA35H0 RTC driver"
+	depends on ARCH_MA35H0
+	help
+	  If you say yes here you get support for the RTC subsystem of the
+	  MA35H0 used in embedded systems.
 
 config RTC_DRV_CPCAP
 	depends on MFD_CPCAP

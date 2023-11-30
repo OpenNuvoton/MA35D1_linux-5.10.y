@@ -36,6 +36,22 @@ config TOUCHSCREEN_MA35D1
 	  found on Nuvoton MA35D1. The ADC driver is also implement
 	  in this driver.
 
+config TOUCHSCREEN_MA35D0
+	tristate "MA35D0 touchscreen(ADC) support"
+	depends on ARCH_MA35D0
+	help
+	  This selects support for the resistive touchscreen controller
+	  found on Nuvoton MA35D0. The ADC driver is also implement
+	  in this driver.
+
+config TOUCHSCREEN_MA35H0
+	tristate "MA35H0 touchscreen(ADC) support"
+	depends on ARCH_MA35H0
+	help
+	  This selects support for the resistive touchscreen controller
+	  found on Nuvoton MA35H0. The ADC driver is also implement
+	  in this driver.
+
 config TOUCHSCREEN_ADS7846
 	tristate "ADS7846/TSC2046/AD7873 and AD(S)7843 based touchscreens"
 	depends on SPI_MASTER

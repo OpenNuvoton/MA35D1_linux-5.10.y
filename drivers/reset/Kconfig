@@ -254,6 +254,20 @@ config RESET_MA35D1
 	  This enables the reset controller driver for MA35D1
 	  Say Y if you want to control reset signals provided by SYS registers.
 
+config RESET_MA35D0
+	bool "MA35D0 Reset Driver"
+	default ARCH_MA35D0
+	help
+	  This enables the reset controller driver for MA35D0
+	  Say Y if you want to control reset signals provided by SYS registers.
+
+config RESET_MA35H0
+	bool "MA35H0 Reset Driver"
+	default ARCH_MA35H0
+	help
+	  This enables the reset controller driver for MA35H0
+	  Say Y if you want to control reset signals provided by SYS registers.
+
 source "drivers/reset/sti/Kconfig"
 source "drivers/reset/hisilicon/Kconfig"
 source "drivers/reset/tegra/Kconfig"

@@ -553,7 +553,11 @@ int dwmac1000_setup(struct stmmac_priv *priv)
 	mac->link.duplex = GMAC_CONTROL_DM;
 	mac->link.speed10 = GMAC_CONTROL_PS;
 	mac->link.speed100 = GMAC_CONTROL_PS | GMAC_CONTROL_FES;
+#if defined(CONFIG_ARCH_MA35D0) || defined(CONFIG_ARCH_MA35H0)
+	mac->link.speed1000 = GMAC_CONTROL_PS | GMAC_CONTROL_FES;
+#else
 	mac->link.speed1000 = 0;
+#endif
 	mac->link.speed_mask = GMAC_CONTROL_PS | GMAC_CONTROL_FES;
 	mac->mii.addr = GMAC_MII_ADDR;
 	mac->mii.data = GMAC_MII_DATA;

@@ -82,6 +82,8 @@ obj-$(CONFIG_XGENE_DMA) += xgene-dma.o
 obj-$(CONFIG_ZX_DMA) += zx_dma.o
 obj-$(CONFIG_ST_FDMA) += st_fdma.o
 obj-$(CONFIG_MA35D1_DMA) += ma35d1-dma.o
+obj-$(CONFIG_MA35D0_DMA) += ma35d0-dma.o
+obj-$(CONFIG_MA35H0_DMA) += ma35h0-dma.o
 obj-$(CONFIG_FSL_DPAA2_QDMA) += fsl-dpaa2-qdma/
 
 obj-y += mediatek/

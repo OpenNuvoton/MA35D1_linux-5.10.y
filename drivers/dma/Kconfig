@@ -267,6 +267,24 @@ config MA35D1_DMA
 	  Support the MA35D1 DMA engine. This engine is integrated into
 	  NUVOTON MA35D1 chips.
 
+config MA35D0_DMA
+	tristate "MA35D0 DMA support"
+	depends on ARCH_MA35D0
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  Support the MA35D0 DMA engine. This engine is integrated into
+	  NUVOTON MA35D0 chips.
+
+config MA35H0_DMA
+	tristate "MA35H0 DMA support"
+	depends on ARCH_MA35H0
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  Support the MA35H0 DMA engine. This engine is integrated into
+	  NUVOTON MA35H0 chips.
+
 config IMX_DMA
 	tristate "i.MX DMA support"
 	depends on ARCH_MXC

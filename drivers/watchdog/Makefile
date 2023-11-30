@@ -96,6 +96,10 @@ obj-$(CONFIG_SPRD_WATCHDOG) += sprd_wdt.o
 obj-$(CONFIG_PM8916_WATCHDOG) += pm8916_wdt.o
 obj-$(CONFIG_MA35D1_WDT) += ma35d1_wdt.o
 obj-$(CONFIG_MA35D1_WWDT) += ma35d1_wwdt.o
+obj-$(CONFIG_MA35D0_WDT) += ma35d0_wdt.o
+obj-$(CONFIG_MA35D0_WWDT) += ma35d0_wwdt.o
+obj-$(CONFIG_MA35H0_WDT) += ma35h0_wdt.o
+obj-$(CONFIG_MA35H0_WWDT) += ma35h0_wwdt.o
 obj-$(CONFIG_ARM_SMC_WATCHDOG) += arm_smc_wdt.o
 obj-$(CONFIG_VISCONTI_WATCHDOG) += visconti_wdt.o
 

@@ -126,14 +126,14 @@ examples:
         };
  
         pcfg_default: pcfg-default {
-                slew-rate = <0>; /* 0:normal, 1:high */
-                input-schmitt-disable;  /* input-schmitt-disable, input-schmitt-enable */
-                bias-disable; /* bias-disable, bias-pull-up, bias-pull-down  */
-                power-source = <3300>; /* 1800:1.8v , 3300:3.3v */
-                drive-strength = <0>; /* 0 ~ 7 */
+                slew-rate = <0>;
+                input-schmitt-disable;
+                bias-disable;
+                power-source = <3300>;
+                drive-strength = <0>;
         };
  
-        uart13: {
+        uart13 {
                 pinctrl_uart13: uart13grp {
                         nuvoton,pins =
                                 <SYS_GPH_MFPH_PH12MFP_UART13_RXD	&pcfg_default>,
@@ -148,7 +148,5 @@ examples:
         reg = <0x0 0x407D0000 0x0 0x10000>;
         interrupts = <GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>;
         clocks = <&clk UART2_GATE>;
-        status = "disabled";
+        pinctrl-0 = <&pinctrl_uart13>;
     };
-    
- 

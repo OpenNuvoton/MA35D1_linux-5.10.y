@@ -94,7 +94,7 @@ static int ma35d1_regulator_probe(struct platform_device *pdev)
 	if (!desc)
 		return -ENOMEM;
 
-	info->id = MA35d1_SIP_PMIC_SD;
+	info->id = MA35D1_SIP_PMIC_SD;
 	desc->n_voltages = ARRAY_SIZE(ma35d1_volt_table);
 	desc->volt_table = ma35d1_volt_table;
 	desc->name = dev_name(&pdev->dev);

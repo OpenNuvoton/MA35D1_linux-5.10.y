@@ -264,6 +264,8 @@ obj-$(CONFIG_MFD_ROHM_BD718XX)	+= rohm-bd718x7.o
 obj-$(CONFIG_MFD_STMFX) 	+= stmfx.o
 obj-$(CONFIG_MFD_KHADAS_MCU) 	+= khadas-mcu.o
 obj-$(CONFIG_MFD_MA35D1)       += ma35d1-sysctl.o
+obj-$(CONFIG_MFD_MA35D0)       += ma35d0-sysctl.o
+obj-$(CONFIG_MFD_MA35H0)       += ma35h0-sysctl.o
 
 obj-$(CONFIG_SGI_MFD_IOC3)	+= ioc3.o
 obj-$(CONFIG_MFD_SIMPLE_MFD_I2C)	+= simple-mfd-i2c.o

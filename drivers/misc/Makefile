@@ -58,7 +58,14 @@ obj-$(CONFIG_UACCE)		+= uacce/
 obj-$(CONFIG_XILINX_SDFEC)	+= xilinx_sdfec.o
 obj-$(CONFIG_HISI_HIKEY_USB)	+= hisi_hikey_usb.o
 obj-$(CONFIG_MA35D1_KS)		+= ma35d1-ks.o
+obj-$(CONFIG_MA35D0_KS)		+= ma35d0-ks.o
+obj-$(CONFIG_MA35H0_KS)		+= ma35h0-ks.o
 obj-$(CONFIG_MA35D1_TIMER)	+= ma35d1-timer.o
+obj-$(CONFIG_MA35D0_TIMER)	+= ma35d0-timer.o
+obj-$(CONFIG_MA35H0_TIMER)	+= ma35h0-timer.o
 obj-$(CONFIG_MA35D1_EBI)	+= ma35d1-ebi.o
+obj-$(CONFIG_MA35D0_EBI)	+= ma35d0-ebi.o
+obj-$(CONFIG_MA35H0_EBI)	+= ma35h0-ebi.o
 obj-$(CONFIG_MA35D1_MISCTRL)	+= ma35d1-misctrl.o
-
+obj-$(CONFIG_MA35D0_MISCTRL)	+= ma35d0-misctrl.o
+obj-$(CONFIG_MA35H0_MISCTRL)	+= ma35h0-misctrl.o

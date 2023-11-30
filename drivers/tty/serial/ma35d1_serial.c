@@ -1084,20 +1084,20 @@ static void ma35d1serial_config_port(struct uart_port *port, int flags)
 	ret = ma35d1serial_request_port(port);
 	if (ret < 0)
 		return;
-	port->type = PORT_MA35D1;
+	port->type = PORT_MA35;
 }
 
 static int ma35d1serial_verify_port(struct uart_port *port,
 									struct serial_struct *ser)
 {
-	if (ser->type != PORT_UNKNOWN && ser->type != PORT_MA35D1)
+	if (ser->type != PORT_UNKNOWN && ser->type != PORT_MA35)
 		return -EINVAL;
 	return 0;
 }
 
 static const char *ma35d1serial_type(struct uart_port *port)
 {
-	return (port->type == PORT_MA35D1) ? "MA35D1" : NULL;
+	return (port->type == PORT_MA35) ? "MA35D1" : NULL;
 }
 
 /* Enable or disable the rs485 support */

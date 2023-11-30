@@ -1201,6 +1201,22 @@ config I2C_MA35D1
 	  Say Y here to include support for I2C controller in the
 	  Nuvoton MA35D1 based System-on-Chip devices.
 
+config I2C_MA35D0
+	tristate "MA35D0 I2C support"
+	depends on ARCH_MA35D0
+	select I2C_SLAVE
+	help
+	  Say Y here to include support for I2C controller in the
+	  Nuvoton MA35D0 based System-on-Chip devices.
+
+config I2C_MA35H0
+	tristate "MA35H0 I2C support"
+	depends on ARCH_MA35H0
+	select I2C_SLAVE
+	help
+	  Say Y here to include support for I2C controller in the
+	  Nuvoton MA35H0 based System-on-Chip devices.
+
 config I2C_RCAR
 	tristate "Renesas R-Car I2C Controller"
 	depends on ARCH_RENESAS || COMPILE_TEST

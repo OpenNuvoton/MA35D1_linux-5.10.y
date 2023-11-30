@@ -359,6 +359,24 @@ config PWM_MA35D1
 	  To compile this driver as a module, choose M here: the module
 	  will be called pwm-ma35d1.
 
+config PWM_MA35D0
+	tristate "Nuvoton MA35D0 EPWM support"
+	depends on ARCH_MA35D0 && OF
+	help
+	  Generic PWM framework driver for Nuvoton MA35D0.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called pwm-ma35d0.
+
+config PWM_MA35H0
+	tristate "Nuvoton MA35H0 EPWM support"
+	depends on ARCH_MA35H0 && OF
+	help
+	  Generic PWM framework driver for Nuvoton MA35H0.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called pwm-ma35h0.
+
 config PWM_OMAP_DMTIMER
 	tristate "OMAP Dual-Mode Timer PWM support"
 	depends on OF

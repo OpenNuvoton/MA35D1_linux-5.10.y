@@ -30,8 +30,6 @@ static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct sn
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
-	struct ma35d1_audio *ma35d1_audio = ma35d1_i2s_data;
-	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
 	int ret;
 
 	unsigned int clk = 0;

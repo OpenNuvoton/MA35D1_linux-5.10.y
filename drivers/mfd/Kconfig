@@ -2150,6 +2150,22 @@ config MFD_MA35D1
 	  Select this to get support for MA35D1 SYSCTL driver. This driver
 	  provides function to lock unlock protect registers.
 
+config MFD_MA35D0
+	bool "MA35D0 SYSCTL Driver"
+	default ARCH_MA35D0 && OF
+	select MFD_SYSCON
+	help
+	  Select this to get support for MA35D0 SYSCTL driver. This driver
+	  provides function to lock unlock protect registers.
+
+config MFD_MA35H0
+	bool "MA35H0 SYSCTL Driver"
+	default ARCH_MA35H0 && OF
+	select MFD_SYSCON
+	help
+	  Select this to get support for MA35H0 SYSCTL driver. This driver
+	  provides function to lock unlock protect registers.
+
 config SGI_MFD_IOC3
 	tristate "SGI IOC3 core driver"
 	depends on PCI && MIPS && 64BIT

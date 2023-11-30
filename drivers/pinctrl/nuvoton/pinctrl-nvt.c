@@ -549,7 +549,7 @@ static int nvt_irq_irqtype(struct irq_data *d, unsigned int type)
 
 static void nvt_irq_demux_intgroup(struct irq_desc *desc)
 {
-	unsigned int i, j, isr;
+	unsigned int j, isr;
 	struct nvt_pin_bank *bank =
 	    gpiochip_get_data(irq_desc_get_handler_data(desc));
 	struct irq_chip *irqchip = irq_desc_get_chip(desc);

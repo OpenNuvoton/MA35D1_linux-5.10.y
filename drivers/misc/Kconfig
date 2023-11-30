@@ -462,11 +462,17 @@ config MA35D1_KS
 	help
 	  This driver provides support for Nuvoton MA35D1 Key Store.
 
-config MA35D1_TIMER
-	tristate "Nuvoton MA35D1 TIMER support"
-	depends on ARCH_MA35D1
+config MA35D0_KS
+	tristate "Nuvoton MA35D0 Key Store support"
+	depends on ARCH_MA35D0
 	help
-	  This driver provides support for Nuvoton MA35D1 TIMER.
+	  This driver provides support for Nuvoton MA35D0 Key Store.
+
+config MA35H0_KS
+	tristate "Nuvoton MA35H0 Key Store support"
+	depends on ARCH_MA35H0
+	help
+	  This driver provides support for Nuvoton MA35H0 Key Store.
 
 config MA35D1_EBI
 	tristate "Nuvoton MA35D1 EBI support"
@@ -474,12 +480,56 @@ config MA35D1_EBI
 	help
 	  This driver provides support for Nuvoton MA35D1 EBI.
 
+config MA35D0_EBI
+	tristate "Nuvoton MA35D0 EBI support"
+	depends on ARCH_MA35D0
+	help
+	  This driver provides support for Nuvoton MA35D0 EBI.
+
+config MA35H0_EBI
+	tristate "Nuvoton MA35H0 EBI support"
+	depends on ARCH_MA35H0
+	help
+	  This driver provides support for Nuvoton MA35H0 EBI.
+
+config MA35D1_TIMER
+	tristate "Nuvoton MA35D1 TIMER support"
+	depends on ARCH_MA35D1
+	help
+	  This driver provides support for Nuvoton MA35D1 TIMER.
+
+config MA35D0_TIMER
+	tristate "Nuvoton MA35D0 TIMER support"
+	depends on ARCH_MA35D0
+	help
+	  This driver provides support for Nuvoton MA35D0 TIMER.
+
+config MA35H0_TIMER
+	tristate "Nuvoton MA35H0 TIMER support"
+	depends on ARCH_MA35H0
+	help
+	  This driver provides support for Nuvoton MA35H0 TIMER.
+
 config MA35D1_MISCTRL
 	tristate "Nuvoton MA35D1 MISC control support"
 	depends on ARCH_MA35D1
 	default y
 	help
 	  This driver provides support for Nuvoton MA35D1 MISC control.
+
+config MA35D0_MISCTRL
+	tristate "Nuvoton MA35D0 MISC control support"
+	depends on ARCH_MA35D0
+	default y
+	help
+	  This driver provides support for Nuvoton MA35D0 MISC control.
+
+config MA35H0_MISCTRL
+	tristate "Nuvoton MA35H0 MISC control support"
+	depends on ARCH_MA35H0
+	default y
+	help
+	  This driver provides support for Nuvoton MA35H0 MISC control.
 
 config HISI_HIKEY_USB
 	tristate "USB GPIO Hub on HiSilicon Hikey 960/970 Platform"
