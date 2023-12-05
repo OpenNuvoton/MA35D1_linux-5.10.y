@@ -15,6 +15,7 @@
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/of.h>
+#include <linux/tee_drv.h>
 #include <linux/crypto.h>
 #include <linux/spinlock.h>
 #include <linux/scatterlist.h>
@@ -50,6 +51,9 @@ struct nu_sha_drv {
 	spinlock_t lock;
 };
 
+static int  optee_sha_open(struct nu_sha_dev *dd);
+static void optee_sha_close(struct nu_sha_dev *dd);
+
 static struct nu_sha_drv nu_sha = {
 	.dev_list = LIST_HEAD_INIT(nu_sha.dev_list),
 	.lock = __SPIN_LOCK_UNLOCKED(nu_sha.lock),
@@ -76,12 +80,26 @@ static struct nu_sha_dev *ma35d0_sha_find_dev(struct nu_sha_ctx *tctx)
 
 static inline void nu_write_reg(struct nu_sha_dev *sha_dd, u32 val, u32 reg)
 {
+#ifdef CONFIG_OPTEE
+	if (sha_dd->nu_cdev->use_optee == true)
+		sha_dd->va_shm[reg/4] = val;
+	else
+		writel_relaxed(val, sha_dd->reg_base + reg);
+#else
 	writel_relaxed(val, sha_dd->reg_base + reg);
+#endif
 }
 
 static inline u32 nu_read_reg(struct nu_sha_dev *sha_dd, u32 reg)
 {
+#ifdef CONFIG_OPTEE
+	if (sha_dd->nu_cdev->use_optee == true)
+		return sha_dd->va_shm[reg/4];
+	else
+		return readl_relaxed(sha_dd->reg_base + reg);
+#else
 	return readl_relaxed(sha_dd->reg_base + reg);
+#endif
 }
 
 static int ma35d0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
@@ -89,6 +107,11 @@ static int ma35d0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
 	struct nu_sha_ctx *tctx = crypto_tfm_ctx(dd->req->base.tfm);
 	int  dma_cnt;
+#ifdef CONFIG_OPTEE
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
+	int  err;
+#endif
 
 	dma_cnt = 0;
 	tctx->dma_buff = 0;
@@ -163,6 +186,127 @@ static int ma35d0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	nu_write_reg(dd, tctx->dma_fdbck, HMAC_FBADDR);
 	nu_write_reg(dd, ctx->reg_ctl, HMAC_CTL);
 
+#ifdef CONFIG_OPTEE
+	if (dd->nu_cdev->use_optee == false)
+		return -EINPROGRESS;
+
+	/*--------------------------------------------------------------*/
+	/*  Invoke OP-TEE Crypto PTA to run SHA                         */
+	/*--------------------------------------------------------------*/
+
+	if (ctx->flags & SHA_FLAGS_FIRST) {
+		/*
+		 * Open a crypto session
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_OPEN_SESSION function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_OPEN_SESSION;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT;
+		param[0].u.value.a = C_CODE_SHA;
+
+		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((err < 0) || (inv_arg.ret != 0)) {
+			pr_err("PTA_CMD_CRYPTO_OPEN_SESSION err: %x\n",
+				inv_arg.ret);
+			return -EINVAL;
+		}
+		dd->crypto_session_id = param[1].u.value.a;
+
+		/*
+		 * Invoke PTA_CMD_CRYPTO_SHA_START
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_SHA_START function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_SHA_START;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = dd->crypto_session_id;
+		param[1].u.value.a = ctx->reg_ctl;
+		param[1].u.value.b = 0;
+		param[2].u.value.a = tctx->hmac_key_len;
+
+		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((err < 0) || (inv_arg.ret != 0)) {
+			pr_err("PTA_CMD_CRYPTO_SHA_START err: %x\n",
+				inv_arg.ret);
+			return -EINVAL;
+		}
+	}
+
+	/*
+	 * Invoke PTA_CMD_CRYPTO_SHA_UPDATE/FINAL
+	 */
+	memset(&inv_arg, 0, sizeof(inv_arg));
+	memset(&param, 0, sizeof(param));
+
+	/* Invoke PTA_CMD_CRYPTO_SHA_UPDATE/FINAL function of Trusted App */
+	if (ctx->flags & SHA_FLAGS_FINAL_DMA)
+		inv_arg.func = PTA_CMD_CRYPTO_SHA_FINAL;
+	else
+		inv_arg.func = PTA_CMD_CRYPTO_SHA_UPDATE;
+	inv_arg.session = dd->session_id;
+	inv_arg.num_params = 4;
+
+	/* Fill invoke cmd params */
+	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+
+	param[0].u.value.a = dd->crypto_session_id;
+	param[0].u.value.b = ctx->digest_len;
+	param[1].u.memref.shm = dd->shm_pool;
+	param[1].u.memref.size = CRYPTO_SHM_SIZE;
+	param[1].u.memref.shm_offs = 0;
+
+	err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+	if ((err < 0) || (inv_arg.ret != 0)) {
+		pr_err("PTA_CMD_CRYPTO_SHA_UPDATE err: %x\n", inv_arg.ret);
+		return -EINVAL;
+	}
+
+	tasklet_schedule(&dd->done_task);
+
+	if (ctx->flags & SHA_FLAGS_FINAL_DMA) {
+		/*
+		 * Close the crypto session
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_CLOSE_SESSION function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_CLOSE_SESSION;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = C_CODE_SHA;
+		param[1].u.value.a = dd->crypto_session_id;
+
+		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((err < 0) || (inv_arg.ret != 0)) {
+			pr_err("PTA_CMD_CRYPTO_CLOSE_SESSION err: %x\n",
+				inv_arg.ret);
+			return -EINVAL;
+		}
+	}
+#endif  /* CONFIG_OPTEE */
 	return -EINPROGRESS;
 }
 
@@ -537,7 +681,7 @@ static int ma35d0_sha_import(struct ahash_request *req, const void *in)
 static int ma35d0_sha_cra_init_alg(struct crypto_tfm *tfm, const char *alg_base)
 {
 	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
-	struct nu_sha_dev *dd = ma35d0_sha_find_dev(tctx);
+	struct nu_sha_dev *dd;
 
 	dd = ma35d0_sha_find_dev(tctx);
 	if (!dd)
@@ -549,11 +693,34 @@ static int ma35d0_sha_cra_init_alg(struct crypto_tfm *tfm, const char *alg_base)
 
 static int ma35d0_sha_cra_init(struct crypto_tfm *tfm)
 {
+#ifdef CONFIG_OPTEE
+	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
+	struct nu_sha_dev *dd;
+
+	dd = ma35d0_sha_find_dev(tctx);
+	if (!dd)
+		return -ENODEV;
+
+	if (dd->nu_cdev->use_optee) {
+		if (optee_sha_open(dd) != 0)
+			return -ENODEV;
+	}
+#endif
 	return ma35d0_sha_cra_init_alg(tfm, NULL);
 }
 
 static void ma35d0_sha_cra_exit(struct crypto_tfm *tfm)
 {
+#ifdef CONFIG_OPTEE
+	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
+	struct nu_sha_dev *dd;
+
+	dd = ma35d0_sha_find_dev(tctx);
+	if (dd) {
+		if (dd->nu_cdev->use_optee)
+			optee_sha_close(dd);
+	}
+#endif
 }
 
 static struct ahash_alg  ma35d0_sha_algs[] = {
@@ -988,6 +1155,77 @@ static void ma35d0_sha_done_task(unsigned long data)
 	ma35d0_sha_dma_complete(ctx);
 }
 
+#ifdef CONFIG_OPTEE
+static int  optee_sha_open(struct nu_sha_dev *dd)
+{
+	struct tee_ioctl_open_session_arg sess_arg;
+	int   err;
+
+	err = ma35d0_crypto_optee_init(dd->nu_cdev);
+	if (err)
+		return err;
+	/*
+	 * Open SHA context with TEE driver
+	 */
+	dd->octx = tee_client_open_context(NULL, optee_ctx_match,
+					       NULL, NULL);
+	if (IS_ERR(dd->octx)) {
+		pr_err("%s open context failed, err: %x\n", __func__,
+			sess_arg.ret);
+		return err;
+	}
+
+	/*
+	 * Open SHA session with Crypto Trusted App
+	 */
+	memset(&sess_arg, 0, sizeof(sess_arg));
+	memcpy(sess_arg.uuid, dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
+	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
+	sess_arg.num_params = 0;
+
+	err = tee_client_open_session(dd->octx, &sess_arg, NULL);
+	if ((err < 0) || (sess_arg.ret != 0)) {
+		pr_err("%s open session failed, err: %x\n", __func__,
+			sess_arg.ret);
+		err = -EINVAL;
+		goto out_ctx;
+	}
+	dd->session_id = sess_arg.session;
+
+	/*
+	 * Allocate handshake buffer from OP-TEE share memory
+	 */
+	dd->shm_pool = tee_shm_alloc(dd->octx, CRYPTO_SHM_SIZE,
+				TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+	if (IS_ERR(dd->shm_pool)) {
+		pr_err("%s tee_shm_alloc failed\n", __func__);
+		goto out_sess;
+	}
+
+	dd->va_shm = tee_shm_get_va(dd->shm_pool, 0);
+	if (IS_ERR(dd->va_shm)) {
+		tee_shm_free(dd->shm_pool);
+		pr_err("%s tee_shm_get_va failed\n", __func__);
+		goto out_sess;
+	}
+	return 0;
+
+out_sess:
+	tee_client_close_session(dd->octx, dd->session_id);
+out_ctx:
+	tee_client_close_context(dd->octx);
+	return err;
+}
+
+static void optee_sha_close(struct nu_sha_dev *dd)
+{
+	tee_shm_free(dd->shm_pool);
+	tee_client_close_session(dd->octx, dd->session_id);
+	tee_client_close_context(dd->octx);
+	dd->octx = NULL;
+}
+#endif
+
 int ma35d0_sha_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
@@ -1064,6 +1302,11 @@ int ma35d0_sha_remove(struct device *dev,
 
 	tasklet_kill(&sha_dd->done_task);
 	tasklet_kill(&sha_dd->queue_task);
+
+#ifdef CONFIG_OPTEE
+	if (nu_cryp_dev->use_optee)
+		optee_sha_close(sha_dd);
+#endif
 
 	return 0;
 }

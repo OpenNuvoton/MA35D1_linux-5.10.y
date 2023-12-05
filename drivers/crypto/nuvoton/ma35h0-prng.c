@@ -13,6 +13,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
+#include <linux/tee_drv.h>
 #include <linux/slab.h>
 #include <linux/err.h>
 #include <linux/clk.h>

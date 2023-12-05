@@ -380,6 +380,15 @@ struct nu_aes_dev {
 	struct scatterlist	*out_sg;
 	int			in_sg_off;
 	int			out_sg_off;
+
+	/*
+	 * for optee client driver
+	 */
+	struct tee_context	*octx;
+	u32			session_id;         /* optee session */
+	struct tee_shm		*shm_pool;
+	u32			*va_shm;
+	u32			crypto_session_id;  /* crypto session */
 };
 
 /*-------------------------------------------------------------------------*/
@@ -425,6 +434,15 @@ struct nu_sha_dev {
 	struct ahash_request	*req;
 	struct tasklet_struct	done_task;
 	struct tasklet_struct	queue_task;
+
+	/*
+	 * for optee client driver
+	 */
+	struct tee_context	*octx;
+	u32			session_id;  /* optee session */
+	struct tee_shm		*shm_pool;
+	u32			*va_shm;
+	u32			crypto_session_id;  /* crypto session */
 };
 
 /*-------------------------------------------------------------------------*/
@@ -498,6 +516,13 @@ struct nu_ecc_dev {
 	void __iomem		*reg_base;
 	spinlock_t		lock;
 
+	/*
+	 * for optee client driver
+	 */
+	struct tee_context	*octx;
+	u32			session_id;  /* optee session */
+	struct tee_shm		*shm_pool;
+	u32			*va_shm;
 };
 
 /*-------------------------------------------------------------------------*/
@@ -543,10 +568,20 @@ struct nu_rsa_dev {
 	struct device		*dev;
 	struct nu_crypto_dev	*nu_cdev;
 	void __iomem		*reg_base;
+
+	/*
+	 * for optee client driver
+	 */
+	struct tee_context	*octx;
+	u32			session_id;  /* optee session */
+	struct tee_shm		*shm_pool;
+	u32			*va_shm;
 };
 
 struct nu_crypto_dev {
 	struct device		*dev;
+	bool                    use_optee;
+	struct tee_client_device *tee_cdev;
 	void __iomem		*reg_base;
 	unsigned long		prng;
 	struct nu_aes_dev	aes_dd;
@@ -573,6 +608,177 @@ struct nu_crypto_dev {
 #define ECC_IOC_SET_PRIV_KEY	_IOW(CRYPTO_IOC_MAGIC, 51, u8 *)
 #define ECC_IOC_SET_PUB_KEY	_IOW(CRYPTO_IOC_MAGIC, 52, u8 *)
 #define ECC_IOC_POINT_MUL	_IOW(CRYPTO_IOC_MAGIC, 55, u8 *)
+
+/*-------------------------------------------------------------------------*/
+/*   OP-TEE                                                                */
+/*-------------------------------------------------------------------------*/
+#define CRYPTO_SHM_SIZE		(0x4000)
+
+#define TEE_ERROR_CRYPTO_BUSY		0x00000001
+#define TEE_ERROR_CRYPTO_FAIL		0x00000002
+#define TEE_ERROR_CRYPTO_INVALID	0x00000003
+#define TEE_ERROR_CRYPTO_TIMEOUT	0x00000004
+
+/* Crypto session class */
+#define C_CODE_AES			0x04
+#define C_CODE_SHA			0x05
+
+/*
+ * PTA_CMD_CRYPTO_INIT - Initialize Crypto Engine
+ *
+ * param[0] unused
+ * param[1] unused
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_BAD_PARAMETERS - Incorrect input param
+ * TEE_ERROR_CRYPTO_FAIL - Initialization failed
+ */
+#define PTA_CMD_CRYPTO_INIT		1
+
+/*
+ * PTA_CMD_CRYPTO_OPEN_SESSION - open a crypto session
+ *
+ * param[0] (in value)  - value.a: session class
+ * param[1] (out value) - value.a: session ID
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - failed
+ */
+#define PTA_CMD_CRYPTO_OPEN_SESSION	2
+
+/*
+ * PTA_CMD_CRYPTO_CLOSE_SESSION - close an opened crypto session
+ *
+ * param[0] (in value)  - value.a: session class
+ * param[1] (in value)  - value.a: session ID
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - failed
+ */
+#define PTA_CMD_CRYPTO_CLOSE_SESSION	3
+
+/*
+ * PTA_CMD_CRYPTO_AES_RUN - Run AES encrypt/decrypt
+ *
+ * param[0] (in value) - value.a: crypto session ID
+ *                     - value.b: register AES_KSCTL
+ * param[1] (inout memref) - memref.size: size of register map
+ *                           memref.buffer: register map buffer
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - AES encrypt/decrypt operation failed
+ */
+#define PTA_CMD_CRYPTO_AES_RUN		5
+
+/*
+ * PTA_CMD_CRYPTO_SHA_START - Start a SHA session
+ *
+ * param[0] (in value) - value.a: session ID
+ * param[1] (in value) - value.a: HMAC_CTL
+ *                     - value.b: HMAC_KSCTL
+ * param[2] (in value) - value.a: HMAC key length
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - SHA operation failed
+ */
+#define PTA_CMD_CRYPTO_SHA_START	8
+
+/*
+ * PTA_CMD_CRYPTO_SHA_UPDATE - Update SHA input data
+ *
+ * param[0] (in value) - value.a: session ID
+ *                     - value.b: HMAC_KSCTL
+ * param[1] (inout memref) - memref.size: size of register map
+ *                           memref.buffer: register map buffer
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - SHA operation failed
+ */
+#define PTA_CMD_CRYPTO_SHA_UPDATE	9
+
+/*
+ * PTA_CMD_CRYPTO_SHA_FINAL - final update SHA input data and
+ *                            get output digest
+ *
+ * param[0] (in value) - value.a: session ID
+ *                     - value.b: digest byte length
+ * param[1] (inout memref) - memref.size: size of register map
+ *                           memref.buffer: register map buffer
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - SHA operation failed
+ */
+#define PTA_CMD_CRYPTO_SHA_FINAL	10
+
+/*
+ * PTA_CMD_CRYPTO_ECC_PMUL - Run ECC point multiplication
+ *
+ * param[0] (in value) - value.a: ECC curve ID
+ * param[1] (inout memref) - memref.size: size of register map
+ *                           memref.buffer: register map buffer
+ * param[2] (in value) - value.a: shm offset of parameter block
+ *                     - value.b: shm offset of output buffer
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - ECC operation failed
+ */
+#define PTA_CMD_CRYPTO_ECC_PMUL		15
+
+/*
+ * PTA_CMD_CRYPTO_RSA_RUN - Run RSA engine
+ *
+ * param[0] unused
+ * param[1] (inout memref) - memref.size: size of register map
+ *                           memref.buffer: register map buffer
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - RSA operation failed
+ */
+#define PTA_CMD_CRYPTO_RSA_RUN		20
+
+static inline int optee_ctx_match(struct tee_ioctl_version_data *ver,
+				  const void *data)
+{
+	if (ver->impl_id == TEE_IMPL_ID_OPTEE)
+		return 1;
+	else
+		return 0;
+}
+
+extern int ma35h0_crypto_optee_init(struct nu_crypto_dev *nu_cryp_dev);
 
 extern int ma35h0_prng_probe(struct device *dev, void __iomem *reg_base, unsigned long *data);
 extern int ma35h0_prng_remove(struct device *dev, unsigned long data);
