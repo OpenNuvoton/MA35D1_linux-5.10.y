@@ -571,7 +571,7 @@ static long optee_ks_dev_ioctl(struct file *fptr, unsigned int cmd,
 	case NU_KS_IOCTL_GET_REMAIN:
 		rval = optee_ks_remain(ks_priv);
 		break;
-	case NU_KS_IOCTL_READ_OTP:
+	case NU_KS_IOCTL_OTP_READ:
 		rval = optee_ks_read_otp(ks_priv, argp);
 		break;
 	default:
@@ -1220,7 +1220,7 @@ static struct platform_driver ma35d1_ks_driver = {
 	.probe = ma35d1_ks_probe,
 	.remove =  ma35d1_ks_remove,
 	.driver = {
-		.name = "nuvoton-ks",
+		.name = "ma35d1-ks",
 		.of_match_table = ma35d1_ks_of_match,
 	},
 };

@@ -112,28 +112,20 @@
 
 #define MA35D1_KS_MAGIC         'K'
 
-#define NU_KS_IOCTL_READ         _IOWR(MA35D1_KS_MAGIC, 1, \
-				       struct ks_read_args *)
-#define NU_KS_IOCTL_WRITE_SRAM   _IOWR(MA35D1_KS_MAGIC, 2, \
-				       struct ks_write_args *)
-#define NU_KS_IOCTL_WRITE_OTP    _IOWR(MA35D1_KS_MAGIC, 3, \
-				       struct ks_write_args *)
-#define NU_KS_IOCTL_ERASE        _IOWR(MA35D1_KS_MAGIC, 4, \
-				       struct ks_kidx_args *)
-#define NU_KS_IOCTL_ERASE_ALL    _IOWR(MA35D1_KS_MAGIC, 5, \
-				       unsigned long)
-#define NU_KS_IOCTL_REVOKE       _IOWR(MA35D1_KS_MAGIC, 6, \
-				       struct ks_kidx_args *)
-#define NU_KS_IOCTL_GET_REMAIN   _IOWR(MA35D1_KS_MAGIC, 7, \
-				       unsigned long)
-#define NU_KS_IOCTL_READ_OTP     _IOWR(MA35D1_KS_MAGIC, 11, \
-				       struct ks_read_args *)
+#define NU_KS_IOCTL_READ         _IOWR(MA35D1_KS_MAGIC, 1,  struct ks_read_args *)
+#define NU_KS_IOCTL_WRITE_SRAM   _IOWR(MA35D1_KS_MAGIC, 2,  struct ks_write_args *)
+#define NU_KS_IOCTL_WRITE_OTP    _IOWR(MA35D1_KS_MAGIC, 3,  struct ks_write_args *)
+#define NU_KS_IOCTL_ERASE        _IOWR(MA35D1_KS_MAGIC, 4,  struct ks_kidx_args *)
+#define NU_KS_IOCTL_ERASE_ALL    _IOWR(MA35D1_KS_MAGIC, 5,  unsigned long)
+#define NU_KS_IOCTL_REVOKE       _IOWR(MA35D1_KS_MAGIC, 6,  struct ks_kidx_args *)
+#define NU_KS_IOCTL_GET_REMAIN   _IOWR(MA35D1_KS_MAGIC, 7,  unsigned long)
 
+#define NU_KS_IOCTL_OTP_READ     _IOWR(MA35D1_KS_MAGIC, 11, struct ks_read_args *)
+#define NU_KS_IOCTL_OTP_WRITE    _IOWR(MA35D1_KS_MAGIC, 12, struct ks_read_args *)
 
 /* type of key */
 #define KS_SRAM                  0x0
 #define KS_OTP                   0x2
-
 
 struct ks_read_args {
 	unsigned int  type;
@@ -141,8 +133,6 @@ struct ks_read_args {
 	int           word_cnt;        /* word count of the key */
 	unsigned int  key[128];
 };
-
-
 
 struct ks_write_args {
 	int           key_idx;
@@ -154,6 +144,5 @@ struct ks_kidx_args {
 	unsigned int  type;
 	unsigned int  key_idx;
 };
-
 
 #endif /* __MA35D1_KS_H__ */
