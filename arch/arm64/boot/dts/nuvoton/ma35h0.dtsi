@@ -144,6 +144,16 @@
 		status = "okay";
 	};
 
+	uart4: serial@40740000 {
+		compatible = "nuvoton,ma35h0-uart";
+		reg = <0x0 0x40740000 0x0 0x100>;
+		interrupts = <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART4_GATE>;
+		port-number = <4>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
 	uart5:serial@40750000 {
 		compatible = "nuvoton,ma35h0-uart";
 		reg = <0x0 0x40750000 0x0 0x10000>;
@@ -193,6 +203,21 @@
 		interrupt-names = "int0", "int1";
 		clocks = <&clk HCLK3>,
 				 <&clk CAN0_GATE>;
+		clock-names = "hclk", "cclk";
+		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
+
+		status = "disable";
+	};
+
+	can1: can@403D0000 {
+		compatible = "bosch,m_can";
+		reg = <0x0 0x403D0000 0x0 0x200>, <0x0 0x403D0200 0x0 0x2000>;
+		reg-names = "m_can", "message_ram";
+		interrupts = <GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>,
+					 <GIC_SPI 132 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "int0", "int1";
+		clocks = <&clk HCLK3>,
+				 <&clk CAN1_GATE>;
 		clock-names = "hclk", "cclk";
 		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
 
