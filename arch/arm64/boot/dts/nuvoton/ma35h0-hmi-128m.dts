@@ -169,7 +169,7 @@
 };
 
 &i2c0 {
-	status = "disabled";
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c0>;
 
