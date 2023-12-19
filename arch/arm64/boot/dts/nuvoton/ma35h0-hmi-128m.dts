@@ -28,7 +28,7 @@
 			no-map;
 		};
 		vc8k_buf: vc8k_buf@0 {
-			reg = <0x0 0x86000000 0x0 0x1800000>; /* 24MiB */
+                       reg = <0x0 0x86000000 0x0 0x1800000>; /* 24MiB */
 			no-map;
 		};
 	};
@@ -80,6 +80,17 @@
 		};
 	};
 
+        volt0_sdhci1: regulator-volt0_sdhci1 {
+		compatible = "regulator-gpio";
+		regulator-name = "volt1_sdhci1";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+		gpios = <&gpion 11 GPIO_ACTIVE_HIGH>; /* PN11 */
+		gpios-states = <0>;
+		states = <1800000 0x1 3300000 0x0>;
+		enable-active-high;
+		regulator-boot-on;
+        };
 };
 
 &mem {
@@ -145,15 +156,17 @@
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sdhci0>;
+	disable-wp;
 };
 
 &sdhci1 {
-        status = "okay";
-        pinctrl-names = "default";
-        pinctrl-0 = <&pinctrl_sdhci1_1_8V>;
-        max-frequency = <200000000>;
-        bus-width = <8>;
-        non-removable;
+	status = "okay";
+	pinctrl-names = "sdhci_3V3","sdhci_1V8";
+	pinctrl-0 = <&pinctrl_sdhci1_3_3V>;
+	pinctrl-1 = <&pinctrl_sdhci1_1_8V>;
+	bus-width = <4>;
+	vqmmc-supply = <&volt0_sdhci1>;
+	power-gpios = <&gpiok 9 GPIO_ACTIVE_LOW>; /* PK9 */
 };
 
 &epwm0 {
