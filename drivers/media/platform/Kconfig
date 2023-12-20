@@ -19,24 +19,6 @@ config VIDEO_MA35D1_CAMERA
 	help
 	  MA35D1 camera0
 
-config VIDEO_MA35H0_CAMERA
-	tristate "MA35H0 camera controller support"
-	depends on MEDIA_CAMERA_SUPPORT
-	depends on VIDEO_DEV && I2C && VIDEO_V4L2 && MEDIA_CONTROLLER
-	select VIDEOBUF2_DMA_CONTIG
-	select V4L2_FWNODE
-	help
-	  MA35H0 camera0
-
-config VIDEO_MA35D0_CAMERA
-	tristate "MA35D0 camera controller support"
-	depends on MEDIA_CAMERA_SUPPORT
-	depends on VIDEO_DEV && I2C && VIDEO_V4L2 && MEDIA_CONTROLLER
-	select VIDEOBUF2_DMA_CONTIG
-	select V4L2_FWNODE
-	help
-	  MA35D0 camera0
-
 source "drivers/media/platform/marvell-ccic/Kconfig"
 
 config VIDEO_VIA_CAMERA

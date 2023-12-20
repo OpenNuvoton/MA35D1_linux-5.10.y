@@ -948,44 +948,6 @@
 		status = "disabled";
 	};
 
-	ccap0: ccap@40240000{
-		compatible = "nuvoton,ma35h0-ccap";
-		reg = <0x0 0x40240000 0x0 0x2000>;
-		interrupts = <GIC_SPI 21 IRQ_TYPE_LEVEL_HIGH>;
-		status = "disabled";
-	};
-
-	i2c_gpio0: i2c-gpio-0 {
-		reg = <0 0 0 0>;
-		compatible = "i2c-gpio";
-		gpios = <&gpiom 14 0 /* sda */
-			 &gpiom 15 0 /* scl */
-			>;
-		i2c-gpio,delay-us = <20>;        /* ~100 kHz */
-		#address-cells = <1>;
-		#size-cells = <0>;
-		status = "disabled";
-	};
-
-	ccap1: ccap@40250000{
-		compatible = "nuvoton,ma35h0-ccap";
-		reg = <0x0 0x40250000 0x0 0x2000>;
-		interrupts = <GIC_SPI 22 IRQ_TYPE_LEVEL_HIGH>;
-		status = "disabled";
-	};
-
-	i2c_gpio1: i2c-gpio-1{
-		reg = <0 0 0 1>;
-		compatible = "i2c-gpio";
-		gpios = <&gpiol 4 0 /* sda */
-			 &gpiol 5 0 /* scl */
-			>;
-		i2c-gpio,delay-us = <20>;        /* ~100 kHz */
-		#address-cells = <1>;
-		#size-cells = <0>;
-		status = "disabled";
-	};
-
 	tsen: tsen {
 		compatible = "nuvoton,ma35h0-tsen";
 		#thermal-sensor-cells = <0>;

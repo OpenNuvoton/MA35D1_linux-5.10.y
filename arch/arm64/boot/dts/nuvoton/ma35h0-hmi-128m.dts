@@ -40,25 +40,19 @@
 		botton0 {
 			label = "Key Down";
 			linux,code = <KEY_DOWN>;
-			gpios = <&gpion 2 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiok 10 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 		button1{
 			label ="Key Up";
 			linux,code = <KEY_UP>;
-			gpios = <&gpion 3 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiok 11 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 		botton2 {
 			label = "Key Left";
 			linux,code = <KEY_LEFT>;
-			gpios = <&gpion 12 GPIO_ACTIVE_LOW>;
-			wakeup-source;
-		};
-		button3 {
-			label ="Key Right";
-			linux,code = <KEY_RIGHT>;
-			gpios = <&gpion 13 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiom 2 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 	};
@@ -96,38 +90,6 @@
 &mem {
 	device_type = "memory";
 	reg = <0x00000000 0x80000000 0 0x08000000>; /* DRAM space - 1, size : 128MB DRAM */
-};
-
-&ccap0 {
-        status = "disabled";
-	port {
-		/* Parallel bus endpoint */
-		ccap0_1: endpoint {
-			remote-endpoint = <&hm1055_0>;
-			hsync-active = <0>;     /* Active low */
-			vsync-active = <0>;     /* Active low */
-			pclk-sample = <1>;      /* Rising */
-		};
-	};
-};
-
-&i2c_gpio0 {
-	status = "disabled";
-	hm1055@24 {
-		compatible = "himax,hm1055";
-		reg = <0x24>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ccap0>;
-		clocks = <&clk CCAP0_GATE>;
-		clock-names = "xclk";
-		reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
-		powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
-		port {
-			hm1055_0: endpoint {
-				remote-endpoint = <&ccap0_1>;
-			};
-		};
-	};
 };
 
 &gmac0 {
@@ -429,24 +391,6 @@
 				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_sdhci_drive1_1_8V>,
 				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_sdhci_drive1_1_8V>,
 				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_sdhci_drive1_1_8V>;
-		};
-	};
-
-	ccap0 {
-		pinctrl_ccap0: ccap0grp{
-			nuvoton,pins =
-				<SYS_GPK_MFPH_PK9MFP_CCAP0_SCLK		&pcfg_default>,
-				<SYS_GPK_MFPH_PK10MFP_CCAP0_PIXCLK	&pcfg_default>,
-				<SYS_GPK_MFPH_PK11MFP_CCAP0_HSYNC	&pcfg_default>,
-				<SYS_GPM_MFPL_PM0MFP_CCAP0_VSYNC	&pcfg_default>,
-				<SYS_GPM_MFPL_PM2MFP_CCAP0_DATA0	&pcfg_default>,
-				<SYS_GPM_MFPL_PM3MFP_CCAP0_DATA1	&pcfg_default>,
-				<SYS_GPM_MFPL_PM4MFP_CCAP0_DATA2	&pcfg_default>,
-				<SYS_GPM_MFPL_PM5MFP_CCAP0_DATA3	&pcfg_default>,
-				<SYS_GPM_MFPL_PM6MFP_CCAP0_DATA4	&pcfg_default>,
-				<SYS_GPM_MFPL_PM7MFP_CCAP0_DATA5	&pcfg_default>,
-				<SYS_GPM_MFPH_PM8MFP_CCAP0_DATA6	&pcfg_default>,
-				<SYS_GPM_MFPH_PM9MFP_CCAP0_DATA7	&pcfg_default>;
 		};
 	};
 
