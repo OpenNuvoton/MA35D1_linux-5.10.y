@@ -92,10 +92,10 @@
 	reg = <0x00000000 0x80000000 0 0x08000000>; /* DRAM space - 1, size : 128MB DRAM */
 };
 
-&gmac0 {
+&emac0 {
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_gmac0>;
+	pinctrl-0 = <&pinctrl_emac0>;
 };
 
 &ehci0 {
@@ -216,8 +216,8 @@
 };
 
 &pinctrl {
-	gmac0 {
-		pinctrl_gmac0: gmac0grp{
+	emac0 {
+		pinctrl_emac0: emac0grp{
 			nuvoton,pins =
 				<SYS_GPE_MFPL_PE0MFP_RMII0_MDC		&pcfg_emac_3_3V>,
 				<SYS_GPE_MFPL_PE1MFP_RMII0_MDIO		&pcfg_emac_3_3V>,

@@ -34,7 +34,7 @@ struct nvt_priv_data {
 	int rx_delay;
 };
 
-static struct nvt_priv_data *nvt_gmac_setup(struct platform_device *pdev,
+static struct nvt_priv_data *nvt_emac_setup(struct platform_device *pdev,
 					    struct plat_stmmacenet_data *plat)
 {
 	struct nvt_priv_data *bsp_priv;
@@ -110,7 +110,7 @@ static struct nvt_priv_data *nvt_gmac_setup(struct platform_device *pdev,
 	return bsp_priv;
 }
 
-static int nvt_gmac_probe(struct platform_device *pdev)
+static int nvt_emac_probe(struct platform_device *pdev)
 {
 	struct plat_stmmacenet_data *plat_dat;
 	struct stmmac_resources stmmac_res;
@@ -127,7 +127,7 @@ static int nvt_gmac_probe(struct platform_device *pdev)
 	plat_dat->has_gmac = 1;
 	plat_dat->pmt = 1;
 
-	plat_dat->bsp_priv = nvt_gmac_setup(pdev, plat_dat);
+	plat_dat->bsp_priv = nvt_emac_setup(pdev, plat_dat);
 	if (IS_ERR(plat_dat->bsp_priv)) {
 		ret = PTR_ERR(plat_dat->bsp_priv);
 		goto err_remove_config_dt;
@@ -145,7 +145,7 @@ err_remove_config_dt:
 	return ret;
 }
 
-static int nvt_gmac_remove(struct platform_device *pdev)
+static int nvt_emac_remove(struct platform_device *pdev)
 {
 	int ret = stmmac_dvr_remove(&pdev->dev);
 
@@ -153,7 +153,7 @@ static int nvt_gmac_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM_SLEEP
-static int nvt_gmac_suspend(struct device *dev)
+static int nvt_emac_suspend(struct device *dev)
 {
 	//struct nvt_priv_data *bsp_priv = get_stmmac_bsp_priv(dev);
 	int ret = stmmac_suspend(dev);
@@ -161,7 +161,7 @@ static int nvt_gmac_suspend(struct device *dev)
 	return ret;
 }
 
-static int nvt_gmac_resume(struct device *dev)
+static int nvt_emac_resume(struct device *dev)
 {
 	//struct nvt_priv_data *bsp_priv = get_stmmac_bsp_priv(dev);
 
@@ -169,24 +169,24 @@ static int nvt_gmac_resume(struct device *dev)
 }
 #endif /* CONFIG_PM_SLEEP */
 
-static SIMPLE_DEV_PM_OPS(nvt_gmac_pm_ops, nvt_gmac_suspend, nvt_gmac_resume);
+static SIMPLE_DEV_PM_OPS(nvt_emac_pm_ops, nvt_emac_suspend, nvt_emac_resume);
 
-static const struct of_device_id nvt_gmac_dwmac_match[] = {
-	{ .compatible = "nuvoton,ma35d0-gmac"},
+static const struct of_device_id nvt_emac_dwmac_match[] = {
+	{ .compatible = "nuvoton,ma35d0-emac"},
 	{ }
 };
-MODULE_DEVICE_TABLE(of, nvt_gmac_dwmac_match);
+MODULE_DEVICE_TABLE(of, nvt_emac_dwmac_match);
 
-static struct platform_driver nvt_gmac_dwmac_driver = {
-	.probe  = nvt_gmac_probe,
-	.remove = nvt_gmac_remove,
+static struct platform_driver nvt_emac_dwmac_driver = {
+	.probe  = nvt_emac_probe,
+	.remove = nvt_emac_remove,
 	.driver = {
-		.name           = "ma35d0-gmac",
-		.pm		= &nvt_gmac_pm_ops,
-		.of_match_table = nvt_gmac_dwmac_match,
+		.name           = "ma35d0-emac",
+		.pm		= &nvt_emac_pm_ops,
+		.of_match_table = nvt_emac_dwmac_match,
 	},
 };
-module_platform_driver(nvt_gmac_dwmac_driver);
+module_platform_driver(nvt_emac_dwmac_driver);
 
 MODULE_DESCRIPTION("Nuvoton MA35D0 DWMAC specific glue layer");
 MODULE_LICENSE("GPL v2");
