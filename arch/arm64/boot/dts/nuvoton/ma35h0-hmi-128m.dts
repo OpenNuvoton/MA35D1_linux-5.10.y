@@ -24,7 +24,7 @@
 
 	reserved-memory {
 		display_buf: display_buf@0 {
-			reg = <0x0 0x84780000 0x0 0x1880000>; /* 24.5MiB */
+			reg = <0x0 0x84FF0000 0x0 0x1010000>; /* 17MiB */
 			no-map;
 		};
 		vc8k_buf: vc8k_buf@0 {

@@ -287,9 +287,9 @@
 		compatible = "nuvoton,ma35h0-crypto";
 		reg = <0x0 0x40300000 0x0 0x1000>;
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
-		rsa_ioctl = "yes";           /* yes: RSA via ioctl, no: RSA via akcipher   */
-		ecc_ioctl = "yes";           /* yes: ECC via ioctl, no: ECDH via akcipher */
-		status = "okay";
+		rsa_ioctl = "no";           /* yes: RSA via ioctl, no: RSA via akcipher   */
+		ecc_ioctl = "no";           /* yes: ECC via ioctl, no: ECDH via akcipher */
+		status = "disabled";
 	};
 
 	/* Key Store */
@@ -305,7 +305,7 @@
 		compatible = "nuvoton,ma35h0-trng";
 		reg = <0x0 0x40B90000 0x0 0x400>;
 		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	rtc: rtc@40410000 {
@@ -1341,7 +1341,7 @@
 		swizzle = <0>;//0:ARGB, 1:RGBA, 2:ABGR, 3:BGRA
 		dpi-config = <5>;//0:D16CFG1, 1:D16CFG2, 2:D16CFG3, 3:D18CFG1, 4:D18CFG2, 5:D24
 
-		buffer-num = <3>;
+		buffer-num = <2>;
 		colorkey-en = <1>;
 
 		//Enable overlay function
