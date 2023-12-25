@@ -140,6 +140,7 @@ static int ma35d0_i2s_trigger(struct snd_pcm_substream *substream, int cmd, stru
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
+	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		val |= I2S_EN;
 		val |= MCLKEN;
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -152,6 +153,7 @@ static int ma35d0_i2s_trigger(struct snd_pcm_substream *substream, int cmd, stru
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
+	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
 		val &= ~I2S_EN;
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 			val &= ~(TX_EN | TXPDMAEN);
