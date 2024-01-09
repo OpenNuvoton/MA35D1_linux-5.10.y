@@ -771,10 +771,28 @@ static inline void nu_read_ecc_key(struct nu_ecc_ctx *ctx, u32 reg, u8 *key)
 {
 	struct nu_ecc_dev *dd = ctx->dd;
 	u32	val32;
-	int	i, idx;
+	int	i, wcnt, idx;
 
-	idx = ((ctx->keylen + 3) / 4) - 1;
-	for (i = 0; i < ctx->keylen; i += 4) {
+	wcnt = (ctx->keylen + 3) / 4;
+	idx = wcnt - 1;
+
+	val32 = nu_read_reg(dd, reg + idx * 4);
+	i = 0;
+	if (ctx->keylen % 4 == 1) {
+		key[i++] = val32 & 0xff;
+		idx--;
+	} else if (ctx->keylen % 4 == 2) {
+		key[i++] = (val32 >> 8) & 0xff;
+		key[i++] = val32 & 0xff;
+		idx--;
+	} else if (ctx->keylen % 4 == 3) {
+		key[i++] = (val32 >> 16) & 0xff;
+		key[i++] = (val32 >> 8) & 0xff;
+		key[i++] = val32 & 0xff;
+		idx--;
+	}
+
+	for (; idx >= 0; i += 4) {
 		val32 = nu_read_reg(dd, reg + idx * 4);
 		idx--;
 		key[i]   = (val32 >> 24) & 0xff;
@@ -1168,11 +1186,30 @@ static void optee_ecc_close(struct nu_ecc_dev *dd)
 	dd->octx = NULL;
 }
 
+void cstr_to_hex(u8 *cstr, u8 *hex_buff, int klen)
+{
+	int i, kidx, bytes;
+
+	bytes = (klen + 7) / 8;
+	hex_buff[bytes] = 0;
+	hex_buff[bytes + 1] = 0;
+
+	i = strlen(cstr) - 1;
+	for (kidx = bytes - 1; kidx >= 0; kidx--) {
+		hex_buff[kidx] = 0;
+		if (i >= 0)
+			hex_buff[kidx] = get_nibble_value(cstr[i--]);
+		if (i >= 0)
+			hex_buff[kidx] |= (get_nibble_value(cstr[i--]) << 4);
+	}
+}
+
 static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
 			  unsigned long arg)
 {
 	struct nu_ecc_dev  *dd;
 	struct nu_ecc_ctx  *ecc_ctx = filp->private_data;
+	struct ecc_args_t args;
 	u8	kbuf[160];
 	u32	ecc_ctl;
 	int	use_optee;
@@ -1183,62 +1220,113 @@ static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
 	if (!ecc_ctx)
 		return -EINVAL;
 
-	if (cmd != ECC_IOC_SET_CURVE) {
-		if ((ecc_ctx->keylen > 72) || (ecc_ctx->keylen < 20)) {
-			pr_err("%s - invalid key length: %d\n",
-				__func__, ecc_ctx->keylen);
-			return -EINVAL;
-		}
-	}
 	dd = ecc_ctx->dd;
 	use_optee =  dd->nu_cdev->use_optee;
 
 	switch (cmd) {
-	case ECC_IOC_SET_CURVE:
-		if (use_optee)
-			memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
-		return nuvoton_ecc_init_curve(arg, ecc_ctx);
-
-	case ECC_IOC_SET_PRIV_KEY:
-		if (copy_from_user(kbuf, (u8 *)arg, ecc_ctx->keylen))
+	case ECC_IOC_KEY_GEN:
+		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
 			return -EFAULT;
 
-		if (use_optee) {
-			ecc_key_to_str(kbuf, (char *)&dd->va_shm[0x1480 / 4],
-					ecc_ctx->keylen);
-		} else {
-			nu_write_ecc_key(ecc_ctx, kbuf, ECC_K);
-		}
-		break;
+		if (use_optee)
+			memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
 
-	case ECC_IOC_SET_PUB_KEY:
-		if (arg == 0) {
-			/* use G point, G should have been set on init */
-			/* Do nothing. */
-			if (use_optee) {
-				ecc_key_to_str((u8 *)ecc_ctx->curve->Px,
-					(char *)&dd->va_shm[0x1000 / 4], ecc_ctx->keylen);
-				ecc_key_to_str((u8 *)ecc_ctx->curve->Py,
-					(char *)&dd->va_shm[0x1240 / 4], ecc_ctx->keylen);
-			}
+		nuvoton_ecc_init_curve(args.curve, ecc_ctx);
+
+		if (args.knum_d != -1) {
+			nu_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
 		} else {
-			if (copy_from_user(kbuf, (u8 *)arg, ecc_ctx->keylen * 2))
-				return -EFAULT;
-			if (use_optee) {
-				ecc_key_to_str(kbuf,
-					(char *)&dd->va_shm[0x1000 / 4], ecc_ctx->keylen);
-				ecc_key_to_str(kbuf + ecc_ctx->keylen,
-					(char *)&dd->va_shm[0x1240 / 4], ecc_ctx->keylen);
-			} else {
-				nu_write_ecc_key(ecc_ctx, kbuf, ECC_X1);
-				nu_write_ecc_key(ecc_ctx, &kbuf[ecc_ctx->keylen], ECC_Y1);
+			nu_write_reg(dd, 0, ECC_KSCTL);
+			if (use_optee)
+				ecc_key_to_str(args.d, (char *)&dd->va_shm[0x1000 / 4],
+					       ecc_ctx->keylen);
+			else
+				nu_write_ecc_key(ecc_ctx, args.d, ECC_K);
+		}
+
+		if (ecc_ctx->curve->GF == (int)CURVE_GF_2M) {
+			ecc_ctl = 0x0;
+		} else {
+			/*  CURVE_GF_P */
+			ecc_ctl = ECC_CTL_FSEL;
+		}
+		nu_write_reg(dd, (ecc_ctx->curve->key_len <<
+			     ECC_CTL_CURVEM_OFFSET) | ECCOP_POINT_MUL |
+			     ECC_CTL_START | ecc_ctl, ECC_CTL);
+
+		if (use_optee == false) {
+			ret = nuvoton_wait_ecc_complete(dd, 2000);
+			if (ret)
+				return ret;
+		} else {
+			/*
+			 *  Invoke OP-TEE Crypto PTA to run ECC
+			 */
+			memset(&inv_arg, 0, sizeof(inv_arg));
+			memset(&param, 0, sizeof(param));
+
+			/* Invoke PTA_CMD_CRYPTO_ECC_PMUL function of PTA */
+			inv_arg.func = PTA_CMD_CRYPTO_ECC_KEY_GEN;
+			inv_arg.session = dd->session_id;
+			inv_arg.num_params = 4;
+
+			/* Fill invoke cmd params */
+			param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+			param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+			param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+			param[0].u.value.a = ecc_ctx->curve->curve_id;
+			param[1].u.memref.shm = dd->shm_pool;
+			param[1].u.memref.size = CRYPTO_SHM_SIZE;
+			param[1].u.memref.shm_offs = 0;
+			param[2].u.value.a = 0x1000;
+			param[2].u.value.b = 0x2000;
+
+			ret = tee_client_invoke_func(dd->octx, &inv_arg, param);
+			if ((ret < 0) || (inv_arg.ret != 0)) {
+				pr_err("PTA_CMD_CRYPTO_ECC_KEY_GEN err: %x\n", inv_arg.ret);
+				return -EINVAL;
 			}
 		}
+		nu_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
+		if (copy_to_user(((struct ecc_args_t *)arg)->out_x, kbuf, ecc_ctx->keylen))
+			return -EFAULT;
+		nu_read_ecc_key(ecc_ctx, ECC_Y1, kbuf);
+		if (copy_to_user(((struct ecc_args_t *)arg)->out_y, kbuf, ecc_ctx->keylen))
+			return -EFAULT;
 		break;
 
 	case ECC_IOC_POINT_MUL:
-		nu_write_reg(dd, 0, ECC_KSCTL);
+		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
+			return -EFAULT;
+
+		if (use_optee)
+			memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+
+		nuvoton_ecc_init_curve(args.curve, ecc_ctx);
+
+		if (args.knum_d != -1) {
+			nu_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
+		} else {
+			nu_write_reg(dd, 0, ECC_KSCTL);
+			if (use_optee)
+				ecc_key_to_str(args.d, (char *)&dd->va_shm[0x1480 / 4],
+					       ecc_ctx->keylen);
+			else
+				nu_write_ecc_key(ecc_ctx, args.d, ECC_K);
+		}
+
 		nu_write_reg(dd, 0, ECC_KSXY);
+		if (use_optee) {
+			ecc_key_to_str(args.Qx,
+				(char *)&dd->va_shm[0x1000 / 4], ecc_ctx->keylen);
+			ecc_key_to_str(args.Qy,
+				(char *)&dd->va_shm[0x1240 / 4], ecc_ctx->keylen);
+		} else {
+			nu_write_ecc_key(ecc_ctx, args.Qx, ECC_X1);
+			nu_write_ecc_key(ecc_ctx, args.Qy, ECC_Y1);
+		}
+
 		if (ecc_ctx->curve->GF == (int)CURVE_GF_2M) {
 			ecc_ctl = 0x0;
 		} else {
@@ -1285,8 +1373,127 @@ static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
 			}
 		}
 		nu_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
-		nu_read_ecc_key(ecc_ctx, ECC_Y1, &kbuf[ecc_ctx->keylen]);
-		if (copy_to_user((char *)arg, kbuf, ecc_ctx->keylen * 2))
+		if (copy_to_user(((struct ecc_args_t *)arg)->out_x, kbuf, ecc_ctx->keylen))
+			return -EFAULT;
+		nu_read_ecc_key(ecc_ctx, ECC_Y1, kbuf);
+		if (copy_to_user(((struct ecc_args_t *)arg)->out_y, kbuf, ecc_ctx->keylen))
+			return -EFAULT;
+		break;
+
+	case ECC_IOC_SIG_VERIFY:
+		if (!use_optee)
+			return -EINVAL;
+
+		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
+			return -EFAULT;
+
+		memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+
+		nuvoton_ecc_init_curve(args.curve, ecc_ctx);
+
+		if (args.knum_x != -1) {
+			nu_write_reg(dd, ECC_KSXY_RSRCXY | (args.knum_x & 0x9F) |
+				     ((args.knum_y & 0x9F) << 8), ECC_KSXY);
+		} else {
+			nu_write_reg(dd, 0, ECC_KSXY);
+			strncpy((char *)&dd->va_shm[0x1240 / 4], args.Qx, 0x240);
+			strncpy((char *)&dd->va_shm[0x1480 / 4], args.Qy, 0x240);
+		}
+
+		strncpy((char *)&dd->va_shm[0x1000 / 4], args.sha_dgst, 0x240);
+		strncpy((char *)&dd->va_shm[0x16C0 / 4], args.R, 0x240);
+		strncpy((char *)&dd->va_shm[0x1900 / 4], args.S, 0x240);
+
+		/*
+		 *  Invoke OP-TEE Crypto PTA to run ECC
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_ECC_SIG_VERIFY function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_ECC_SIG_VERIFY;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = ecc_ctx->curve->curve_id;
+		param[1].u.memref.shm = dd->shm_pool;
+		param[1].u.memref.size = CRYPTO_SHM_SIZE;
+		param[1].u.memref.shm_offs = 0;
+		param[2].u.value.a = 0x1000;
+		param[2].u.value.b = 0x2000;
+
+		ret = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((ret < 0) || (inv_arg.ret != 0)) {
+			pr_err("ECC_IOC_SIG_VERIFY failed: %x\n", inv_arg.ret);
+			return -EINVAL;
+		}
+		break;
+
+	case ECC_IOC_SIG_GEN:
+		if (!use_optee)
+			return -EINVAL;
+
+		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
+			return -EFAULT;
+
+		memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+
+		nuvoton_ecc_init_curve(args.curve, ecc_ctx);
+
+		if (args.knum_d != -1) {
+			nu_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
+		} else {
+			nu_write_reg(dd, 0, ECC_KSCTL);
+			if (use_optee)
+				ecc_key_to_str(args.d, (char *)&dd->va_shm[0x1000 / 4],
+					       ecc_ctx->keylen);
+			else
+				nu_write_ecc_key(ecc_ctx, args.d, ECC_K);
+		}
+
+		strncpy((char *)&dd->va_shm[0x1000 / 4], args.sha_dgst, 0x240);
+		strncpy((char *)&dd->va_shm[0x1240 / 4], args.d, 0x240);
+		strncpy((char *)&dd->va_shm[0x1480 / 4], args.k, 0x240);
+
+		/*
+		 *  Invoke OP-TEE Crypto PTA to run ECC
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_ECC_SIG_GEN function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_ECC_SIG_GEN;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = ecc_ctx->curve->curve_id;
+		param[1].u.memref.shm = dd->shm_pool;
+		param[1].u.memref.size = CRYPTO_SHM_SIZE;
+		param[1].u.memref.shm_offs = 0;
+		param[2].u.value.a = 0x1000;
+		param[2].u.value.b = 0x2000;
+
+		ret = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((ret < 0) || (inv_arg.ret != 0)) {
+			pr_err("ECC_IOC_SIG_GEN failed: %x\n", inv_arg.ret);
+			return -EINVAL;
+		}
+
+		if (copy_to_user(((struct ecc_args_t *)arg)->R,
+				 (char *)&dd->va_shm[0x2000 / 4], ECC_KMAXL))
+			return -EFAULT;
+		if (copy_to_user(((struct ecc_args_t *)arg)->S,
+				 (char *)&dd->va_shm[0x2240 / 4], ECC_KMAXL))
 			return -EFAULT;
 		break;
 

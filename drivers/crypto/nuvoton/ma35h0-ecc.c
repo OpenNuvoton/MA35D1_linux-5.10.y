@@ -686,7 +686,9 @@ static struct ecc_curve _Curve[] = {
 },
 };
 
+#ifdef CONFIG_OPTEE
 static int  optee_ecc_open(struct nu_ecc_dev *dd);
+#endif
 
 struct ecc_curve *get_curve(int ecc_curve)
 {
@@ -732,18 +734,26 @@ static struct nu_ecc_dev *ma35h0_ecc_find_dev(struct nu_ecc_ctx *tctx)
 
 static inline void nu_write_reg(struct nu_ecc_dev *ecc_dd, u32 val, u32 reg)
 {
+#ifdef CONFIG_OPTEE
 	if (ecc_dd->nu_cdev->use_optee == true)
 		ecc_dd->va_shm[reg / 4] = val;
 	else
 		writel_relaxed(val, ecc_dd->reg_base + reg);
+#else
+	writel_relaxed(val, ecc_dd->reg_base + reg);
+#endif
 }
 
 static inline u32 nu_read_reg(struct nu_ecc_dev *ecc_dd, u32 reg)
 {
+#ifdef CONFIG_OPTEE
 	if (ecc_dd->nu_cdev->use_optee == true)
 		return ecc_dd->va_shm[reg / 4];
 	else
 		return readl_relaxed(ecc_dd->reg_base + reg);
+#else
+	return readl_relaxed(ecc_dd->reg_base + reg);
+#endif
 }
 
 static inline void nu_write_ecc_key(struct nu_ecc_ctx *ctx, u8 *key, u32 reg)
@@ -770,11 +780,29 @@ static inline void nu_write_ecc_key(struct nu_ecc_ctx *ctx, u8 *key, u32 reg)
 static inline void nu_read_ecc_key(struct nu_ecc_ctx *ctx, u32 reg, u8 *key)
 {
 	struct nu_ecc_dev *dd = ctx->dd;
-	u32 val32;
-	int i, idx;
+	u32	val32;
+	int	i, wcnt, idx;
 
-	idx = ((ctx->keylen + 3) / 4) - 1;
-	for (i = 0; i < ctx->keylen; i += 4) {
+	wcnt = (ctx->keylen + 3) / 4;
+	idx = wcnt - 1;
+
+	val32 = nu_read_reg(dd, reg + idx * 4);
+	i = 0;
+	if (ctx->keylen % 4 == 1) {
+		key[i++] = val32 & 0xff;
+		idx--;
+	} else if (ctx->keylen % 4 == 2) {
+		key[i++] = (val32 >> 8) & 0xff;
+		key[i++] = val32 & 0xff;
+		idx--;
+	} else if (ctx->keylen % 4 == 3) {
+		key[i++] = (val32 >> 16) & 0xff;
+		key[i++] = (val32 >> 8) & 0xff;
+		key[i++] = val32 & 0xff;
+		idx--;
+	}
+
+	for (; idx >= 0; i += 4) {
 		val32 = nu_read_reg(dd, reg + idx * 4);
 		idx--;
 		key[i]   = (val32 >> 24) & 0xff;
@@ -784,6 +812,7 @@ static inline void nu_read_ecc_key(struct nu_ecc_ctx *ctx, u32 reg, u8 *key)
 	}
 }
 
+#ifdef CONFIG_OPTEE
 static const char hex_char_tbl[] = "0123456789abcdef";
 
 static void ecc_key_to_str(u8 *key, char *kstr, int keylen)
@@ -798,6 +827,7 @@ static void ecc_key_to_str(u8 *key, char *kstr, int keylen)
 	*kstr++ = 0;
 	*kstr = 0;
 }
+#endif
 
 static inline int get_nibble_value(char c)
 {
@@ -892,8 +922,10 @@ static int ma35h0_ecc_point_mult(struct nu_ecc_ctx *ctx, u8 *private_key,
 				 u8 *public_key, u8 *result)
 {
 	struct nu_ecc_dev *dd = ctx->dd;
+#ifdef CONFIG_OPTEE
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
+#endif
 	int err;
 
 	if (public_key != NULL) {
@@ -912,6 +944,7 @@ static int ma35h0_ecc_point_mult(struct nu_ecc_ctx *ctx, u8 *private_key,
 	nu_write_reg(dd, ((ctx->keylen * 8) << ECC_CTL_CURVEM_OFFSET) |
 		     ECC_CTL_FSEL | ECCOP_POINT_MUL | ECC_CTL_START, ECC_CTL);
 
+#ifdef CONFIG_OPTEE
 	if (dd->nu_cdev->use_optee == false) {
 		err = ma35h0_wait_ecc_complete(dd, 2000);
 		if (err)
@@ -961,7 +994,11 @@ static int ma35h0_ecc_point_mult(struct nu_ecc_ctx *ctx, u8 *private_key,
 			return -EINVAL;
 		}
 	}
-
+#else
+	err = ma35h0_wait_ecc_complete(dd, 2000);
+	if (err)
+		return err;
+#endif
 	nu_read_ecc_key(ctx, ECC_X1, result);
 	nu_read_ecc_key(ctx, ECC_Y1, result + ctx->keylen);
 	return 0;
@@ -977,11 +1014,12 @@ static int ma35h0_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf,
 	int err;
 
 	ctx->dd = dd;
+#ifdef CONFIG_OPTEE
 	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
 		if (optee_ecc_open(dd) != 0)
 			return -ENODEV;
 	}
-
+#endif
 	if (crypto_ecdh_decode_key(buf, len, &params) < 0) {
 		pr_err("crypto_ecdh_decode_key failed!\n");
 		return -EINVAL;
@@ -1024,11 +1062,12 @@ static int ma35h0_ecdh_compute_value(struct kpp_request *req)
 	int copied, nbytes, public_key_sz;
 	int ret;
 
+#ifdef CONFIG_OPTEE
 	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
 		if (optee_ecc_open(dd) != 0)
 			return -ENODEV;
 	}
-
+#endif
 	ctx->dd = dd;
 	ret = ma35h0_ecc_init_curve(ctx->curve_id, ctx);
 	if (ret)
@@ -1094,6 +1133,7 @@ static struct kpp_alg ma35h0_ecdh = {
 	},
 };
 
+#ifdef CONFIG_OPTEE
 static int  optee_ecc_open(struct nu_ecc_dev *dd)
 {
 	struct tee_ioctl_open_session_arg sess_arg;
@@ -1162,58 +1202,54 @@ static void optee_ecc_close(struct nu_ecc_dev *dd)
 	tee_client_close_context(dd->octx);
 	dd->octx = NULL;
 }
+#endif
 
-static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
+			  unsigned long arg)
 {
-	struct nu_ecc_dev *dd;
-	struct nu_ecc_ctx *ecc_ctx = filp->private_data;
-	u8 kbuf[160];
-	u32 ecc_ctl;
-	int use_optee;
-	int ret;
+	struct nu_ecc_dev  *dd;
+	struct nu_ecc_ctx  *ecc_ctx = filp->private_data;
+	struct ecc_args_t args;
+	u8	kbuf[160];
+	u32	ecc_ctl;
+	int	ret;
+#ifdef CONFIG_OPTEE
+	int	use_optee;
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
+#endif
 
 	if (!ecc_ctx)
 		return -EINVAL;
 
-	if (cmd != ECC_IOC_SET_CURVE) {
-		if ((ecc_ctx->keylen > 72) || (ecc_ctx->keylen < 20)) {
-			pr_err("%s - invalid key length: %d\n", __func__, ecc_ctx->keylen);
-			return -EINVAL;
-		}
-	}
 	dd = ecc_ctx->dd;
+#ifdef CONFIG_OPTEE
 	use_optee =  dd->nu_cdev->use_optee;
-
+#endif
 	switch (cmd) {
-	case ECC_IOC_SET_CURVE:
-		if (use_optee)
-			memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
-		return ma35h0_ecc_init_curve(arg, ecc_ctx);
-
-	case ECC_IOC_SET_PRIV_KEY:
-		if (copy_from_user(kbuf, (u8 *)arg, ecc_ctx->keylen))
+	case ECC_IOC_KEY_GEN:
+		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
 			return -EFAULT;
 
-		nu_write_ecc_key(ecc_ctx, kbuf, ECC_K);
-		break;
+#ifdef CONFIG_OPTEE
+		if (use_optee)
+			memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+#endif
+		ma35h0_ecc_init_curve(args.curve, ecc_ctx);
 
-	case ECC_IOC_SET_PUB_KEY:
-		if (arg == 0) {
-			/* use G point, G should have been set on init */
-			/* Do nothing. */
+		if (args.knum_d != -1) {
+			nu_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
 		} else {
-			if (copy_from_user(kbuf, (u8 *)arg, ecc_ctx->keylen * 2))
-				return -EFAULT;
-			nu_write_ecc_key(ecc_ctx, kbuf, ECC_X1);
-			nu_write_ecc_key(ecc_ctx, &kbuf[ecc_ctx->keylen], ECC_Y1);
+			nu_write_reg(dd, 0, ECC_KSCTL);
+#ifdef CONFIG_OPTEE
+			if (use_optee)
+				ecc_key_to_str(args.d, (char *)&dd->va_shm[0x1000 / 4],
+					       ecc_ctx->keylen);
+			else
+#endif
+				nu_write_ecc_key(ecc_ctx, args.d, ECC_K);
 		}
-		break;
 
-	case ECC_IOC_POINT_MUL:
-		nu_write_reg(dd, 0, ECC_KSCTL);
-		nu_write_reg(dd, 0, ECC_KSXY);
 		if (ecc_ctx->curve->GF == (int)CURVE_GF_2M) {
 			ecc_ctl = 0x0;
 		} else {
@@ -1224,6 +1260,104 @@ static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 			     ECC_CTL_CURVEM_OFFSET) | ECCOP_POINT_MUL |
 			     ECC_CTL_START | ecc_ctl, ECC_CTL);
 
+#ifdef CONFIG_OPTEE
+		if (use_optee == false) {
+			ret = ma35h0_wait_ecc_complete(dd, 2000);
+			if (ret)
+				return ret;
+		} else {
+			/*
+			 *  Invoke OP-TEE Crypto PTA to run ECC
+			 */
+			memset(&inv_arg, 0, sizeof(inv_arg));
+			memset(&param, 0, sizeof(param));
+
+			/* Invoke PTA_CMD_CRYPTO_ECC_PMUL function of PTA */
+			inv_arg.func = PTA_CMD_CRYPTO_ECC_KEY_GEN;
+			inv_arg.session = dd->session_id;
+			inv_arg.num_params = 4;
+
+			/* Fill invoke cmd params */
+			param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+			param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+			param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+			param[0].u.value.a = ecc_ctx->curve->curve_id;
+			param[1].u.memref.shm = dd->shm_pool;
+			param[1].u.memref.size = CRYPTO_SHM_SIZE;
+			param[1].u.memref.shm_offs = 0;
+			param[2].u.value.a = 0x1000;
+			param[2].u.value.b = 0x2000;
+
+			ret = tee_client_invoke_func(dd->octx, &inv_arg, param);
+			if ((ret < 0) || (inv_arg.ret != 0)) {
+				pr_err("PTA_CMD_CRYPTO_ECC_KEY_GEN err: %x\n", inv_arg.ret);
+				return -EINVAL;
+			}
+		}
+#else
+		ret = ma35h0_wait_ecc_complete(dd, 2000);
+		if (ret)
+			return ret;
+#endif
+		nu_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
+		if (copy_to_user(((struct ecc_args_t *)arg)->out_x, kbuf, ecc_ctx->keylen))
+			return -EFAULT;
+		nu_read_ecc_key(ecc_ctx, ECC_Y1, kbuf);
+		if (copy_to_user(((struct ecc_args_t *)arg)->out_y, kbuf, ecc_ctx->keylen))
+			return -EFAULT;
+		break;
+
+	case ECC_IOC_POINT_MUL:
+		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
+			return -EFAULT;
+
+#ifdef CONFIG_OPTEE
+		if (use_optee)
+			memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+#endif
+		ma35h0_ecc_init_curve(args.curve, ecc_ctx);
+
+		if (args.knum_d != -1) {
+			nu_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
+		} else {
+			nu_write_reg(dd, 0, ECC_KSCTL);
+#ifdef CONFIG_OPTEE
+			if (use_optee)
+				ecc_key_to_str(args.d, (char *)&dd->va_shm[0x1480 / 4],
+					       ecc_ctx->keylen);
+			else
+#endif
+				nu_write_ecc_key(ecc_ctx, args.d, ECC_K);
+		}
+
+		nu_write_reg(dd, 0, ECC_KSXY);
+
+#ifdef CONFIG_OPTEE
+		if (use_optee) {
+			ecc_key_to_str(args.Qx,
+				(char *)&dd->va_shm[0x1000 / 4], ecc_ctx->keylen);
+			ecc_key_to_str(args.Qy,
+				(char *)&dd->va_shm[0x1240 / 4], ecc_ctx->keylen);
+		} else {
+			nu_write_ecc_key(ecc_ctx, args.Qx, ECC_X1);
+			nu_write_ecc_key(ecc_ctx, args.Qy, ECC_Y1);
+		}
+#else
+		nu_write_ecc_key(ecc_ctx, args.Qx, ECC_X1);
+		nu_write_ecc_key(ecc_ctx, args.Qy, ECC_Y1);
+#endif
+		if (ecc_ctx->curve->GF == (int)CURVE_GF_2M) {
+			ecc_ctl = 0x0;
+		} else {
+			/*  CURVE_GF_P */
+			ecc_ctl = ECC_CTL_FSEL;
+		}
+		nu_write_reg(dd, (ecc_ctx->curve->key_len <<
+			     ECC_CTL_CURVEM_OFFSET) | ECCOP_POINT_MUL |
+			     ECC_CTL_START | ecc_ctl, ECC_CTL);
+
+#ifdef CONFIG_OPTEE
 		if (use_optee == false) {
 			ret = ma35h0_wait_ecc_complete(dd, 2000);
 			if (ret)
@@ -1259,10 +1393,17 @@ static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 				return -EINVAL;
 			}
 		}
+#else
+		ret = ma35h0_wait_ecc_complete(dd, 2000);
+		if (ret)
+			return ret;
+#endif
 
 		nu_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
-		nu_read_ecc_key(ecc_ctx, ECC_Y1, &kbuf[ecc_ctx->keylen]);
-		if (copy_to_user((char *)arg, kbuf, ecc_ctx->keylen * 2))
+		if (copy_to_user(((struct ecc_args_t *)arg)->out_x, kbuf, ecc_ctx->keylen))
+			return -EFAULT;
+		nu_read_ecc_key(ecc_ctx, ECC_Y1, kbuf);
+		if (copy_to_user(((struct ecc_args_t *)arg)->out_y, kbuf, ecc_ctx->keylen))
 			return -EFAULT;
 		break;
 
@@ -1282,10 +1423,12 @@ static int nvt_ecc_open(struct inode *inode, struct file *file)
 	ecc_ctx->dd = __ecc_dd;
 	file->private_data = ecc_ctx;
 
+#ifdef CONFIG_OPTEE
 	if ((__ecc_dd->nu_cdev->use_optee) && (__ecc_dd->octx == NULL)) {
 		if (optee_ecc_open(__ecc_dd) != 0)
 			return -ENODEV;
 	}
+#endif
 	return 0;
 }
 
@@ -1369,8 +1512,10 @@ int ma35h0_ecc_remove(struct device *dev,
 	list_del(&ecc_dd->list);
 	spin_unlock(&nu_ecc.lock);
 
+#ifdef CONFIG_OPTEE
 	if (nu_cryp_dev->use_optee)
 		optee_ecc_close(ecc_dd);
+#endif
 	return 0;
 }
 

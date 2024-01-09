@@ -33,7 +33,9 @@
 
 #include "ma35h0-crypto.h"
 
+#ifdef CONFIG_OPTEE
 static int  optee_rsa_open(struct nu_rsa_dev *dd);
+#endif
 static struct nu_rsa_dev  *__rsa_dd;
 
 struct nu_rsa_drv {
@@ -68,18 +70,26 @@ static struct nu_rsa_dev *ma35h0_rsa_find_dev(struct nu_rsa_ctx *ctx)
 
 static inline void nu_write_reg(struct nu_rsa_dev *rsa_dd, u32 val, u32 reg)
 {
+#ifdef CONFIG_OPTEE
 	if (rsa_dd->nu_cdev->use_optee == true)
 		rsa_dd->va_shm[reg/4] = val;
 	else
 		writel_relaxed(val, rsa_dd->reg_base + reg);
+#else
+	writel_relaxed(val, rsa_dd->reg_base + reg);
+#endif
 }
 
 static inline u32 nu_read_reg(struct nu_rsa_dev *rsa_dd, u32 reg)
 {
+#ifdef CONFIG_OPTEE
 	if (rsa_dd->nu_cdev->use_optee == true)
 		return rsa_dd->va_shm[reg/4];
 	else
 		return readl_relaxed(rsa_dd->reg_base + reg);
+#else
+	return readl_relaxed(rsa_dd->reg_base + reg);
+#endif
 }
 
 static int check_key_length(u8 *input, int keysz)
@@ -183,13 +193,17 @@ static int ma35h0_rsa_enc(struct akcipher_request *req)
 	u32	keyleng;
 	int	len, err;
 	unsigned long   timeout;
+#ifdef CONFIG_OPTEE
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
+#endif
 
+#ifdef CONFIG_OPTEE
 	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
 		if (optee_rsa_open(dd) != 0)
 			return -ENODEV;
 	}
+#endif
 	ctx->dd = dd;
 	keyleng = ctx->rsa_bit_len/1024 - 1;
 
@@ -238,6 +252,7 @@ static int ma35h0_rsa_enc(struct akcipher_request *req)
 	nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
 			RSA_CTL_START, RSA_CTL);
 
+#ifdef CONFIG_OPTEE
 	if (dd->nu_cdev->use_optee == false) {
 		timeout = jiffies + msecs_to_jiffies(2000);
 		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
@@ -273,7 +288,16 @@ static int ma35h0_rsa_enc(struct akcipher_request *req)
 			return -EINVAL;
 		}
 	}
-
+#else
+	timeout = jiffies + msecs_to_jiffies(2000);
+	while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
+		if (time_after(jiffies, timeout)) {
+			pr_err("RSA encrypt time-out!\n");
+			err = -EIO;
+			break;
+		}
+	}
+#endif
 	dma_unmap_single(dd->dev, ctx->dma_buff, RSA_BUFF_SIZE, DMA_FROM_DEVICE);
 
 	memset(m, 0, sizeof(m));
@@ -292,14 +316,17 @@ static int ma35h0_rsa_dec(struct akcipher_request *req)
 	u32	keyleng;
 	int	err, len;
 	unsigned long   timeout;
+#ifdef CONFIG_OPTEE
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
+#endif
 
+#ifdef CONFIG_OPTEE
 	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
 		if (optee_rsa_open(dd) != 0)
 			return -ENODEV;
 	}
-
+#endif
 	ctx->dd = dd;
 	keyleng = (ctx->rsa_bit_len - 1024) / 1024;
 
@@ -347,6 +374,7 @@ static int ma35h0_rsa_dec(struct akcipher_request *req)
 	nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
 			RSA_CTL_START, RSA_CTL);
 
+#ifdef CONFIG_OPTEE
 	if (dd->nu_cdev->use_optee == false) {
 		timeout = jiffies + msecs_to_jiffies(2000);
 		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
@@ -382,7 +410,16 @@ static int ma35h0_rsa_dec(struct akcipher_request *req)
 			return -EINVAL;
 		}
 	}
-
+#else
+	timeout = jiffies + msecs_to_jiffies(2000);
+	while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
+		if (time_after(jiffies, timeout)) {
+			pr_err("RSA decrypt time-out!\n");
+			err = -EIO;
+			break;
+		}
+	}
+#endif
 	dma_unmap_single(dd->dev, ctx->dma_buff, RSA_BUFF_SIZE, DMA_BIDIRECTIONAL);
 
 	memset(m, 0, sizeof(m));
@@ -499,6 +536,7 @@ static struct akcipher_alg  ma35h0_rsa = {
 	},
 };
 
+#ifdef CONFIG_OPTEE
 static int  optee_rsa_open(struct nu_rsa_dev *dd)
 {
 	struct tee_ioctl_open_session_arg sess_arg;
@@ -567,6 +605,7 @@ static void optee_rsa_close(struct nu_rsa_dev *dd)
 	tee_client_close_context(dd->octx);
 	dd->octx = NULL;
 }
+#endif
 
 static int nvt_rsa_ioctl_set_register(struct nu_rsa_ctx *rsa_ctx,
 				      int offs, unsigned long arg)
@@ -597,9 +636,11 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 	u8	m[NU_RSA_MAX_BYTE_LEN];
 	struct nu_rsa_ctx  *rsa_ctx = filp->private_data;
 	unsigned long   timeout;
+#ifdef CONFIG_OPTEE
 	int err;
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
+#endif
 
 	if (!rsa_ctx)
 		return -EIO;
@@ -661,6 +702,7 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 		nu_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
 				RSA_CTL_START, RSA_CTL);
 
+#ifdef CONFIG_OPTEE
 		if (dd->nu_cdev->use_optee == false) {
 			timeout = jiffies + msecs_to_jiffies(2000);
 			while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
@@ -698,7 +740,15 @@ static long nvt_rsa_ioctl(struct file *filp, unsigned int cmd,
 				return -EINVAL;
 			}
 		}
-
+#else
+		timeout = jiffies + msecs_to_jiffies(2000);
+		while (nu_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
+			if (time_after(jiffies, timeout)) {
+				pr_err("RSA decrypt time-out!\n");
+				return -EIO;
+			}
+		}
+#endif
 		dma_unmap_single(dd->dev, rsa_ctx->dma_buff, RSA_BUFF_SIZE, DMA_BIDIRECTIONAL);
 
 		nu_rsa_reg_to_hex((u32 *)&rsa_ctx->buffer[ANS_OFF], rsa_ctx->rsa_bit_len, m, &len);
@@ -722,10 +772,12 @@ static int nvt_rsa_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	rsa_ctx->dd = __rsa_dd;
 	file->private_data = rsa_ctx;
+#ifdef CONFIG_OPTEE
 	if ((__rsa_dd->nu_cdev->use_optee) && (__rsa_dd->octx == NULL)) {
 		if (optee_rsa_open(__rsa_dd) != 0)
 			return -ENODEV;
 	}
+#endif
 	return 0;
 }
 
@@ -805,7 +857,9 @@ int ma35h0_rsa_remove(struct device *dev,
 	list_del(&rsa_dd->list);
 	spin_unlock(&nu_rsa.lock);
 
+#ifdef CONFIG_OPTEE
 	if (nu_cryp_dev->use_optee)
 		optee_rsa_close(rsa_dd);
+#endif
 	return 0;
 }

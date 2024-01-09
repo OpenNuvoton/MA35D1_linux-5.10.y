@@ -51,8 +51,10 @@ struct nu_sha_drv {
 	spinlock_t lock;
 };
 
+#ifdef CONFIG_OPTEE
 static int  optee_sha_open(struct nu_sha_dev *dd);
 static void optee_sha_close(struct nu_sha_dev *dd);
+#endif
 
 static struct nu_sha_drv nu_sha = {
 	.dev_list = LIST_HEAD_INIT(nu_sha.dev_list),

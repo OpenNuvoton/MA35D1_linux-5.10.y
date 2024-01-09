@@ -613,20 +613,42 @@ struct nu_crypto_dev {
 #define RSA_IOC_SET_Q             _IOW(CRYPTO_IOC_MAGIC, 25, u8 *)
 #define RSA_IOC_RUN               _IOW(CRYPTO_IOC_MAGIC, 29, u8 *)
 
-#define ECC_IOC_SET_CURVE         _IOW(CRYPTO_IOC_MAGIC, 50, int)
-#define ECC_IOC_SET_PRIV_KEY      _IOW(CRYPTO_IOC_MAGIC, 51, u8 *)
-#define ECC_IOC_SET_PUB_KEY       _IOW(CRYPTO_IOC_MAGIC, 52, u8 *)
+#define ECC_IOC_KEY_GEN           _IOW(CRYPTO_IOC_MAGIC, 53, u8 *)
 #define ECC_IOC_POINT_MUL         _IOW(CRYPTO_IOC_MAGIC, 55, u8 *)
+#define ECC_IOC_SIG_GEN           _IOW(CRYPTO_IOC_MAGIC, 57, u8 *)
+#define ECC_IOC_SIG_VERIFY        _IOW(CRYPTO_IOC_MAGIC, 58, u8 *)
+
+#define ECC_KMAXL                 160
+
+struct ecc_args_t {
+	int	curve;
+	int	keylen;
+					/* Key Store key is OTP key if bit7 is 1, otherwise is SRAM key. */
+					/* For example, 0x84 is OTP key 4, while 0x11 is SRAM key 17 */
+	int	knum_d;			/* Key Store number of private key; -1 means unused */
+	int	knum_x;			/* Key Store number of public key X; -1 means unused */
+	int	knum_y;			/* Key Store number of public key Y; -1 means unused */
+	u8	d[ECC_KMAXL];		/* private key (not used if select Key Store key) */
+	u8	Qx[ECC_KMAXL];		/* public key X (not used if select Key Store key) */
+	u8	Qy[ECC_KMAXL];		/* public key Y (not used if select Key Store key) */
+	u8	sha_dgst[ECC_KMAXL];	/* sha digest of the message(or image) to be verified */
+	u8	k[ECC_KMAXL];		/* used for signature generation */
+	u8	R[ECC_KMAXL];		/* ECDSA signature R */
+	u8	S[ECC_KMAXL];		/* ECDSA signature S */
+	u8	out_x[ECC_KMAXL];	/* output X */
+	u8	out_y[ECC_KMAXL];	/* output Y */
+};
 
 /*-------------------------------------------------------------------------*/
 /*   OP-TEE                                                                */
 /*-------------------------------------------------------------------------*/
-#define CRYPTO_SHM_SIZE		(0x4000)
+#define CRYPTO_SHM_SIZE			(0x4000)
 
 #define TEE_ERROR_CRYPTO_BUSY		0x00000001
 #define TEE_ERROR_CRYPTO_FAIL		0x00000002
 #define TEE_ERROR_CRYPTO_INVALID	0x00000003
 #define TEE_ERROR_CRYPTO_TIMEOUT	0x00000004
+#define TEE_ERROR_CRYPTO_NOT_SUPPORT	0x00000005
 
 /* Crypto session class */
 #define C_CODE_AES			0x04
@@ -746,6 +768,23 @@ struct nu_crypto_dev {
 #define PTA_CMD_CRYPTO_SHA_FINAL	10
 
 /*
+ * PTA_CMD_CRYPTO_ECC_KEY_GEN - Run ECC public key generation
+ *
+ * param[0] (in value) - value.a: ECC curve ID
+ * param[1] (inout memref) - memref.size: size of register map
+ *                           memref.buffer: register map buffer
+ * param[2] (in value) - value.a: shm offset of parameter block
+ *                     - value.b: shm offset of output buffer
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - ECC operation failed
+ */
+#define PTA_CMD_CRYPTO_ECC_KEY_GEN	13
+
+/*
  * PTA_CMD_CRYPTO_ECC_PMUL - Run ECC point multiplication
  *
  * param[0] (in value) - value.a: ECC curve ID
@@ -761,6 +800,39 @@ struct nu_crypto_dev {
  * TEE_ERROR_CRYPTO_FAIL - ECC operation failed
  */
 #define PTA_CMD_CRYPTO_ECC_PMUL		15
+
+/*
+ * PTA_CMD_CRYPTO_ECC_SIG_VERIFY - Run ECC ECDSA signature verification
+ *
+ * param[0] (in value) - value.a: ECC curve ID
+ * param[1] (inout memref) - memref.size: size of register map
+ *                           memref.buffer: register map buffer
+ * param[2] (in value) - value.a: shm offset of parameter block
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - ECC operation failed
+ * TEE_ERROR_CRYPTO_ECC_VERIFY - ECC ECDSA signature verification failed
+ */
+#define PTA_CMD_CRYPTO_ECC_SIG_VERIFY	16
+
+/*
+ * PTA_CMD_CRYPTO_ECC_SIG_GEN - Run ECC ECDSA signature generation
+ *
+ * param[0] (in value) - value.a: ECC curve ID
+ * param[1] (inout memref) - memref.size: size of register map
+ *                           memref.buffer: register map buffer
+ * param[2] (in value) - value.a: shm offset of parameter block
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_CRYPTO_INVALID - Invalid input param
+ * TEE_ERROR_CRYPTO_FAIL - ECC operation failed
+ */
+#define PTA_CMD_CRYPTO_ECC_SIG_GEN	17
 
 /*
  * PTA_CMD_CRYPTO_RSA_RUN - Run RSA engine
@@ -814,9 +886,8 @@ extern int nuvoton_rsa_remove(struct device *dev,
 				struct nu_crypto_dev *nu_cryp_dev);
 
 /* functions in crypto/ecc.c */
-extern int ecc_gen_privkey(unsigned int curve_id, unsigned int ndigits,
-		u64 *privkey);
+extern int ecc_gen_privkey(unsigned int curve_id, unsigned int ndigits, u64 *privkey);
 extern int ecc_is_key_valid(unsigned int curve_id, unsigned int ndigits,
-		const u64 *private_key, unsigned int private_key_len);
+			    const u64 *private_key, unsigned int private_key_len);
 
 #endif /* __NUVOTON_CRYPTO_H__ */
