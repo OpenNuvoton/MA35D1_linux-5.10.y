@@ -1107,6 +1107,7 @@ static int ma35d1serial_config_rs485(struct uart_port *port,
 	struct uart_ma35d1_port *p = to_ma35d1_uart_port(port);
 
 	p->rs485 = *rs485conf;
+	port->rs485 = *rs485conf;
 
 	if (p->rs485.delay_rts_before_send >= 1000)
 		p->rs485.delay_rts_before_send = 1000;
