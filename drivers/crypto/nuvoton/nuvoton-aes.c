@@ -323,7 +323,7 @@ static int nuvoton_aes_dma_run(struct nu_aes_dev *dd, u32 cascade)
 	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
 
 	param[0].u.value.a = dd->crypto_session_id;
-	param[0].u.value.b = 0;
+	param[0].u.value.b = nu_read_reg(dd, AES_KSCTL);
 	param[1].u.memref.shm = dd->shm_pool;
 	param[1].u.memref.size = CRYPTO_SHM_SIZE;
 	param[1].u.memref.shm_offs = 0;
@@ -1034,7 +1034,7 @@ static int nuvoton_aes_gcm_setkey(struct crypto_aead *tfm,
 		 */
 		if ((key[0] > 2) || (key[1] > 1) || (key[2] > 31))
 			return -EINVAL;
-		ctx->keysz_sel = (0x0 << AES_CTL_KEYSZ_OFFSET);
+		ctx->keysz_sel = (key[0] << AES_CTL_KEYSZ_OFFSET);
 		break;
 
 	default:
