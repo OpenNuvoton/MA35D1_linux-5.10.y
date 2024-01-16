@@ -402,7 +402,7 @@ static inline void hw_rx(struct nuvoton_spi *hw, unsigned int data, int count)
 static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 					void *rxbuf, unsigned int len)
 {
-	unsigned int    i, j;
+	unsigned int    i;
 	unsigned int    non_tx_align_len = 0;
 	unsigned int    non_rx_align_len = 0;
 
@@ -415,29 +415,18 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 
 	hw->tx = txbuf;
 	hw->rx = rxbuf;
+
 	/* Use PDMA or not from device tree */
 	if (hw->pdata->use_pdma) {
 
 		/* short length transfer by CPU */
 		if (len < USE_PDMA_LEN) {
 			if (hw->rx) {
-				j = 0;
-
-				for (i = 0; i < len; ) {
-					if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
-						__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-						i++;
-					}
-					if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-						j++;
-					}
-				}
-				while (j < len) {
-					if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-						hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-						j++;
-					}
+				for (i = 0; i < len; i++) {
+					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
+					while (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == RXEMPTY))
+						;
+					hw_rx(hw, __raw_readl(hw->regs + REG_RX), i);
 				}
 			} else {
 				for (i = 0; i < len; i++) {
@@ -605,39 +594,17 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 	} else { /* hw->pdata->use_pdma = 0 */
 
 		if (hw->rx) {
-			j = 0;
-
-			for (i = 0; i < len; ) {
-				if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
-					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-					i++;
-				} else {
-					cond_resched();
-				}
-				if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-					hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-					j++;
-				} else {
-					cond_resched();
-				}
+			for (i = 0; i < len; i++) {
+				__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
+				while (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == RXEMPTY))
+					;
+				hw_rx(hw, __raw_readl(hw->regs + REG_RX), i);
 			}
-			while (j < i) {
-				if (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == 0)) { //RX NOT EMPTY
-					hw_rx(hw, __raw_readl(hw->regs + REG_RX), j);
-					j++;
-				} else {
-					cond_resched();
-				}
-			}
-
-		} else { /* hw->tx */
-			for (i = 0; i < len; ) {
-				if (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == 0)) { //TX NOT FULL
-					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-					i++;
-				} else {
-					cond_resched();
-				}
+		} else {
+			for (i = 0; i < len; i++) {
+				while (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == TXFULL))
+					;
+				__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
 			}
 		}
 
