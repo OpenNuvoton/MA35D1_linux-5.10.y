@@ -107,6 +107,10 @@
 			reg = <0x0 0x80020000 0x0 0x60000>; /* 384KB */
 			no-map;
 		};
+		rpmsg_buf: rpmsg_buf@0 {
+			reg = <0x0 0x80080000 0x0 0x8000>; /* maximun tx+rx 16+16KB */
+			no-map;
+		};
 	};
 
 	timer {
@@ -670,6 +674,9 @@
 		mboxes = <&wormhole 2>;
 		tx-smem-size = <128>;
 		rx-smem-size = <128>;
+		/* rpmsg-v2-arch; */
+		/* rpmsg-ddr-buf; */
+		/* memory-region = <&rpmsg_buf>; */
 		status = "okay";
 	};
 

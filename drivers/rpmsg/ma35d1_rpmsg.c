@@ -49,8 +49,9 @@ struct ma35d1_rpmsg_priv {
 	wait_queue_head_t tx_ack_event;
 	u32 tx_ack_flag;
 	u32 rx_ack_flag;
-	unsigned char __iomem *tx_smem_start_addr;
-	unsigned char __iomem *rx_smem_start_addr;
+	bool enable_v2_arch;
+	unsigned char __iomem *tx_mem_start_addr;
+	unsigned char __iomem *rx_mem_start_addr;
 	u32 tx_smem_size;
 	u32 rx_smem_size;
 	struct ma35d1_rpmsg_endpoint *ma35d1_ept;
@@ -90,19 +91,21 @@ static void ma35d1_rpmsg_recv_from_remote(struct mbox_client *cl, void *msg)
 
 	switch (data[0]) {
 		case COMMAND_RECEIVE_MSG:
-			ret = ept->cb(ept->rpdev, priv->rx_smem_start_addr, data[1], ept->priv, RPMSG_ADDR_ANY);
+			ret = ept->cb(ept->rpdev, priv->rx_mem_start_addr, data[1], ept->priv, RPMSG_ADDR_ANY);
 			if (ret < 0)
 				dev_err(&priv->dev, "failed to get share memery data \n");
 
-			command[0] = COMMAND_RECEIVE_ACK;
-			ret = mbox_send_message(priv->mbox_chan, (void *)&command[0]);
-			if (ret < 0)
-				dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
+			if (priv->enable_v2_arch != true) {
+				command[0] = COMMAND_RECEIVE_ACK;
+				ret = mbox_send_message(priv->mbox_chan, (void *)&command[0]);
+				if (ret < 0)
+					dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
+			}
 
 			priv->rx_ack_flag = 1;
 			wake_up_interruptible_all(&priv->tx_ack_event);
 		break;
-		
+
 		case COMMAND_SEND_ACK:
 			priv->tx_ack_flag = 1;
 			wake_up_interruptible_all(&priv->tx_ack_event);
@@ -132,7 +135,7 @@ static int ma35d1_rpmsg_send(struct rpmsg_endpoint *ept, void *data, int len)
 	int ret = 0;
 	int command[4];
 
-	memcpy(priv->tx_smem_start_addr, data, len);
+	memcpy(priv->tx_mem_start_addr, data, len);
 
 	command[0] = COMMAND_SEND_MSG;
 	command[1] = len;
@@ -142,7 +145,10 @@ static int ma35d1_rpmsg_send(struct rpmsg_endpoint *ept, void *data, int len)
 	if (ret < 0)
 		dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
 
-	return mbox_flush(priv->mbox_chan, 50);
+	if (priv->enable_v2_arch != true)
+		return mbox_flush(priv->mbox_chan, 50);
+	else
+		return ret;
 }
 
 static int ma35d1_rpmsg_trysend(struct rpmsg_endpoint *ept, void *data, int len)
@@ -152,7 +158,7 @@ static int ma35d1_rpmsg_trysend(struct rpmsg_endpoint *ept, void *data, int len)
 	int ret = 0;
 	int command[4];
 
-	memcpy(priv->tx_smem_start_addr, data, len);
+	memcpy(priv->tx_mem_start_addr, data, len);
 
 	command[0] = COMMAND_SEND_MSG;
 	command[1] = len;
@@ -162,7 +168,10 @@ static int ma35d1_rpmsg_trysend(struct rpmsg_endpoint *ept, void *data, int len)
 	if (ret < 0)
 		dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
 
-	return mbox_flush(priv->mbox_chan, 50);
+	if (priv->enable_v2_arch != true)
+		return mbox_flush(priv->mbox_chan, 50);
+	else
+		return ret;
 }
 
 static __poll_t ma35d1_rpmsg_poll(struct rpmsg_endpoint *ept, struct file *filp, poll_table *wait)
@@ -254,7 +263,10 @@ static void ma35d1_rpmsg_mbox_set(struct ma35d1_rpmsg_priv *priv)
 	priv->mbox_client.tx_done        = NULL;
 	priv->mbox_client.tx_block       = false;
 	priv->mbox_client.knows_txdone   = false;
-	priv->mbox_client.tx_tout        = 10;
+	if (priv->enable_v2_arch != true)
+		priv->mbox_client.tx_tout    = 10;
+	else
+		priv->mbox_client.tx_tout    = 1;
 
 	priv->mbox_chan = mbox_request_channel(&priv->mbox_client, 0);
 	if (IS_ERR(priv->mbox_chan)) {
@@ -267,32 +279,53 @@ struct ma35d1_rpmsg_priv *ma35d1_rpmsg_register(struct device *parent, struct de
 {
 	struct ma35d1_rpmsg_priv *priv;
 	struct ma35d1_rpmsg_device *ndev;
+	struct device_node *node1;
+	struct resource r;
 	int ret;
-	u32  share_mem_addr, tx_share_size, rx_share_size;
+	u32  share_mem_addr, share_mem_size, tx_share_size, rx_share_size;
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return ERR_PTR(-ENOMEM);
 
-	if (of_property_read_u32_array(node, "share-mem-addr", &share_mem_addr, 1) != 0) {
-		return ERR_PTR(-EINVAL);
-	}
-	if (of_property_read_u32_array(node, "tx-smem-size", &tx_share_size, 1) != 0) {
-		return ERR_PTR(-EINVAL);
-	}
-	if (of_property_read_u32_array(node, "rx-smem-size", &rx_share_size, 1) != 0) {
-		return ERR_PTR(-EINVAL);
-	}
+	if (of_property_read_bool(node, "rpmsg-ddr-buf")) {
+		node1 = of_parse_phandle(node, "memory-region", 0);
+		if (node) {
+			ret = of_address_to_resource(node1, 0, &r);
+			if (ret == 0) {
+				share_mem_addr = r.start;
+				share_mem_size  = resource_size(&r);
+				priv->tx_mem_start_addr = memremap(share_mem_addr, share_mem_size, MEMREMAP_WT);
+				priv->rx_mem_start_addr = priv->tx_mem_start_addr + share_mem_size/2;
+			} else {
+				dev_err(&priv->dev, "fail to parse share memory region!\n");
+				return ERR_PTR(ret);
+			}
+		}
+		priv->enable_v2_arch = true;
+	} else {
+		priv->enable_v2_arch = of_property_read_bool(node, "rpmsg-v2-arch");
 
-	if((tx_share_size + rx_share_size) > MAX_SHARE_MEMERY_SIZE){
-		dev_err(&priv->dev, "share memery set error!\n");
-		return ERR_PTR(-EINVAL);
-	}
+		if (of_property_read_u32_array(node, "share-mem-addr", &share_mem_addr, 1) != 0) {
+			return ERR_PTR(-EINVAL);
+		}
+		if (of_property_read_u32_array(node, "tx-smem-size", &tx_share_size, 1) != 0) {
+			return ERR_PTR(-EINVAL);
+		}
+		if (of_property_read_u32_array(node, "rx-smem-size", &rx_share_size, 1) != 0) {
+			return ERR_PTR(-EINVAL);
+		}
 
-	priv->tx_smem_start_addr = ioremap(share_mem_addr, tx_share_size);
-	priv->rx_smem_start_addr = ioremap((share_mem_addr + tx_share_size), rx_share_size);
-	priv->tx_smem_size = tx_share_size;
-	priv->tx_smem_size = rx_share_size;
+		if((tx_share_size + rx_share_size) > MAX_SHARE_MEMERY_SIZE){
+			dev_err(&priv->dev, "share memery set error!\n");
+			return ERR_PTR(-EINVAL);
+		}
+
+		priv->tx_mem_start_addr = ioremap(share_mem_addr, tx_share_size);
+		priv->rx_mem_start_addr = ioremap((share_mem_addr + tx_share_size), rx_share_size);
+		priv->tx_smem_size = tx_share_size;
+		priv->rx_smem_size = rx_share_size;
+	}
 
 	priv->tx_ack_flag = 0;
 	priv->rx_ack_flag = 0;
