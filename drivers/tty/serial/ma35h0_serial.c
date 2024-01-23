@@ -111,6 +111,8 @@ struct uart_ma35h0_port {
 	unsigned int console_line;
 	unsigned int console_int;
 
+	unsigned char wakeup_enable;
+
 	int max_count;
 
 	/* We provide a per-port pm hook. */
@@ -750,6 +752,9 @@ static irqreturn_t ma35h0serial_interrupt(int irq, void *dev_id)
 					(BIF | FEF | PEF | RX_OVER_IF | TX_OVER_IF));
 	}
 
+	if(isr & WAKEUP_IF)
+		serial_out(up, UART_REG_WKSTS, 0x1F);
+
 	return IRQ_HANDLED;
 }
 
@@ -903,6 +908,17 @@ static int ma35h0serial_startup(struct uart_port *port)
 
 	if (up->uart_pdma_enable_flag == 1)
 		up->baud_rate = 0;
+
+	if(up->wakeup_enable == 1) {
+		/* Clear wakeup status */
+		serial_out(up, UART_REG_WKSTS, 0x1f);
+		/* enable CTS wakeup */
+		serial_out(up, UART_REG_WKCTL, 0x1);
+
+		serial_out(up, UART_REG_IER,
+				serial_in(up, UART_REG_IER) | WAKEUP_IEN);
+
+	}
 
 	spin_unlock(&up->port.lock);
 
@@ -1409,6 +1425,19 @@ static int ma35h0serial_probe(struct platform_device *pdev)
 	if (val32[0] == 1)
 		set_pdma_flag(up, i);
 
+	if (of_property_read_u32_array(pdev->dev.of_node, "wakeup-enable",
+													val32, 1) != 0) {
+		up->wakeup_enable = 0;
+	}
+	else {
+		if (val32[0] == 1) {
+			up->wakeup_enable = 1;
+			device_init_wakeup(&pdev->dev, true);
+		}
+		else
+			up->wakeup_enable = 0;
+	}
+
 	up->port.irq = platform_get_irq(pdev, 0);
 	up->port.dev = &pdev->dev;
 	up->port.flags = UPF_BOOT_AUTOCONF;
@@ -1429,15 +1458,23 @@ static int ma35h0serial_remove(struct platform_device *dev)
 {
 	int i;
 	struct uart_port *port = platform_get_drvdata(dev);
+	struct uart_ma35h0_port *up;
+
+	i = get_uart_port_number(dev);
+	if (i < 0)
+		return i;
+
+	up = &ma35h0serial_ports[i];
+
+	if(up->wakeup_enable == 1)
+		device_init_wakeup(&dev->dev, false);
+
 
 	free_irq(port->irq, port);
 
-	for (i = 0; i < UART_NR; i++) {
-		struct uart_ma35h0_port *up = &ma35h0serial_ports[i];
+	if (up->port.dev == &dev->dev)
+		uart_remove_one_port(&ma35h0serial_reg, &up->port);
 
-		if (up->port.dev == &dev->dev)
-			uart_remove_one_port(&ma35h0serial_reg, &up->port);
-	}
 	return 0;
 }
 
@@ -1452,6 +1489,9 @@ static int ma35h0serial_suspend(struct platform_device *dev,
 		return i;
 
 	up = &ma35h0serial_ports[i];
+
+	if (device_may_wakeup(&dev->dev))
+		enable_irq_wake(up->port.irq);
 
 	if (i == 0) {
 		up->console_baud_rate = serial_in(up, UART_REG_BAUD);
@@ -1472,6 +1512,9 @@ static int ma35h0serial_resume(struct platform_device *dev)
 		return i;
 
 	up = &ma35h0serial_ports[i];
+
+	if (device_may_wakeup(&dev->dev))
+		disable_irq_wake(up->port.irq);
 
 	if (i == 0) {
 		serial_out(up, UART_REG_BAUD, up->console_baud_rate);
