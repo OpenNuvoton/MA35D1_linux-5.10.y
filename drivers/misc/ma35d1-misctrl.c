@@ -35,9 +35,10 @@
 #define SET_EPLL_DIV_BY_4	0x1204
 #define SET_EPLL_DIV_BY_8	0x1208
 #define SET_EPLL_RESTORE	0x120F
-#define SET_SYS_SPD_LOW		0x1301
+#define SET_SYS_SPD_LOW	0x1301
 #define SET_SYS_SPD_RESTORE	0x1302
 #define FORCE_CHIP_RESET	0x1401
+#define GET_BL2_OFFSET		0x1501
 
 struct ma35d1_misctrl {
 	int minor;
@@ -113,6 +114,10 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 	case FORCE_CHIP_RESET:
 		arm_smccc_smc(MA35D1_SIP_CHIP_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
 		break;
+
+	case GET_BL2_OFFSET:
+		arm_smccc_smc(MA35D1_SIP_BL2_OFFSET, 0, 0, 0, 0, 0, 0, 0, &res);
+		return res.a0;
 
 	default:
 		return -EINVAL;
