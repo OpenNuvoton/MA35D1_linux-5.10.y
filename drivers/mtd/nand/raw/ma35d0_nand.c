@@ -85,7 +85,7 @@
 #define BCH_T12     0x00200000
 #define BCH_T24     0x00040000
 
-#define MA35D0_DRV_VERSION "20231016"
+#define MA35D0_DRV_VERSION "20240125"
 #define DEF_RESERVER_OOB_SIZE_FOR_MARKER 4
 
 struct ma35d0_nand_info {
@@ -97,15 +97,18 @@ struct ma35d0_nand_info {
 	struct nand_chip	chip;
 	struct mtd_partition	*parts;	/* mtd partition */
 	int			nr_parts;	/* mtd partition number */
-	struct platform_device  *pdev;
-	struct clk              *clk;
+	struct platform_device	*pdev;
+	struct clk		*clk;
 
-	int                     eBCHAlgo;
-	int                     m_i32SMRASize;
+	int			eBCHAlgo;
+	int			m_i32SMRASize;
 	int			irq;
-	struct completion       complete;
+	struct completion	complete;
 
-	unsigned char           *dma_buf;
+	spinlock_t		dma_lock;
+
+	unsigned char volatile	*dma_buf;
+	dma_addr_t		dma_addr;
 
 };
 
@@ -192,6 +195,7 @@ static void ma35d0_nand_hwecc_init(struct ma35d0_nand_info *nand)
 		/* Enable H/W ECC, ECC parity check enable bit during read page */
 		writel(readl(nand->base+REG_NFI_NANDCTL) | 0x00800000, nand->base+REG_NFI_NANDCTL);
 	}
+	spin_lock_init(&nand->dma_lock);
 }
 
 static void ma35d0_nand_initialize(struct ma35d0_nand_info *nand)
@@ -364,7 +368,7 @@ int fmiSMCorrectData(struct nand_chip *chip, unsigned long uDAddr)
 			} else if ((uStatus & 0x03) == 0x01) { /* Correctable error */
 				uErrorCnt = (uStatus >> 2) & 0x1F;
 				pr_warn("Field (%d, %d) have %d error!!\n", jj, ii, uErrorCnt);
-				fmiSM_CorrectData_BCH(nand, jj*4+ii, uErrorCnt, (char *)uDAddr);
+				fmiSM_CorrectData_BCH(nand, jj*4+ii, uErrorCnt, (u8 *)uDAddr);
 				uReportErrCnt += uErrorCnt;
 
 			} else { /* uncorrectable error or ECC error */
@@ -486,6 +490,7 @@ static inline int ma35d0_nand_dma_transfer(struct nand_chip *chip,
 
 		/* Fill dma_addr */
 		dma_addr = dma_map_single(nand->dev, (void *)addr, len, DMA_TO_DEVICE);
+		dma_sync_single_for_device(nand->dev, dma_addr, len, DMA_TO_DEVICE);
 		ret = dma_mapping_error(nand->dev, dma_addr);
 		if (ret) {
 			dev_err(nand->dev, "dma mapping error\n");
@@ -505,12 +510,14 @@ static inline int ma35d0_nand_dma_transfer(struct nand_chip *chip,
 			dev_err(nand->dev, "dma mapping error\n");
 			return -EINVAL;
 		}
-		nand->dma_buf = (unsigned char *) addr;
+		nand->dma_buf = (unsigned char volatile *) addr;
+		nand->dma_addr = dma_addr;
 
 		writel((unsigned long)dma_addr, nand->base+REG_NFI_DMASA);
 		writel(readl(nand->base+REG_NFI_NANDCTL) | 0x2, nand->base+REG_NFI_NANDCTL);
 		wait_for_completion_timeout(&nand->complete, msecs_to_jiffies(1000));
 
+		dma_sync_single_for_cpu(nand->dev, dma_addr, len, DMA_FROM_DEVICE);
 		dma_unmap_single(nand->dev, dma_addr, len, DMA_FROM_DEVICE);
 	}
 
@@ -716,7 +723,6 @@ static int ma35d0_nand_read_page_hwecc_oob_first(struct nand_chip *chip,
 {
 	struct mtd_info *mtd = nand_to_mtd(chip);
 	struct ma35d0_nand_info *nand = nand_get_controller_data(chip);
-	uint8_t *p = buf;
 	char *ptr = nand->base+REG_NFI_NANDRA0;
 
 	/* At first, read the OOB area  */
@@ -727,11 +733,11 @@ static int ma35d0_nand_read_page_hwecc_oob_first(struct nand_chip *chip,
 	memcpy((void *)ptr, (void *)chip->oob_poi, mtd->oobsize);
 
 	if ((*(ptr+2) != 0) && (*(ptr+3) != 0))
-		memset((void *)p, 0xff, mtd->writesize);
+		memset((void *)buf, 0xff, mtd->writesize);
 	else {
 		/* Third, read data from nand */
 		ma35d0_nand_command(chip, NAND_CMD_READ0, 0, page);
-		ma35d0_nand_dma_transfer(chip, p, mtd->writesize, 0x0);
+		ma35d0_nand_dma_transfer(chip, buf, mtd->writesize, 0x0);
 
 		/* Fouth, restore OOB data from SMRA */
 		memcpy((void *)chip->oob_poi, (void *)ptr, mtd->oobsize);
@@ -776,14 +782,13 @@ static irqreturn_t ma35d0_nand_irq(int irq, struct ma35d0_nand_info *nand)
 	unsigned int isr;
 	int stat = 0;
 
+	spin_lock(&nand->dma_lock);
+
 	/* Clear interrupt flag */
 	/* SM interrupt status */
 	isr = readl(nand->base+REG_NFI_NANDINTSTS);
-	if (isr & 0x01) {
-		writel(0x1, nand->base+REG_NFI_NANDINTSTS);
-		complete(&nand->complete);
-	}
 	if (isr & 0x04) {
+		dma_sync_single_for_cpu(nand->dev, nand->dma_addr, mtd->writesize, DMA_FROM_DEVICE);
 		stat = fmiSMCorrectData(&nand->chip, (unsigned long)nand->dma_buf);
 		if (stat < 0) {
 			mtd->ecc_stats.failed++;
@@ -796,6 +801,11 @@ static irqreturn_t ma35d0_nand_irq(int irq, struct ma35d0_nand_info *nand)
 		}
 		writel(0x4, nand->base+REG_NFI_NANDINTSTS);
 	}
+	if (isr & 0x01) {
+		writel(0x1, nand->base+REG_NFI_NANDINTSTS);
+		complete(&nand->complete);
+	}
+	spin_unlock(&nand->dma_lock);
 
 	return IRQ_HANDLED;
 }
