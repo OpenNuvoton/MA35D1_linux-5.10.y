@@ -16,6 +16,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spi-mem.h>
+#include <linux/wait.h>
 
 #include <linux/interrupt.h>
 #include <linux/of.h>
@@ -71,6 +72,8 @@
 /* define for PDMA */
 #define ALIGNMENT_4     4
 #define USE_PDMA_LEN    100
+
+#define SPI_GENERAL_TIMEOUT_MS	1000
 
 struct ma35d1_ip_dma {
 	struct dma_chan                 *chan_rx;
@@ -316,14 +319,11 @@ static int nuvoton_spi_update_state(struct spi_device *spi)
 static int nuvoton_spi_setupxfer(struct spi_device *spi)
 {
 	struct nuvoton_spi *hw = (struct nuvoton_spi *)to_hw(spi);
-	unsigned long flags;
 	int ret;
 
 	ret = nuvoton_spi_update_state(spi);
 	if (ret)
 		return ret;
-
-	spin_lock_irqsave(&hw->lock, flags);
 
 	nuvoton_setup_txbitlen(hw, hw->pdata->txbitlen);
 	nuvoton_tx_rx_edge(hw, hw->pdata->txneg, hw->pdata->rxneg);
@@ -331,18 +331,12 @@ static int nuvoton_spi_setupxfer(struct spi_device *spi)
 	nuvoton_send_first(hw, hw->pdata->lsb);
 	nuvoton_set_divider(hw);
 
-	spin_unlock_irqrestore(&hw->lock, flags);
-
 	return 0;
 }
 
 static void nuvoton_spi_hw_init(struct nuvoton_spi *hw)
 {
-	unsigned long flags;
-
 	spin_lock_init(&hw->lock);
-
-	spin_lock_irqsave(&hw->lock, flags);
 
 	if (hw->pdata->spimode & SPI_CPOL)
 		hw->pdata->clkpol = 1;
@@ -374,7 +368,6 @@ static void nuvoton_spi_hw_init(struct nuvoton_spi *hw)
 	while (__raw_readl(hw->regs + REG_STATUS) & TXRXRST)
 		;
 
-	spin_unlock_irqrestore(&hw->lock, flags);
 }
 
 static inline unsigned int hw_tx(struct nuvoton_spi *hw, unsigned int count)
@@ -410,16 +403,21 @@ static inline void hw_rx(struct nuvoton_spi *hw, unsigned int data, int count)
 static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 				void *rxbuf, unsigned int len)
 {
-	unsigned int    i;
-	unsigned int    non_tx_align_len = 0;
-	unsigned int    non_rx_align_len = 0;
-
 	struct ma35d1_ip_dma *pdma = &hw->dma;
 	struct ma35d1_peripheral pcfg;
+	unsigned int  non_tx_align_len = 0;
+	unsigned int  non_rx_align_len = 0;
+	unsigned long end;
+	unsigned int  i;
 
 	__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
-	while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR)
-		;
+	end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
+	while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {
+		if (time_after(jiffies, end)) {
+			printk("SPI FIFOCLR timeout: %d\n", __LINE__);
+			return -ETIMEDOUT;
+		}
+	}
 
 	hw->tx = txbuf;
 	hw->rx = rxbuf;
@@ -428,30 +426,49 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 
 		/* short length transfer by CPU */
 		if (len < USE_PDMA_LEN) {
+			end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
 			if (hw->rx) {
 				for (i = 0; i < len; i++) {
 					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-					while (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == RXEMPTY))
-						;
+					while (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == RXEMPTY)) {
+						if (time_after(jiffies, end)) {
+							printk("SPI RXEMPTY timeout: %d\n", __LINE__);
+							return -ETIMEDOUT;
+						}
+					}
 					hw_rx(hw, __raw_readl(hw->regs + REG_RX), i);
 				}
 			} else {
 				for (i = 0; i < len; i++) {
-					while (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == TXFULL))
-						;
+					while (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == TXFULL)) {
+						if (time_after(jiffies, end)) {
+							printk("SPI TXFULL timeout: %d\n", __LINE__);
+							return -ETIMEDOUT;
+						}
+					}
 					__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
 				}
 			}
 
-			while (__raw_readl(hw->regs + REG_STATUS) & BUSY)
-				;
+			while (__raw_readl(hw->regs + REG_STATUS) & BUSY) {
+				if (time_after(jiffies, end)) {
+					printk("SPI BUSY timeout: %d\n", __LINE__);
+					return -ETIMEDOUT;
+				}
+			}
 
 		} else { /* Long length transfer by PDMA */
 			int pdma_en = 0;
+			int ret;
 
+			end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
 			__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
-			while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR)
-				;
+			while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {
+				if (time_after(jiffies, end)) {
+					printk("SPI FIFOCLR timeout: %d\n", __LINE__);
+					return -ETIMEDOUT;
+				}
+			}
 
 			non_rx_align_len = 0;
 			non_tx_align_len = 0;
@@ -558,27 +575,42 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 			} /* txbuf */
 
 			/* Trigger PDMA */
-			if (rxbuf)
+			if (rxbuf) {
 				pdma_en |= RXPDMAEN;
+				hw->slave_rxdone_state = 0;
+			}
 
-			if (txbuf)
+			if (txbuf) {
+				hw->slave_txdone_state = 0;
 				pdma_en |= TXPDMAEN;
+			}
 
 			__raw_writel(UNITIF, hw->regs + REG_STATUS);
 			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) | (pdma_en),
 						hw->regs + REG_PDMACTL); //Enable SPIx PDMA
 
 			if (txbuf) {
-				wait_event_interruptible(hw->slave_txdone, (hw->slave_txdone_state != 0));
+				ret = wait_event_interruptible_timeout(hw->slave_txdone, hw->slave_txdone_state != 0,
+								 msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS));
+				if (!ret)
+					printk("\n\nSPI DMA TIMEOUT - %d\n", __LINE__);
 				hw->slave_txdone_state = 0;
 			}
 			if (rxbuf) {
-				wait_event_interruptible(hw->slave_rxdone, (hw->slave_rxdone_state != 0));
+				ret = wait_event_interruptible_timeout(hw->slave_rxdone, hw->slave_rxdone_state != 0,
+								 msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS));
+				if (!ret)
+					printk("\n\nSPI DMA TIMEOUT - %d\n", __LINE__);
 				hw->slave_rxdone_state = 0;
 			}
 
-			while (__raw_readl(hw->regs + REG_STATUS) & BUSY)
-				;
+			end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
+			while (__raw_readl(hw->regs + REG_STATUS) & BUSY) {
+				if (time_after(jiffies, end)) {
+					printk("SPI PDMA BUSY timeout: %d\n", __LINE__);
+					return -ETIMEDOUT;
+				}
+			}
 
 			__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~SPIEN), hw->regs + REG_CTL); //Disable SPIEN
 			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) & ~(TXPDMAEN | RXPDMAEN),
@@ -598,26 +630,38 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 						DMA_TO_DEVICE);
 		}
 
-
 	} else { /* hw->pdata->use_pdma = 0 */
 
+		end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
 		if (hw->rx) {
 			for (i = 0; i < len; i++) {
 				__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
-				while (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == RXEMPTY))
-					;
+				while (((__raw_readl(hw->regs + REG_STATUS) & RXEMPTY) == RXEMPTY)) {
+					if (time_after(jiffies, end)) {
+						printk("SPI RXEMPTY timeout: %d\n", __LINE__);
+						return -ETIMEDOUT;
+					}
+				}
 				hw_rx(hw, __raw_readl(hw->regs + REG_RX), i);
 			}
 		} else {
 			for (i = 0; i < len; i++) {
-				while (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == TXFULL))
-					;
+				while (((__raw_readl(hw->regs + REG_STATUS) & TXFULL) == TXFULL)) {
+					if (time_after(jiffies, end)) {
+						printk("SPI TXFULL timeout: %d\n", __LINE__);
+						return -ETIMEDOUT;
+					}
+				}
 				__raw_writel(hw_tx(hw, i), hw->regs + REG_TX);
 			}
 		}
 
-		while (__raw_readl(hw->regs + REG_STATUS) & BUSY)
-			;
+		while (__raw_readl(hw->regs + REG_STATUS) & BUSY) {
+			if (time_after(jiffies, end)) {
+				printk("SPI BUSY timeout: %d\n", __LINE__);
+				return -ETIMEDOUT;
+			}
+		}
 	}
 
 	return 0;
@@ -643,6 +687,7 @@ static bool nuvoton_spi_mem_supports_op(struct spi_mem *mem,
 static void nuvoton_spi_set_cs(struct spi_device *spi, bool lvl)
 {
 	struct nuvoton_spi *nuvoton = spi_master_get_devdata(spi->master);
+	unsigned long end;
 	unsigned int val;
 
 	val = __raw_readl(nuvoton->regs + REG_SSCTL);
@@ -659,8 +704,14 @@ static void nuvoton_spi_set_cs(struct spi_device *spi, bool lvl)
 			val &= ~SELECTSLAVE1;
 	}
 
-	while (__raw_readl(nuvoton->regs + REG_STATUS) & BUSY)
-		;
+	end = jiffies + msecs_to_jiffies(3000);
+	while (__raw_readl(nuvoton->regs + REG_STATUS) & BUSY) {
+		if (time_after(jiffies, end)) {
+			printk("SPI BUSY timeout: %d, %s - %d\n", __LINE__, __func__, lvl);
+			return;
+		}
+	}
+
 	__raw_writel(val, nuvoton->regs + REG_SSCTL);
 }
 
@@ -759,32 +810,39 @@ static int nuvoton_spi_mem_exec_op(struct spi_mem *mem,
 					const struct spi_mem_op *op)
 {
 	struct nuvoton_spi *nuvoton = spi_master_get_devdata(mem->spi->master);
+	unsigned long flags;
 	int i, ret;
 	u8 addr[8];
 
-	ret = nuvoton_spi_set_freq(nuvoton, mem->spi->max_speed_hz);
-	if (ret)
-		return ret;
+	spin_lock_irqsave(&nuvoton->lock, flags);
 
+	ret = nuvoton_spi_set_freq(nuvoton, mem->spi->max_speed_hz);
+	if (ret) {
+		printk("nuvoton_spi_set_freq failed!\n");
+		goto out;
+	}
 	nuvoton_spi_setupxfer(mem->spi);
 
 	nuvoton_spi_set_cs(mem->spi, 0); //Activate CS
 
 	ret = nuvoton_spi_data_xfer(nuvoton, &op->cmd.opcode, NULL, 1);
-	if (ret)
+	if (ret) {
+		printk("nuvoton_spi_data_xfer failed!! %d\n", __LINE__);
 		goto out;
+	}
 
-	if (op->addr.buswidth == 4) {
+	if (op->addr.buswidth == 4)
 		__raw_writel((__raw_readl(nuvoton->regs + REG_CTL) | QUADIOEN | DATDIR),
 				nuvoton->regs + REG_CTL); //Enable Quad mode, direction output
-	}
 
 	for (i = 0; i < op->addr.nbytes; i++)
 		addr[i] = op->addr.val >> (8 * (op->addr.nbytes - i - 1));
 
 	ret = nuvoton_spi_data_xfer(nuvoton, addr, NULL, op->addr.nbytes);
-	if (ret)
+	if (ret) {
+		printk("nuvoton_spi_data_xfer failed!! %d\n", __LINE__);
 		goto out;
+	}
 
 	if (op->dummy.buswidth == 4) {
 		__raw_writel((__raw_readl(nuvoton->regs + REG_CTL) | QUADIOEN | DATDIR),
@@ -792,8 +850,10 @@ static int nuvoton_spi_mem_exec_op(struct spi_mem *mem,
 	}
 
 	ret = nuvoton_spi_data_xfer(nuvoton, NULL, NULL, op->dummy.nbytes);
-	if (ret)
+	if (ret) {
+		printk("nuvoton_spi_data_xfer failed!! %d\n", __LINE__);
 		goto out;
+	}
 
 	if (op->data.buswidth == 4) {
 		if (op->data.dir == SPI_MEM_DATA_OUT)
@@ -814,7 +874,10 @@ static int nuvoton_spi_mem_exec_op(struct spi_mem *mem,
 	__raw_writel((__raw_readl(nuvoton->regs + REG_CTL) & ~(QUADIOEN | DATDIR)),
 			nuvoton->regs + REG_CTL); //Restore to single mode, direction input
 out:
+
 	nuvoton_spi_set_cs(mem->spi, 1); //Deactivate CS
+
+	spin_unlock_irqrestore(&nuvoton->lock, flags);
 
 	return ret;
 }
@@ -852,10 +915,9 @@ static int nuvoton_spi_transfer_one(struct spi_master *master,
 			busw = OP_BUSW_2;
 	}
 
-	if (busw == OP_BUSW_4) {
+	if (busw == OP_BUSW_4)
 		__raw_writel(((__raw_readl(nuvoton->regs + REG_CTL) | QUADIOEN) & ~DATDIR),
 				nuvoton->regs + REG_CTL);//Enable Quad mode, direction input
-	}
 
 	ret = nuvoton_spi_set_freq(nuvoton, t->speed_hz);
 	if (ret)
