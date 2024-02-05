@@ -29,25 +29,19 @@
 		botton0 {
 			label = "Key Down";
 			linux,code = <KEY_DOWN>;
-			gpios = <&gpion 2 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiok 10 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 		button1{
 			label ="Key Up";
 			linux,code = <KEY_UP>;
-			gpios = <&gpion 3 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiok 11 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 		botton2 {
 			label = "Key Left";
 			linux,code = <KEY_LEFT>;
-			gpios = <&gpion 12 GPIO_ACTIVE_LOW>;
-			wakeup-source;
-		};
-		button3 {
-			label ="Key Right";
-			linux,code = <KEY_RIGHT>;
-			gpios = <&gpion 13 GPIO_ACTIVE_LOW>;
+			gpios = <&gpioi 14 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 	};
