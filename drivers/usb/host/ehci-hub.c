@@ -279,6 +279,7 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 				t2 |= PORT_WKOC_E | PORT_WKCONN_E;
 		}
 
+#if 0  // Jacky Huang: this will cause system hang while entering power down mode
 		if (t1 != t2) {
 			/*
 			 * On some controllers, Wake-On-Disconnect will
@@ -293,6 +294,7 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 			ehci_writel(ehci, t2, reg);
 			changed = 1;
 		}
+#endif
 	}
 	spin_unlock_irq(&ehci->lock);
 
