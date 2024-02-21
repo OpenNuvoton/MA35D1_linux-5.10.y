@@ -82,6 +82,7 @@ struct ma35h0_desc {
 
 struct ma35h0_chan {
 	struct device *dev;
+	struct ma35h0_dmadev *edma;
 	struct virt_dma_chan vc;
 	void __iomem *base;
 	struct ma35h0_desc *desc;
@@ -100,6 +101,9 @@ struct ma35h0_dmadev {
 	struct ma35h0_chan channels[PDMA_MAX_CHANS];
 	unsigned int irq;
 	int nr_chans;
+
+        /* To protect channel manipulation */
+        spinlock_t lock;
 };
 
 static struct device *chan2dev(struct dma_chan *chan)
@@ -138,12 +142,14 @@ static int ma35h0_terminate_all(struct dma_chan *chan)
 		ch->desc = NULL;
 	}
 
+	spin_lock_irqsave(&ch->edma->lock,flags);
 	val = readl(ch->base + PDMA_CHCTL) & ~(1 << ch->ch_num);
 	writel(val, ch->base + PDMA_CHCTL);
+	spin_unlock_irqrestore(&ch->edma->lock,flags);
 
 	vchan_get_all_descriptors(&ch->vc, &head);
-	spin_unlock_irqrestore(&ch->vc.lock, flags);
 	vchan_dma_desc_free_list(&ch->vc, &head);
+	spin_unlock_irqrestore(&ch->vc.lock, flags);
 
 	return 0;
 }
@@ -151,8 +157,10 @@ static int ma35h0_terminate_all(struct dma_chan *chan)
 static void ma35h0_set_dma_timeout(struct ma35h0_chan *ch)
 {
 	struct ma35h0_desc *d = ch->desc;
+	unsigned long flags;
 	u32 val;
 
+	spin_lock_irqsave(&ch->edma->lock,flags);
 	if (d->pcfg.timeout_prescaler == 0 && d->pcfg.timeout_counter == 0) {
 		/* Disable time-out funciton */
 		val = readl(ch->base + PDMA_TOUTIEN);
@@ -162,6 +170,7 @@ static void ma35h0_set_dma_timeout(struct ma35h0_chan *ch)
 		val = readl(ch->base + PDMA_TOUTEN);
 		val &= ~(1 << ch->ch_num);
 		writel(val, ch->base + PDMA_TOUTEN);
+		spin_unlock_irqrestore(&ch->edma->lock,flags);
 		return;
 	}
 
@@ -203,23 +212,29 @@ static void ma35h0_set_dma_timeout(struct ma35h0_chan *ch)
 	val = readl(ch->base + PDMA_TOUTIEN);
 	val |= (1 << ch->ch_num);
 	writel(val, ch->base + PDMA_TOUTIEN);
+	spin_unlock_irqrestore(&ch->edma->lock,flags);
 }
 
 static void ma35h0_set_transfer_params(struct ma35h0_chan *ch, int reqsel)
 {
 	u32 sel, reg;
+	unsigned long flags;
 
+	spin_lock_irqsave(&ch->edma->lock,flags);
 	reg = PDMA_REQSEL + (4 * (ch->ch_num / 4));
 	sel = readl(ch->base + reg);
 	sel &= ~(0xFF << ((ch->ch_num & 0x3) * 8));
 	sel |= (reqsel << ((ch->ch_num & 0x3) * 8));
 	writel(sel, ch->base + reg);
+	spin_unlock_irqrestore(&ch->edma->lock,flags);
 }
 
 static void ma35h0_set_channel_params(struct ma35h0_chan *ch)
 {
 	u32 reg, val;
+	unsigned long flags;
 
+	spin_lock_irqsave(&ch->edma->lock,flags);
 	if ((readl(ch->base + ch->ch_num * 16) & 0x3) != 0) {
 		reg = readl(ch->base + PDMA_CHCTL);
 		writel(0, ch->base + ch->ch_num * 16);
@@ -234,6 +249,7 @@ static void ma35h0_set_channel_params(struct ma35h0_chan *ch)
 	}
 	val = readl(ch->base + PDMA_INTEN) | (1 << ch->ch_num);
 	writel(val, ch->base + PDMA_INTEN);
+	spin_unlock_irqrestore(&ch->edma->lock,flags);
 }
 
 static int ma35h0_slave_config(struct dma_chan *chan,
@@ -321,6 +337,7 @@ static struct dma_async_tx_descriptor *ma35h0_prep_dma_memcpy(
 	d->sg[d->sglen - 1].ctl |= PDMA_OP_BASIC;
 	d->dma_dir = DMA_MEM_TO_MEM;
 	d->cyclic = false;
+
 	return vchan_tx_prep(&ch->vc, &d->vd, tx_flags);
 }
 
@@ -559,8 +576,8 @@ static enum dma_status ma35h0_tx_status(struct dma_chan *chan,
 	enum dma_status ret;
 	unsigned long flags;
 
-	ret = dma_cookie_status(chan, cookie, txstate);
 	spin_lock_irqsave(&ch->vc.lock, flags);
+	ret = dma_cookie_status(chan, cookie, txstate);
 	if (likely(ret != DMA_ERROR))
 		dma_set_residue(txstate, ch->remain);
 	spin_unlock_irqrestore(&ch->vc.lock, flags);
@@ -584,19 +601,16 @@ static irqreturn_t ma35h0_dma_interrupt(int irq, void *devid)
 			writel((1 << i), ch->base + PDMA_TDSTS);
 			if (ch->desc) {
 				ch->remain = 0;
-				spin_lock(&ch->vc.lock);
 				if (!ch->desc->cyclic) {
 					vchan_cookie_complete(&ch->desc->vd);
 					ma35h0_dma_start_desc(&ch->vc.chan);
 				} else
 					vchan_cyclic_callback(&ch->desc->vd);
-				spin_unlock(&ch->vc.lock);
 			}
 		}
 
 		/* Timeout interrupt */
 		if (intsts & (1 << (i + 8))) {
-			spin_lock(&ch->vc.lock);
 			val =
 			    readl(ch->base +
 				  ch->ch_num * PDMA_OFFSET_CHAN_SIZE);
@@ -605,9 +619,10 @@ static irqreturn_t ma35h0_dma_interrupt(int irq, void *devid)
 			val &= ~(1 << i);
 			writel(val, ch->base + PDMA_TOUTEN);
 			writel(1 << (i + 8), ch->base + PDMA_INTSTS);
-			vchan_cookie_complete(&ch->desc->vd);
-			ma35h0_dma_start_desc(&ch->vc.chan);
-			spin_unlock(&ch->vc.lock);
+			if (ch->desc) {
+				vchan_cookie_complete(&ch->desc->vd);
+				ma35h0_dma_start_desc(&ch->vc.chan);
+			}
 		}
 
 		/* Abort interrupt */
@@ -615,8 +630,8 @@ static irqreturn_t ma35h0_dma_interrupt(int irq, void *devid)
 			writel(0x1, ch->base + PDMA_TDSTS);
 			ch->error = 1;
 		}
-
 	}
+
 	return IRQ_HANDLED;
 }
 
@@ -698,10 +713,13 @@ static int ma35h0_probe(struct platform_device *pdev)
 	    BIT(DMA_SLAVE_BUSWIDTH_2_BYTES) | BIT(DMA_SLAVE_BUSWIDTH_1_BYTE);
 	edma->ddev.directions = BIT(DMA_MEM_TO_DEV) | BIT(DMA_DEV_TO_MEM) |
 	    BIT(DMA_MEM_TO_MEM);
+
+	spin_lock_init(&edma->lock);
 	INIT_LIST_HEAD(&edma->ddev.channels);
 	ch = &edma->channels[0];
 	for (i = 0; i < nr_chans; i++, ch++) {
 		ch->dev = &pdev->dev;
+		ch->edma = edma;
 		ch->ch_num = i;
 		ch->base = dma_base_addr;
 		ch->allocated = 0;
