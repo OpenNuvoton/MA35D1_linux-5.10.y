@@ -51,16 +51,28 @@
 		status = "okay";
 		led0 {
 			label = "LED0";
-			gpios = <&gpion 6 GPIO_ACTIVE_LOW>;
+			gpios = <&gpion 4 GPIO_ACTIVE_LOW>;
 		};
 		led1 {
 			label = "LED1";
-			gpios = <&gpion 7 GPIO_ACTIVE_LOW>;
+			gpios = <&gpion 5 GPIO_ACTIVE_LOW>;
 		};
 		led2 {
 			label = "LED2";
 			gpios = <&gpion 10 GPIO_ACTIVE_LOW>;
 		};
+	};
+
+	volt0_sdhci1: regulator-volt0_sdhci1 {
+		compatible = "regulator-gpio";
+		regulator-name = "volt1_sdhci1";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+		gpios = <&gpion 11 GPIO_ACTIVE_HIGH>; /* PN11 */
+		gpios-states = <0>;
+		states = <1800000 0x1 3300000 0x0>;
+		enable-active-high;
+		regulator-boot-on;
 	};
 };
 
@@ -104,12 +116,12 @@
 };
 
 &sdhci1 {
-        status = "okay";
-        pinctrl-names = "default";
-        pinctrl-0 = <&pinctrl_sdhci1_1_8V>;
-        max-frequency = <200000000>;
-        bus-width = <8>;
-        non-removable;
+	status = "okay";
+	pinctrl-names = "sdhci_3V3","sdhci_1V8";
+	pinctrl-0 = <&pinctrl_sdhci1_3_3V>;
+	pinctrl-1 = <&pinctrl_sdhci1_1_8V>;
+	vqmmc-supply = <&volt0_sdhci1>;
+	power-gpios = <&gpion 14 GPIO_ACTIVE_LOW>; /* PN14 */
 };
 
 &epwm0 {
@@ -526,24 +538,6 @@
 				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_sdhci_drive1_1_8V>,
 				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_sdhci_drive1_1_8V>,
 				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_sdhci_drive1_1_8V>;
-		};
-	};
-
-	ccap0 {
-		pinctrl_ccap0: ccap0grp{
-			nuvoton,pins =
-				<SYS_GPK_MFPH_PK9MFP_CCAP0_SCLK		&pcfg_default>,
-				<SYS_GPK_MFPH_PK10MFP_CCAP0_PIXCLK	&pcfg_default>,
-				<SYS_GPK_MFPH_PK11MFP_CCAP0_HSYNC	&pcfg_default>,
-				<SYS_GPM_MFPL_PM0MFP_CCAP0_VSYNC	&pcfg_default>,
-				<SYS_GPM_MFPL_PM2MFP_CCAP0_DATA0	&pcfg_default>,
-				<SYS_GPM_MFPL_PM3MFP_CCAP0_DATA1	&pcfg_default>,
-				<SYS_GPM_MFPL_PM4MFP_CCAP0_DATA2	&pcfg_default>,
-				<SYS_GPM_MFPL_PM5MFP_CCAP0_DATA3	&pcfg_default>,
-				<SYS_GPM_MFPL_PM6MFP_CCAP0_DATA4	&pcfg_default>,
-				<SYS_GPM_MFPL_PM7MFP_CCAP0_DATA5	&pcfg_default>,
-				<SYS_GPM_MFPH_PM8MFP_CCAP0_DATA6	&pcfg_default>,
-				<SYS_GPM_MFPH_PM9MFP_CCAP0_DATA7	&pcfg_default>;
 		};
 	};
 };
