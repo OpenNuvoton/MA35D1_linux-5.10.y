@@ -160,6 +160,9 @@ static void ma35d1_Rx_dma_callback(void *arg)
 	uint32_t i = 0;
 	struct dma_tx_state state;
 	enum dma_status status;
+	unsigned long flags;
+
+	spin_lock_irqsave(&p->port.lock, flags);
 
 	status = dmaengine_tx_status(pdma_rx->chan_rx, pdma_rx->cookie,
 								&state);
@@ -167,8 +170,6 @@ static void ma35d1_Rx_dma_callback(void *arg)
 		count = ((p->dest_mem_p.size) - (state.residue + 1));
 	else
 		count = (p->dest_mem_p.size);
-
-	spin_lock(&p->port.lock);
 
 	if (p->pdma_rx_phy_addr2 == p->dest_mem_p.phy_addr) {
 		p->dest_mem_p.phy_addr = p->pdma_rx_phy_addr1;
@@ -230,15 +231,14 @@ static void ma35d1_Rx_dma_callback(void *arg)
 	}
 
 	if (copied_count != (count + i)) {
-		dev_err(p->port.dev, "Rx overrun: dropping %d bytes\n",
-				(count - copied_count));
+		p->port.icount.overrun++;
 	}
 
 	p->port.icount.rx = p->port.icount.rx + copied_count;
 
 	tty_flip_buffer_push(tty_port);
 
-	spin_unlock(&p->port.lock);
+	spin_unlock_irqrestore(&p->port.lock, flags);
 }
 
 static void ma35d1_Tx_dma_callback(void *arg)
@@ -247,8 +247,9 @@ static void ma35d1_Tx_dma_callback(void *arg)
 	struct uart_ma35d1_port *p =
 			(struct uart_ma35d1_port *)done->callback_param;
 	struct circ_buf *xmit = &p->port.state->xmit;
+	unsigned long flags;
 
-	spin_lock(&p->port.lock);
+	spin_lock_irqsave(&p->port.lock, flags);
 
 	p->port.icount.tx += p->tx_dma_len;
 
@@ -264,7 +265,7 @@ static void ma35d1_Tx_dma_callback(void *arg)
 	} else
 		p->Tx_pdma_busy_flag = 0;
 
-	spin_unlock(&p->port.lock);
+	spin_unlock_irqrestore(&p->port.lock, flags);
 }
 
 static void set_pdma_flag(struct uart_ma35d1_port *p, int id)
@@ -571,6 +572,7 @@ receive_chars(struct uart_ma35d1_port *up)
 	unsigned int isr;
 	unsigned int dcnt;
 	char flag;
+	unsigned long flags;
 
 	isr = serial_in(up, UART_REG_ISR);
 	fsr = serial_in(up, UART_REG_FSR);
@@ -619,9 +621,9 @@ receive_chars(struct uart_ma35d1_port *up)
 		up->max_count++;
 		dcnt = (serial_in(up, UART_REG_FSR) >> 8) & 0x3f;
 		if (up->max_count > 1023) {
-			spin_lock(&up->port.lock);
+			spin_lock_irqsave(&up->port.lock, flags);
 			tty_flip_buffer_push(&up->port.state->port);
-			spin_unlock(&up->port.lock);
+			spin_unlock_irqrestore(&up->port.lock, flags);
 			up->max_count = 0;
 			if ((isr & TOUT_IF) && (dcnt == 0))
 				goto tout_end;
@@ -634,9 +636,9 @@ receive_chars(struct uart_ma35d1_port *up)
 		fsr = serial_in(up, UART_REG_FSR);
 	}
 
-	spin_lock(&up->port.lock);
+	spin_lock_irqsave(&up->port.lock, flags);
 	tty_flip_buffer_push(&up->port.state->port);
-	spin_unlock(&up->port.lock);
+	spin_unlock_irqrestore(&up->port.lock, flags);
 tout_end:
 	up->max_count = 0;
 }
@@ -850,10 +852,11 @@ static int ma35d1serial_startup(struct uart_port *port)
 	int retval;
 	struct ma35d1_ip_rx_dma *pdma_rx = &(up->dma_rx);
 	struct ma35d1_ip_tx_dma *pdma_tx = &(up->dma_tx);
+	unsigned long flags;
 
 	dma_cap_mask_t mask;
 
-	spin_lock(&up->port.lock);
+	spin_lock_irqsave(&up->port.lock, flags);
 
 	if (up->uart_pdma_enable_flag == 1) {
 		dma_cap_zero(mask);
@@ -920,7 +923,7 @@ static int ma35d1serial_startup(struct uart_port *port)
 
 	}
 
-	spin_unlock(&up->port.lock);
+	spin_unlock_irqrestore(&up->port.lock, flags);
 
 	return 0;
 }
@@ -1050,9 +1053,13 @@ ma35d1serial_set_termios(struct uart_port *port,
 
 			ma35d1_prepare_RX_dma(up);
 
+			spin_lock_irqsave(&up->port.lock, flags);
+
 			/* trigger pdma */
 			serial_out(up, UART_REG_IER,
 					(serial_in(up, UART_REG_IER)|RXPDMAEN));
+
+			spin_unlock_irqrestore(&up->port.lock, flags);
 		}
 	}
 }
@@ -1249,9 +1256,7 @@ static void ma35d1serial_console_write(struct console *co, const char *s,
 	unsigned long flags;
 	unsigned int ier;
 
-	spin_lock(&up->port.lock);
-
-	local_irq_save(flags);
+	spin_lock_irqsave(&up->port.lock, flags);
 
 	/*
 	 *  First save the IER then disable the interrupts
@@ -1269,9 +1274,7 @@ static void ma35d1serial_console_write(struct console *co, const char *s,
 	} while (!(serial_in(up, UART_REG_FSR) & TX_EMPTY));
 	serial_out(up, UART_REG_IER, ier);
 
-	local_irq_restore(flags);
-
-	spin_unlock(&up->port.lock);
+	spin_unlock_irqrestore(&up->port.lock, flags);
 }
 
 static int __init ma35d1serial_console_setup(struct console *co,
