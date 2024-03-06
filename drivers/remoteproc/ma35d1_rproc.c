@@ -151,6 +151,9 @@ int ma35d1_rproc_elf_load_segments(struct rproc *rproc, const struct firmware *f
 			break;
 		}
 
+		if (filesz == 0)
+			continue;
+
 		/* grab the kernel address for this device address */
 		if ((da < nproc->sram_size) && ((da + filesz) <= nproc->sram_size)) {
 			ptr = rproc_da_to_va(rproc, da, filesz);
