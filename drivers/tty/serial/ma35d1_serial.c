@@ -279,9 +279,9 @@ void ma35d1_uart_cal_pdma_time_out(struct uart_ma35d1_port *p,
 									unsigned int baud)
 {
 	unsigned int lcr;
-	/* 300M*Time_Out_Frame_Count/256 */
+	/* 180M*Time_Out_Frame_Count/256 */
 	unsigned int pdma_time_out_base =
-		300000000 * Time_Out_Frame_Count / 256;
+		180000000 * Time_Out_Frame_Count / 256;
 	unsigned int time_out_prescaler = 0;
 	unsigned int bit_length;
 	unsigned int time_out;
@@ -329,6 +329,9 @@ void ma35d1_uart_cal_pdma_time_out(struct uart_ma35d1_port *p,
 
 	if (time_out == 0)
 		time_out = 1;
+
+	if (time_out_prescaler > 7)
+		time_out_prescaler = 7;
 
 	p->pdma_time_out_count = time_out;
 	p->pdma_time_out_prescaler = time_out_prescaler;
