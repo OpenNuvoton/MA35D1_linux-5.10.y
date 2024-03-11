@@ -86,6 +86,9 @@ obj-$(CONFIG_ARM_TEGRA186_CPUFREQ)	+= tegra186-cpufreq.o
 obj-$(CONFIG_ARM_TEGRA194_CPUFREQ)	+= tegra194-cpufreq.o
 obj-$(CONFIG_ARM_TI_CPUFREQ)		+= ti-cpufreq.o
 obj-$(CONFIG_ARM_VEXPRESS_SPC_CPUFREQ)	+= vexpress-spc-cpufreq.o
+obj-$(CONFIG_ARM_MA35D1_CPUFREQ)	+= ma35d1-cpufreq.o
+obj-$(CONFIG_ARM_MA35H0_CPUFREQ)	+= ma35h0-cpufreq.o
+obj-$(CONFIG_ARM_MA35D0_CPUFREQ)	+= ma35d0-cpufreq.o
 
 
 ##################################################################################

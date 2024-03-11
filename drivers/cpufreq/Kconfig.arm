@@ -123,6 +123,30 @@ config ARM_MEDIATEK_CPUFREQ
 	help
 	  This adds the CPUFreq driver support for MediaTek SoCs.
 
+config ARM_MA35D1_CPUFREQ
+	tristate "CPU Frequency scaling support for Nuvoton MA35D1 SoC"
+	depends on ARCH_MA35D1
+	default y
+	select PM_OPP
+	help
+	  This adds the CPUFreq driver support for Nuvoton MA35D1 SoC.
+
+config ARM_MA35D0_CPUFREQ
+	tristate "CPU Frequency scaling support for Nuvoton MA35D0 SoC"
+	depends on ARCH_MA35D0
+	default y
+	select PM_OPP
+	help
+	  This adds the CPUFreq driver support for Nuvoton MA35D0 SoC.
+
+config ARM_MA35H0_CPUFREQ
+	tristate "CPU Frequency scaling support for Nuvoton MA35H0 SoC"
+	depends on ARCH_MA35H0
+	default y
+	select PM_OPP
+	help
+	  This adds the CPUFreq driver support for Nuvoton MA35H0 SoC.
+
 config ARM_OMAP2PLUS_CPUFREQ
 	bool "TI OMAP2+"
 	depends on ARCH_OMAP2PLUS
