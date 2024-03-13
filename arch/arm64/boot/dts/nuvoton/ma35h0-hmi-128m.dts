@@ -157,6 +157,26 @@
 	};
 };
 
+&i2c5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c5>;
+	status = "disabled";
+
+	goodix_ts@5d {
+		compatible = "goodix,gt911";
+		status = "disabled";
+		reg = <0x5d>;
+		interrupt-parent = <&gpiok>;
+		interrupts = <12 2>;
+		reset-gpios = <&gpiof 1 0x00>;
+		irq-gpios = <&gpiok 12 0x00>;
+		touchscreen-size-x = <1024>;
+		touchscreen-size-y = <600>;
+		touchscreen-inverted-x = <1>;
+		touchscreen-inverted-y = <1>;
+	};
+};
+
 &uart6 {
 	status = "disabled";
 	pinctrl-names = "default";
@@ -264,6 +284,14 @@
 			nuvoton,pins =
 				<SYS_GPM_MFPH_PM8MFP_I2C0_SDA	&pcfg_default>,
 				<SYS_GPM_MFPH_PM9MFP_I2C0_SCL	&pcfg_default>;
+		};
+	};
+
+	i2c5 {
+		pinctrl_i2c5: i2c5grp{
+			nuvoton,pins =
+				<SYS_GPM_MFPL_PM4MFP_I2C5_SDA		&pcfg_default>,
+				<SYS_GPM_MFPL_PM5MFP_I2C5_SCL		&pcfg_default>;
 		};
 	};
 
