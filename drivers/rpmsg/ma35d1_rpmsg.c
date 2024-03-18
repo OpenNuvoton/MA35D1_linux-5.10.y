@@ -361,6 +361,10 @@ struct ma35d1_rpmsg_priv *ma35d1_rpmsg_register(struct device *parent, struct de
 		goto unregister_dev;
 	}
 
+	dev_info(parent, "RPMsg v%d engine with %s shared memory supported.\n",
+			priv->enable_v2_arch ? 2 : 1,
+			of_property_read_bool(node, "rpmsg-ddr-buf") ? "DRAM" : "SRAM");
+
 	return priv;
 
 unregister_dev:
