@@ -35,6 +35,8 @@
 #define SET_EPLL_RESTORE	0x120F
 #define SET_SYS_SPD_LOW		0x1301
 #define SET_SYS_SPD_RESTORE	0x1302
+#define SDRAM_AUTOREF_ENABLE	0x1381
+#define SDRAM_AUTOREF_DISABLE	0x1382
 #define FORCE_CHIP_RESET	0x1401
 
 struct ma35d0_misctrl {
@@ -98,6 +100,14 @@ static long ma35d0_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 
 	case SET_SYS_SPD_RESTORE:
 		arm_smccc_smc(MA35D0_SIP_LSPD, 0, 0, 0, 0, 0, 0, 0, &res);
+		break;
+
+	case SDRAM_AUTOREF_ENABLE:
+		arm_smccc_smc(MA35D0_SIP_DDR_SELFREF, 1, 0, 0, 0, 0, 0, 0, &res);
+		break;
+
+	case SDRAM_AUTOREF_DISABLE:
+		arm_smccc_smc(MA35D0_SIP_DDR_SELFREF, 0, 0, 0, 0, 0, 0, 0, &res);
 		break;
 
 	case FORCE_CHIP_RESET:
