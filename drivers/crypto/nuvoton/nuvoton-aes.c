@@ -539,16 +539,6 @@ static int  optee_aes_open(struct nu_aes_dev *dd)
 	err = nuvoton_crypto_optee_init(dd->nu_cdev);
 	if (err)
 		return err;
-	/*
-	 * Open AES context with TEE driver
-	 */
-	dd->octx = tee_client_open_context(NULL, optee_ctx_match,
-					       NULL, NULL);
-	if (IS_ERR(dd->octx)) {
-		pr_err("%s open context failed, err: %x\n", __func__,
-			sess_arg.ret);
-		return err;
-	}
 
 	/*
 	 * Open AES session with Crypto Trusted App
@@ -562,42 +552,16 @@ static int  optee_aes_open(struct nu_aes_dev *dd)
 	if ((err < 0) || (sess_arg.ret != 0)) {
 		pr_err("%s open session failed, err: %x\n", __func__,
 			sess_arg.ret);
-		err = -EINVAL;
-		goto out_ctx;
+		return -EINVAL;
 	}
 	dd->session_id = sess_arg.session;
 
-	/*
-	 * Allocate handshake buffer from OP-TEE share memory
-	 */
-	dd->shm_pool = tee_shm_alloc(dd->octx, CRYPTO_SHM_SIZE,
-				TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
-	if (IS_ERR(dd->shm_pool)) {
-		pr_err("%s tee_shm_alloc failed\n", __func__);
-		goto out_sess;
-	}
-
-	dd->va_shm = tee_shm_get_va(dd->shm_pool, 0);
-	if (IS_ERR(dd->va_shm)) {
-		tee_shm_free(dd->shm_pool);
-		pr_err("%s tee_shm_get_va failed\n", __func__);
-		goto out_sess;
-	}
 	return 0;
-
-out_sess:
-	tee_client_close_session(dd->octx, dd->session_id);
-out_ctx:
-	tee_client_close_context(dd->octx);
-	return err;
 }
 
 static void optee_aes_close(struct nu_aes_dev *dd)
 {
-	tee_shm_free(dd->shm_pool);
 	tee_client_close_session(dd->octx, dd->session_id);
-	tee_client_close_context(dd->octx);
-	dd->octx = NULL;
 }
 #endif
 
@@ -1540,6 +1504,35 @@ int nuvoton_aes_probe(struct device *dev,
 	aes_dd->reg_base = nu_cryp_dev->reg_base;
 	aes_dd->octx = NULL;
 
+#ifdef CONFIG_OPTEE
+	/*
+	 * Open AES context with TEE driver
+	 */
+	aes_dd->octx = tee_client_open_context(NULL, optee_ctx_match,
+					       NULL, NULL);
+	if (IS_ERR(aes_dd->octx)) {
+		pr_err("%s open context failed!\n", __func__);
+		return -EINVAL;
+	}
+
+	/*
+	 * Allocate handshake buffer from OP-TEE share memory
+	 */
+	aes_dd->shm_pool = tee_shm_alloc(aes_dd->octx, CRYPTO_SHM_SIZE,
+					 TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+	if (IS_ERR(aes_dd->shm_pool)) {
+		pr_err("%s tee_shm_alloc failed\n", __func__);
+		return -EINVAL;
+	}
+
+	aes_dd->va_shm = tee_shm_get_va(aes_dd->shm_pool, 0);
+	if (IS_ERR(aes_dd->va_shm)) {
+		tee_shm_free(aes_dd->shm_pool);
+		pr_err("%s tee_shm_get_va failed\n", __func__);
+		return -EINVAL;
+	}
+#endif
+
 	INIT_LIST_HEAD(&aes_dd->list);
 	spin_lock_init(&aes_dd->lock);
 
@@ -1553,6 +1546,7 @@ int nuvoton_aes_probe(struct device *dev,
 	spin_lock(&nu_aes.lock);
 	list_add_tail(&aes_dd->list, &nu_aes.dev_list);
 	spin_unlock(&nu_aes.lock);
+
 
 	/*
 	 *  Register AES/SM4 algorithms
@@ -1608,6 +1602,10 @@ int nuvoton_aes_remove(struct device *dev,
 	tasklet_kill(&aes_dd->done_task);
 	tasklet_kill(&aes_dd->queue_task);
 
+#ifdef CONFIG_OPTEE
+	tee_shm_free(aes_dd->shm_pool);
+	tee_client_close_context(aes_dd->octx);
+#endif
 	return 0;
 }
 
