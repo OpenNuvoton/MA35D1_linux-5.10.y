@@ -138,6 +138,8 @@ struct ma35d1_i2c {
 
 	struct i2c_client *slave;
 	bool slave_mode;
+
+	struct reset_control *rst;
 };
 
 /* ma35d1_i2c_master_complete
@@ -197,18 +199,12 @@ static void ma35d1_check_work(struct work_struct *work)
 	struct ma35d1_i2c *i2c =
 			container_of(work, struct ma35d1_i2c, check_work.work);
 	unsigned int tmp;
-	struct reset_control *rst;
 
 	if (readl(i2c->regs+CTL0) & I2C_CTL_STO) {
 		tmp = readl(i2c->regs+CLKDIV);
 
-		rst = devm_reset_control_get(i2c->adap.dev.parent, NULL);
-		if (IS_ERR(rst)) {
-			dev_err(i2c->dev, "Error: Missing I2C controller reset\n");
-		} else {
-			reset_control_assert(rst);
-			reset_control_deassert(rst);
-		}
+		reset_control_assert(i2c->rst);
+		reset_control_deassert(i2c->rst);
 
 		ma35d1_reg_unlock();
 		writel(tmp, (i2c->regs+CLKDIV));
@@ -748,8 +744,12 @@ static int ma35d1_i2c_probe(struct platform_device *pdev)
 	/* setup info block for the i2c core */
 
 	i2c->adap.algo_data = i2c;
-	i2c->adap.dev.parent = &pdev->dev;
 	i2c->slave_mode = i2c_detect_slave_mode(&pdev->dev);
+
+	i2c->rst = devm_reset_control_get(&pdev->dev, NULL);
+	if (IS_ERR(i2c->rst)) {
+			dev_err(i2c->dev, "Error: Missing I2C controller reset\n");
+	}
 
 	of_property_read_u32(pdev->dev.of_node, "clock-frequency", &busfreq);
 
