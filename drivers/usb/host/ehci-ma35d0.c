@@ -58,6 +58,9 @@ static void ma35d0_start_ehci(struct platform_device *pdev)
 	/* USBPMISCR; HSUSBH0 & HSUSBH1 PHY */
 	regmap_read(ma35d0_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
 	if ((reg & 0x20302) != 0x20302) {
+		reg = (reg & ~0x30003) | 0x30003;
+		regmap_write(ma35d0_ehci->sysregmap, REG_SYS_USBPMISCR, reg);
+		msleep(20);
 		reg = (reg & ~0x30003) | 0x20002;
 		regmap_write(ma35d0_ehci->sysregmap, REG_SYS_USBPMISCR, reg);
 		do {
