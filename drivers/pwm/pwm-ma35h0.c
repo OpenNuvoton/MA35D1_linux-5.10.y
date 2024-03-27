@@ -345,22 +345,22 @@ static int ma35h0_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	if (ch == 0) {
 		__raw_writel(period - 1, ma35h0->regs + REG_PWM_PERIOD0);
-		__raw_writel(duty - 1, ma35h0->regs + REG_PWM_CMPDAT0);
+		__raw_writel(duty, ma35h0->regs + REG_PWM_CMPDAT0);
 	} else if (ch == 1) {
 		__raw_writel(period - 1, ma35h0->regs + REG_PWM_PERIOD1);
-		__raw_writel(duty - 1, ma35h0->regs + REG_PWM_CMPDAT1);
+		__raw_writel(duty, ma35h0->regs + REG_PWM_CMPDAT1);
 	} else if (ch == 2) {
 		__raw_writel(period - 1, ma35h0->regs + REG_PWM_PERIOD2);
-		__raw_writel(duty - 1, ma35h0->regs + REG_PWM_CMPDAT2);
+		__raw_writel(duty, ma35h0->regs + REG_PWM_CMPDAT2);
 	} else if (ch == 3) {
 		__raw_writel(period - 1, ma35h0->regs + REG_PWM_PERIOD3);
-		__raw_writel(duty - 1, ma35h0->regs + REG_PWM_CMPDAT3);
+		__raw_writel(duty, ma35h0->regs + REG_PWM_CMPDAT3);
 	} else if (ch == 4) {
 		__raw_writel(period - 1, ma35h0->regs + REG_PWM_PERIOD4);
-		__raw_writel(duty - 1, ma35h0->regs + REG_PWM_CMPDAT4);
+		__raw_writel(duty, ma35h0->regs + REG_PWM_CMPDAT4);
 	} else {/* ch 5 */
 		__raw_writel(period - 1, ma35h0->regs + REG_PWM_PERIOD5);
-		__raw_writel(duty - 1, ma35h0->regs + REG_PWM_CMPDAT5);
+		__raw_writel(duty, ma35h0->regs + REG_PWM_CMPDAT5);
 	}
 
 	spin_unlock_irqrestore(&ma35h0->lock, flags);
