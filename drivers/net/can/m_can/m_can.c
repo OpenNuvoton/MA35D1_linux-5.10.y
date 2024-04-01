@@ -1466,7 +1466,7 @@ static netdev_tx_t m_can_tx_handler(struct m_can_classdev *cdev)
 	u32 id, cccr, fdflags;
 	int i;
 	int putidx;
-	u32 check_idle_timeout = 0;
+	unsigned long check_idle_timeout;
 
 	cdev->tx_skb = NULL;
 
@@ -1569,16 +1569,17 @@ static netdev_tx_t m_can_tx_handler(struct m_can_classdev *cdev)
 		 */
 		can_put_echo_skb(skb, dev, putidx);
 
-		/* Enable TX FIFO element to start transfer  */
-		#if 1
-		while((m_can_read(cdev, M_CAN_PSR) & 0x18) != 0x8){
-			check_idle_timeout++;
-			if(check_idle_timeout > 0xffffff) {
-				return NETDEV_TX_BUSY;
-			}
+		/* Make sure the MA35 series SoC data bus is ready.
+		 * if data bus cannot be ready in 10 ms, we still let it go
+		 * the original TX flow.
+		 */
+		check_idle_timeout = jiffies + msecs_to_jiffies(10);
+		while ((m_can_read(cdev, M_CAN_PSR) & 0x18) != 0x8) {
+			if (time_after(jiffies, check_idle_timeout))
+				break;
 		}
-		#endif
-		
+
+		/* Enable TX FIFO element to start transfer  */
 		m_can_write(cdev, M_CAN_TXBAR, (1 << putidx));
 
 		/* stop network queue if fifo full */
