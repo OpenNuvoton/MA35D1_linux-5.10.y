@@ -59,6 +59,11 @@ static struct nvt_priv_data *nvt_gmac_setup(struct platform_device *pdev,
 		return ERR_PTR(-ENODEV);
 	}
 
+	regmap_read(bsp_priv->regmap, 0, &reg);
+	reg = (reg >> 16) & 0xff;
+	if (reg == 0xa1 || reg == 0x81 || reg == 0x82)
+		return ERR_PTR(-EINVAL);
+
 	regmap_read(bsp_priv->regmap,
 		    bsp_priv->id == 0 ? REG_SYS_GMAC0MISCR : REG_SYS_GMAC1MISCR, &reg);
 	reg &= ~(TXDLY_MSK | RXDLY_MSK);
