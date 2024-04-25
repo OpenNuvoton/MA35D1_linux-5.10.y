@@ -2179,6 +2179,39 @@ config FB_BROADSHEET
 	  and could also have been called by other names when coupled with
 	  a bridge adapter.
 
+config FB_MA35D1
+	tristate "Nuvoton MA35D1 Video support"
+	depends on FB && ARCH_MA35D1
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	select FB_DEFERRED_IO
+	select DMA_CMA if HAVE_DMA_CONTIGUOUS && CMA
+	help
+	  This framebuffer driver supports Nuvoton MA35D1 Video support.
+
+config FB_MA35D0
+	tristate "Nuvoton MA35D0 Video support"
+	depends on FB && ARCH_MA35D0
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	select FB_DEFERRED_IO
+	select DMA_CMA if HAVE_DMA_CONTIGUOUS && CMA
+	help
+	  This framebuffer driver supports Nuvoton MA35D0 Video support.
+
+config FB_MA35H0
+	tristate "Nuvoton MA35H0 Video support"
+	depends on FB && ARCH_MA35H0
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	select FB_DEFERRED_IO
+	select DMA_CMA if HAVE_DMA_CONTIGUOUS && CMA
+	help
+	  This framebuffer driver supports Nuvoton MA35H0 Video support.
+
 config FB_HYPERV
 	tristate "Microsoft Hyper-V Synthetic Video support"
 	depends on FB && HYPERV
