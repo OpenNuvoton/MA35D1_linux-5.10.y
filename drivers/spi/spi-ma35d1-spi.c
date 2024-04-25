@@ -941,13 +941,8 @@ static int nuvoton_spi_probe(struct platform_device *pdev)
 		dma_cap_set(DMA_PRIVATE, mask);
 
 		/* Initailize wait queue head as  __WAIT_QUEUE_HEAD_INITIALIZER() */
-		nuvoton->slave_txdone.lock           = __SPIN_LOCK_UNLOCKED(nuvoton->slave_txdone.lock);
-		nuvoton->slave_txdone.head.next       = &(nuvoton->slave_txdone).head;
-		nuvoton->slave_txdone.head.prev       = &(nuvoton->slave_txdone).head;
-
-		nuvoton->slave_rxdone.lock           = __SPIN_LOCK_UNLOCKED(nuvoton->slave_rxdone.lock);
-		nuvoton->slave_rxdone.head.next       = &(nuvoton->slave_rxdone).head;
-		nuvoton->slave_rxdone.head.prev       = &(nuvoton->slave_rxdone).head;
+		init_waitqueue_head(&nuvoton->slave_txdone);
+		init_waitqueue_head(&nuvoton->slave_rxdone);
 
 		/* Request the DMA channel from the DMA engine and then use the device from
 		 * the channel for the proxy channel also.
