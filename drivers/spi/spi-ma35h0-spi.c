@@ -457,6 +457,12 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 		} else { /* Long length transfer by PDMA */
 			int pdma_en = 0;
 			int ret;
+			int tx_dummy = 0;
+
+			if (txbuf == NULL) {
+				tx_dummy = 1;
+				txbuf = (u64)(kmalloc(len, GFP_KERNEL));
+			}
 
 			end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
 			__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
@@ -487,6 +493,7 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 					pdma->sgrx.dma_length = len;
 				}
 
+				dmaengine_terminate_all(pdma->chan_rx);
 				pdma->slave_config.direction = DMA_DEV_TO_MEM;
 				pcfg.reqsel = hw->pdata->pdma_reqsel_rx;
 				pdma->slave_config.peripheral_config = &pcfg;
@@ -536,6 +543,7 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 					pdma->sgtx.dma_length = len;
 				}
 
+				dmaengine_terminate_all(pdma->chan_tx);
 				pdma->slave_config.direction = DMA_MEM_TO_DEV;
 				pcfg.reqsel = hw->pdata->pdma_reqsel_tx;
 				pdma->slave_config.peripheral_config = &pcfg;
@@ -621,9 +629,12 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 			if (rxbuf)
 				dma_unmap_single(hw->dev, pdma->sgrx.dma_address - non_rx_align_len, len,
 						DMA_FROM_DEVICE);
-			if (txbuf)
+			if (txbuf) {
 				dma_unmap_single(hw->dev, pdma->sgtx.dma_address - non_tx_align_len, len,
 						DMA_TO_DEVICE);
+				if (tx_dummy == 1)
+					kfree((void *)txbuf);
+			}
 		}
 
 	} else { /* hw->pdata->use_pdma = 0 */
@@ -666,7 +677,6 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 static bool nuvoton_spi_mem_supports_op(struct spi_mem *mem,
 					const struct spi_mem_op *op)
 {
-	/* MA35H0 SPI doesn't support QUAD, hence filter QUAD mode command */
 	if (op->data.buswidth > 1 || op->addr.buswidth > 1 ||
 		op->dummy.buswidth > 1 || op->cmd.buswidth > 1)
 		return false;
