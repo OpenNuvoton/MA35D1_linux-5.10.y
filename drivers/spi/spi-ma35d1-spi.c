@@ -461,7 +461,7 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 
 			if (txbuf == NULL) {
 				tx_dummy = 1;
-				txbuf = (u64)(kmalloc(len, GFP_KERNEL));
+				txbuf = (void *)(kmalloc(len, GFP_KERNEL));
 			}
 
 			end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
