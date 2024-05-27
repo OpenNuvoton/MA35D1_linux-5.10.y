@@ -15,7 +15,7 @@ struct m_can_plat_priv {
 	spinlock_t	lock;
 };
 
-#define REG_READ_TIME 3
+#define REG_READ_TIME 20
 
 static u32 iomap_read_reg(struct m_can_classdev *cdev, int reg)
 {
