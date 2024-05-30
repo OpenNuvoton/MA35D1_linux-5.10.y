@@ -76,6 +76,9 @@ static irqreturn_t wormhole_isr(int irq, void *data)
 	u32 intsts = ioread32(priv->base + INTSTS) & ioread32(priv->base + INTEN);
 	u32 ch, d[4] = {0};
 
+	// Clear interrupt
+	iowrite32(intsts, priv->base + INTSTS);
+
 	// Process Tx and Rx
 	for (ch = 0; ch < DATA_CHANS ; ch++) {
 		if (intsts & (INTSTS_TX0IF << ch))
@@ -103,8 +106,6 @@ static irqreturn_t wormhole_isr(int irq, void *data)
 		iowrite32(d[0], priv->base + CPSTS);
 		mbox_chan_received_data(&priv->mbox.chans[DATA_CHANS + GINT_CHANS], (void *)d);
 	}
-	// Clear interrupt
-	iowrite32(intsts, priv->base + INTSTS);
 
 	return IRQ_HANDLED;
 }
