@@ -20,16 +20,3 @@ config SND_SOC_MA35D0EVB
 	  Select this option to enable audio (I2S) on the
 	  MA35D0 demoboard.
 
-choice
-	prompt "I2S Mode Selection"
-	depends on SND_SOC_MA35D0EVB
-	default MA35D0_I2S_MASTER_MODE
-
-config MA35D0_I2S_MASTER_MODE
-	bool "Master Mode"
-
-config MA35D0_I2S_SLAVE_MODE
-	bool "Slave Mode"
-
-endchoice
-

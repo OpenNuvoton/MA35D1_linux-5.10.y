@@ -19,40 +19,49 @@
 #include <sound/pcm.h>
 #include <sound/soc.h>
 #include <sound/pcm_params.h>
+#include <linux/clk.h>
 
 #include "ma35d0-audio.h"
 #include "../codecs/nau8822.h"
 
-extern struct ma35d0_audio *ma35d0_i2s_data;
-
 static int ma35d0_audio_hw_params(struct snd_pcm_substream *substream, struct snd_pcm_hw_params *params)
 {
+	unsigned int fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBS_CFS;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
+	struct ma35d0_audio *ma35d0_audio = dev_get_drvdata(cpu_dai->dev);
+	unsigned int i2s_clk, cpu_mclk;
 	int ret;
 
-	unsigned int clk = 0;
 	unsigned int sample_rate = params_rate(params);
 
 	/* set codec DAI configuration */
-	ret = snd_soc_dai_set_fmt(codec_dai, SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBS_CFS);
+	ret = snd_soc_dai_set_fmt(codec_dai, fmt);
 	if (ret < 0)
 		return ret;
 
 	/* set cpu DAI configuration */
-	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBM_CFM);
+	ret = snd_soc_dai_set_fmt(cpu_dai, fmt);
 	if (ret < 0)
 		return ret;
 
-	clk = 256 * sample_rate;
 	cpu_dai->channels = params_channels(params);
 	cpu_dai->rate = params_rate(params);
 	cpu_dai->sample_bits = params_width(params);
 
-	/* set the codec system clock for DAC and ADC */
-	ret = snd_soc_dai_set_sysclk(codec_dai, NAU8822_CLK_MCLK, clk, SND_SOC_CLOCK_OUT);
-	if (ret < 0)
+	i2s_clk = clk_get_rate(ma35d0_audio->clk);
+	cpu_mclk = i2s_clk/(2*8);
+
+	/* set the codec system clock */
+	ret = snd_soc_dai_set_sysclk(codec_dai, NAU8822_CLK_PLL,
+				      cpu_mclk, SND_SOC_CLOCK_IN);
+	if (ret < 0 )
+		return ret;
+
+	ret = snd_soc_dai_set_pll(codec_dai, 0, 0,
+				  cpu_mclk, 256 * params_rate(params));
+	if (ret < 0 )
 		return ret;
 
 	/* set prescaler division for sample rate */

@@ -96,10 +96,10 @@ static int ma35d0_i2s_set_fmt(struct snd_soc_dai *cpu_dai, unsigned int fmt)
 
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
 	case SND_SOC_DAIFMT_CBM_CFM:
-		val &= ~SLAVE; //Master
+		val |= SLAVE; //Slave
 		break;
 	case SND_SOC_DAIFMT_CBS_CFS:
-		val |= SLAVE; //Slave
+		val &= ~SLAVE; //Master
 		break;
 	default:
 		return -EINVAL;
