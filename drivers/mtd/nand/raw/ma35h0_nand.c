@@ -750,12 +750,12 @@ static void ma35h0_layout_oob_table(struct nand_ecclayout_user *pNandOOBTbl,
 					int oobsize, int eccbytes)
 {
 	pNandOOBTbl->eccbytes = eccbytes;
-
 	pNandOOBTbl->oobavail = oobsize - DEF_RESERVER_OOB_SIZE_FOR_MARKER - eccbytes;
-
 	pNandOOBTbl->oobfree[0].offset = DEF_RESERVER_OOB_SIZE_FOR_MARKER;  /* Bad block marker size */
-
 	pNandOOBTbl->oobfree[0].length = oobsize - eccbytes - pNandOOBTbl->oobfree[0].offset;
+
+	pNandOOBTbl->oobfree[1].offset = 0;
+	pNandOOBTbl->oobfree[1].length = 0;
 }
 
 static int ma35h0_nand_read_oob_hwecc(struct nand_chip *chip, int page)
