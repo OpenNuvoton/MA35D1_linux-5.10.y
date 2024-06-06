@@ -46,6 +46,8 @@
 #define Time_Out_Frame_Count 2
 #define Time_Out_Low_Baudrate 115200
 
+#define RDA_TOUT_IF (RDA_IF | TOUT_IF)
+
 unsigned char UART_PDMA_TX_ID[UART_NR] = {
 	PDMA_UART0_TX, PDMA_UART1_TX, PDMA_UART2_TX,
 	PDMA_UART3_TX, PDMA_UART4_TX, PDMA_UART5_TX,
@@ -112,6 +114,8 @@ struct uart_ma35d1_port {
 	unsigned int console_int;
 
 	unsigned char wakeup_enable;
+
+	unsigned int fifo_threshold;
 
 	int max_count;
 
@@ -632,7 +636,7 @@ receive_chars(struct uart_ma35d1_port *up)
 				goto tout_end;
 		}
 
-		if (isr & RDA_IF) {
+		if ((isr & RDA_TOUT_IF) == RDA_IF) {
 			if (dcnt == 1)
 				return; /* have remaining data, don't reset max_count */
 		}
@@ -915,11 +919,11 @@ static int ma35d1serial_startup(struct uart_port *port)
 	if (up->uart_pdma_enable_flag == 1)
 		up->baud_rate = 0;
 
-	if(up->wakeup_enable == 1) {
+	if(up->wakeup_enable != 0) {
 		/* Clear wakeup status */
 		serial_out(up, UART_REG_WKSTS, 0x1f);
-		/* enable CTS wakeup */
-		serial_out(up, UART_REG_WKCTL, 0x1);
+		/* Set wakeup mode */
+		serial_out(up, UART_REG_WKCTL, up->wakeup_enable);
 
 		serial_out(up, UART_REG_IER,
 				serial_in(up, UART_REG_IER) | WAKEUP_IEN);
@@ -1155,6 +1159,9 @@ static int ma35d1serial_config_rs485(struct uart_port *port,
 		/* set auto direction mode */
 		serial_out(p, UART_REG_ALT_CSR,
 				(serial_in(p, UART_REG_ALT_CSR) | (1 << 10)));
+
+		/* Reset FIFO */
+		serial_out(p, UART_REG_FCR, TFR | RFR);
 	}
 
 	return 0;
@@ -1385,7 +1392,7 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 	struct resource *res_mem;
 	struct uart_ma35d1_port *up;
 	int ret, i;
-	u32   val32[2];
+	u32   val32[3];
 	struct clk *clk;
 	int err;
 
@@ -1431,17 +1438,41 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 	if (val32[0] == 1)
 		set_pdma_flag(up, i);
 
+	up->wakeup_enable = 0;
+
 	if (of_property_read_u32_array(pdev->dev.of_node, 
-						"wakeup-enable", val32, 1) != 0) {
+						"wakeup-enable", val32, 3) != 0) {
 		up->wakeup_enable = 0;
 	}
 	else {
-		if (val32[0] == 1) {
+		if (val32[0] != 0)
 			up->wakeup_enable = 1;
+
+		if (val32[1] != 0)
+			up->wakeup_enable |= (0x1 << 2);
+
+		if (val32[2] != 0)
+			up->wakeup_enable |= (0x1 << 4);
+
+		if(up->wakeup_enable != 0)
 			device_init_wakeup(&pdev->dev, true);
-		}
+	}
+
+	if (of_property_read_u32_array(pdev->dev.of_node, 
+						"fifo-threshold", val32, 1) != 0) {
+		up->fifo_threshold = 0;
+	}
+	else {
+		if(val32[0] < 4)
+			up->fifo_threshold = 0;
+		else if(val32[0] < 8)
+			up->fifo_threshold = (0x1 << 4);
+		else if(val32[0] < 14)
+			up->fifo_threshold = (0x2 << 4);
+		else if(val32[0] < 30)
+			up->fifo_threshold = (0x3 << 4);
 		else
-			up->wakeup_enable = 0;
+			up->fifo_threshold = (0x4 << 4);
 	}
 
 	up->port.irq = platform_get_irq(pdev, 0);
@@ -1495,8 +1526,15 @@ static int ma35d1serial_suspend(struct platform_device *dev,
 
 	up = &ma35d1serial_ports[i];
 
-	if (device_may_wakeup(&dev->dev))
+	if (device_may_wakeup(&dev->dev)) {
+
+		/* FIFO trigger from device tree */
+		/* RTS trigger level 8 bytes */
+		serial_out(up, UART_REG_FCR, serial_in(up,
+					UART_REG_FCR) | up->fifo_threshold | 0x20000);
+
 		enable_irq_wake(up->port.irq);
+	}
 
 	if (i == 0) {
 		up->console_baud_rate = serial_in(up, UART_REG_BAUD);
@@ -1518,8 +1556,15 @@ static int ma35d1serial_resume(struct platform_device *dev)
 
 	up = &ma35d1serial_ports[i];
 
-	if (device_may_wakeup(&dev->dev))
+	if (device_may_wakeup(&dev->dev)) {
 		disable_irq_wake(up->port.irq);
+
+		/* FIFO trigger level 4 byte */
+		/* RTS trigger level 8 bytes */
+		serial_out(up, UART_REG_FCR, serial_in(up,
+					UART_REG_FCR) | 0x10 | 0x20000);
+
+	}
 
 	if (i == 0) {
 		serial_out(up, UART_REG_BAUD, up->console_baud_rate);

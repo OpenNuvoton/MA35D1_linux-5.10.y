@@ -213,6 +213,14 @@
 		clocks = <&clk UART10_GATE>;
 		port-number = <10>;
 		pdma-enable = <0>;
+
+		/* wakeup-enable = <cts-wakeup fifo-threshold-wakeup fifo-timeout-wakeup> */
+		/* wakeup-enable = <1 1 0>; */
+		
+		/* set: 1, 4, 8, 14 or 30 bytes */
+		/* only for fifo threshold wakeup */
+		/* fifo-threshold = <14>; */ 
+
 		status = "disabled";
 	};
 
