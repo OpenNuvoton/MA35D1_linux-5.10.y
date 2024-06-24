@@ -1,0 +1,81 @@
+/*
+ * Device Tree Source for MA35D1 Evaluation Board (EVB)
+ *
+ * Copyright (C) 2024 Nuvoton Technology Corp.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+&pinctrl {
+	gmac0 {
+		pinctrl_gmac0_rgmii: gmac0_rgmiigrp{
+			nuvoton,pins =
+				<SYS_GPE_MFPL_PE0MFP_RGMII0_MDC		&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE1MFP_RGMII0_MDIO	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE2MFP_RGMII0_TXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE3MFP_RGMII0_TXD0	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE4MFP_RGMII0_TXD1	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE5MFP_RGMII0_RXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE6MFP_RGMII0_RXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE7MFP_RGMII0_RXD0	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE8MFP_RGMII0_RXD1	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE9MFP_RGMII0_RXD2	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE10MFP_RGMII0_RXD3	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE11MFP_RGMII0_TXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE12MFP_RGMII0_TXD2	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE13MFP_RGMII0_TXD3	&pcfg_emac_1_8V>;
+		};
+
+		pinctrl_gmac0_rmii: gmac0_rmiigrp{
+            nuvoton,pins =
+				<SYS_GPE_MFPL_PE0MFP_RMII0_MDC		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE1MFP_RMII0_MDIO		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE2MFP_RMII0_TXEN		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE3MFP_RMII0_TXD0		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE4MFP_RMII0_TXD1		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE5MFP_RMII0_REFCLK	&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE6MFP_RMII0_CRSDV	&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE7MFP_RMII0_RXD0		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPH_PE8MFP_RMII0_RXD1		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPH_PE9MFP_RMII0_RXERR	&pcfg_emac_3_3V>;
+        };
+	};
+
+	gmac1 {
+		pinctrl_gmac1_rgmii: gmac1_rgmiigrp{
+			nuvoton,pins =
+				<SYS_GPF_MFPL_PF0MFP_RGMII1_MDC		&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF1MFP_RGMII1_MDIO	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF2MFP_RGMII1_TXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF3MFP_RGMII1_TXD0	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF4MFP_RGMII1_TXD1	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF5MFP_RGMII1_RXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF6MFP_RGMII1_RXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF7MFP_RGMII1_RXD0	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF8MFP_RGMII1_RXD1	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF9MFP_RGMII1_RXD2	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF10MFP_RGMII1_RXD3	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF11MFP_RGMII1_TXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF12MFP_RGMII1_TXD2	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPH_PF13MFP_RGMII1_TXD3	&pcfg_emac_1_8V>;
+		};
+		pinctrl_gmac1_rmii: gmac1_rmiigrp{
+			nuvoton,pins =
+				<SYS_GPF_MFPL_PF0MFP_RMII1_MDC		&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPL_PF1MFP_RMII1_MDIO		&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPL_PF2MFP_RMII1_TXEN		&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPL_PF3MFP_RMII1_TXD0		&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPL_PF4MFP_RMII1_TXD1		&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPL_PF5MFP_RMII1_REFCLK	&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPL_PF6MFP_RMII1_CRSDV	&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPL_PF7MFP_RMII1_RXD0		&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPH_PF8MFP_RMII1_RXD1		&pcfg_emac_3_3V>,
+				<SYS_GPF_MFPH_PF9MFP_RMII1_RXERR	&pcfg_emac_3_3V>;
+		};
+	};
+};
