@@ -32,6 +32,8 @@ struct ma35d1_tmperature_sensor {
 	struct thermal_zone_device *th_dev;
 	enum thermal_device_mode mode;
 	struct regmap *regmap;
+	unsigned long last_jiffies;
+	int last_temp;
 };
 
 
@@ -66,14 +68,27 @@ static int ma35d1_tsen_get_temp(void *data, int *temp)
 		return -EAGAIN;
 
 	regmap_read(sensor->regmap, REG_SYS_TSENSRFCR, &reg);
-	if (!(reg & TSEN_DATA_VALID))
+	if (!(reg & TSEN_DATA_VALID)) {
+		/*
+		 * The MA35 temperature sensor requires 350 ms to complete a temperature
+		 * conversion. If If the current temperature reading is taken less than
+		 * 355 ms after the previous one, the previously read temperature value
+		 * will be returned.
+		 * */
+		if (jiffies - sensor->last_jiffies < 355) {
+			*temp = sensor->last_temp;
+			return 0;
+		}
 		return -EAGAIN;
+	}
 
 	// clear valid bit
 	regmap_write(sensor->regmap, REG_SYS_TSENSRFCR, reg);
 
 	reg  = (reg & TSEN_DATA) >> TSEN_DATA_SHIFT;
 	*temp = (reg * 27435 / 4096 - 9333) / 100;
+	sensor->last_jiffies = jiffies;
+	sensor->last_temp = *temp;
 	return 0;
 }
 
