@@ -639,6 +639,17 @@
 		status = "disable";
 	};
 
+	i2s1: i2s@40490000 {
+		compatible = "nuvoton,ma35d1-audio-i2s";
+		reg = <0x0 0x40490000 0x0 0x10000>;
+		interrupts = <GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk I2S1_GATE>;
+		resets = <&reset MA35D1_RESET_I2S1>;
+		pdma_reqsel_tx = <88>;
+		pdma_reqsel_rx = <89>;
+		status = "disable";
+	};
+
 	i2s_pcm: i2s_pcm {
 		compatible = "nuvoton,ma35d1-audio-pcm";
 		status = "disable";
