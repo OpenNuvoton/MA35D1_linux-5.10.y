@@ -1161,7 +1161,7 @@ static int ma35d1serial_config_rs485(struct uart_port *port,
 				(serial_in(p, UART_REG_ALT_CSR) | (1 << 10)));
 
 		/* Reset FIFO */
-		serial_out(p, UART_REG_FCR, TFR | RFR);
+		serial_out(p, UART_REG_FCR, serial_in(p, UART_REG_FCR) | TFR | RFR);
 	}
 
 	return 0;
