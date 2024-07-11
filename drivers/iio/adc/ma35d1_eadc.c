@@ -115,6 +115,7 @@ struct ma35d1_adc_device {
 	u16		buffer[EADC_MAX_SP];
 	unsigned int	bufi;
 	unsigned int	num_conv;
+	unsigned int	scan_chancnt;
 	char		chan_name[EADC_CH_MAX][EADC_CH_SZ];
 };
 
@@ -162,15 +163,18 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 {
 	struct iio_dev *indio_dev = data;
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+	int i;
 
 	if (readl(info->regs + STATUS2) & 1) {  /* check ADIF0 */
 		writel(1, info->regs + STATUS2); /* clear ADIF0 */
 
 		/* Reading DR also clears EOC status flag */
-		info->buffer[info->bufi] = readl(info->regs + DAT0) & DATMSK;
 		/* Check if IIO buffer enabled */
 		if (iio_buffer_enabled(indio_dev)) {
-			info->bufi++;
+			for (i = 0; i < info->scan_chancnt; i++) {
+				info->buffer[info->bufi] = readl(info->regs + DAT0 + (i << 2)) & DATMSK;
+				info->bufi++;
+			}
 			if (info->bufi >= info->num_conv) {
 				/* disable ADCIEN0 */
 				writel(readl(info->regs + CTL) & ~ADCIEN0, info->regs + CTL);
@@ -178,6 +182,7 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 				iio_trigger_poll(indio_dev->trig);
 			}
 		} else {
+			info->buffer[info->bufi] = readl(info->regs + DAT0) & DATMSK;
 			complete(&info->completion);
 		}
 		return IRQ_HANDLED;
@@ -364,6 +369,9 @@ static int ma35d1_adc_conf_scan_seq(struct iio_dev *indio_dev,
 		dev_dbg(&indio_dev->dev, "%s chan %d to Sample module %d\n",
 			__func__, chan->channel, i);
 
+		/* configure sample module trigger source to ADINT0 */
+		writel((readl(info->regs + SCTL0 + (i << 2)) & ~TRGSELMSK)
+			| ADINT0TRG, info->regs + SCTL0 + (i << 2));
 		/* configure sample module channel select */
 		writel((readl(info->regs + SCTL0 + (i << 2)) & ~CHSELMSK)
 			| chan->channel, info->regs + SCTL0 + (i << 2));
@@ -377,6 +385,7 @@ static int ma35d1_adc_conf_scan_seq(struct iio_dev *indio_dev,
 		if (i > EADC_MAX_SP)
 			return -EINVAL;
 	}
+	info->scan_chancnt = i;
 
 	if (!i)
 		return -EINVAL;
