@@ -40,6 +40,8 @@
 #define COMMAND_SEND_MSG 0x80
 #define COMMAND_SEND_ACK 0x81
 
+#define WHC_CMD_SIZE     0x4
+
 struct ma35d1_rpmsg_priv {
 	struct device dev;
 	const char *name;
@@ -80,12 +82,12 @@ static void ma35d1_rpmsg_recv_from_remote(struct mbox_client *cl, void *msg)
 	struct rpmsg_endpoint *ept = &priv->ma35d1_ept->ept;
 	struct device *dev = priv->dev.parent;
 	int ret;
-	int command[4];
+	int *command;
 
 	u32 *data = (u32 *)msg;
 
-	if(ept == NULL) {
-		dev_err(&priv->dev, "endpoint not set !! \n");
+	if(priv->ma35d1_ept == NULL) {
+		dev_err(&priv->dev, "The endpoint has been freed!! \n");
 		return;
 	}
 
@@ -96,8 +98,15 @@ static void ma35d1_rpmsg_recv_from_remote(struct mbox_client *cl, void *msg)
 				dev_err(&priv->dev, "failed to get share memery data \n");
 
 			if (priv->enable_v2_arch != true) {
-				command[0] = COMMAND_RECEIVE_ACK;
-				ret = mbox_send_message(priv->mbox_chan, (void *)&command[0]);
+				command = kzalloc(sizeof(int) * WHC_CMD_SIZE, GFP_KERNEL);
+				if (command) {
+					command[0] = COMMAND_RECEIVE_ACK;
+					ret = mbox_send_message(priv->mbox_chan, (void *)command);
+					kfree(command);
+				} else {
+					ret = -1;
+				}
+
 				if (ret < 0)
 					dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
 			}
@@ -125,7 +134,10 @@ static void ma35d1_rpmsg_ept_release(struct kref *kref)
 
 static void ma35d1_rpmsg_destroy_ept(struct rpmsg_endpoint *ept)
 {
+	struct ma35d1_rpmsg_endpoint *ma35d1_ept = to_ma35d1_rpmsg_endpoint(ept);
+	struct ma35d1_rpmsg_priv *ma35d1_priv = ma35d1_ept->ma35d1_priv;
 	kref_put(&ept->refcount, ma35d1_rpmsg_ept_release);
+	ma35d1_priv->ma35d1_ept = NULL;
 }
 
 static int ma35d1_rpmsg_send(struct rpmsg_endpoint *ept, void *data, int len)
@@ -133,15 +145,21 @@ static int ma35d1_rpmsg_send(struct rpmsg_endpoint *ept, void *data, int len)
 	struct ma35d1_rpmsg_endpoint *nept = to_ma35d1_rpmsg_endpoint(ept);
 	struct ma35d1_rpmsg_priv *priv = nept->ma35d1_priv;
 	int ret = 0;
-	int command[4];
+	int *command = kzalloc(sizeof(u32) * WHC_CMD_SIZE, GFP_KERNEL);
 
 	memcpy(priv->tx_mem_start_addr, data, len);
 
-	command[0] = COMMAND_SEND_MSG;
-	command[1] = len;
+	if (command) {
+		command[0] = COMMAND_SEND_MSG;
+		command[1] = len;
 
-	priv->tx_ack_flag = 0;
-	ret = mbox_send_message(priv->mbox_chan, (void *)&command);
+		priv->tx_ack_flag = 0;
+		ret = mbox_send_message(priv->mbox_chan, (void *)command);
+		kfree(command);
+	} else {
+		ret = -1;
+	}
+
 	if (ret < 0)
 		dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
 
@@ -156,15 +174,21 @@ static int ma35d1_rpmsg_trysend(struct rpmsg_endpoint *ept, void *data, int len)
 	struct ma35d1_rpmsg_endpoint *nept = to_ma35d1_rpmsg_endpoint(ept);
 	struct ma35d1_rpmsg_priv *priv = nept->ma35d1_priv;
 	int ret = 0;
-	int command[4];
+	int *command = kzalloc(sizeof(u32) * WHC_CMD_SIZE, GFP_KERNEL);
 
 	memcpy(priv->tx_mem_start_addr, data, len);
 
-	command[0] = COMMAND_SEND_MSG;
-	command[1] = len;
+	if (command) {
+		command[0] = COMMAND_SEND_MSG;
+		command[1] = len;
 
-	priv->tx_ack_flag = 0;
-	ret = mbox_send_message(priv->mbox_chan, (void *)&command);
+		priv->tx_ack_flag = 0;
+		ret = mbox_send_message(priv->mbox_chan, (void *)command);
+		kfree(command);
+	} else {
+		ret = -1;
+	}
+
 	if (ret < 0)
 		dev_err(&priv->dev, "failed to send mailbox message, status = %d\n", ret);
 
