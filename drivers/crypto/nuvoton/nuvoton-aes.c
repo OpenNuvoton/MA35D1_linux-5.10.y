@@ -1510,10 +1510,8 @@ int nuvoton_aes_probe(struct device *dev,
 	 */
 	aes_dd->octx = tee_client_open_context(NULL, optee_ctx_match,
 					       NULL, NULL);
-	if (IS_ERR(aes_dd->octx)) {
-		pr_err("%s open context failed!\n", __func__);
-		return -EINVAL;
-	}
+	if (IS_ERR(aes_dd->octx))
+		return 0; /* TEE is not ready, do not use H/W AES */
 
 	/*
 	 * Allocate handshake buffer from OP-TEE share memory
