@@ -683,7 +683,6 @@ static void nuvoton_aes_cra_exit(struct crypto_tfm *tfm)
 #endif
 }
 
-
 static struct skcipher_alg nuvoton_aes_algs[] = {
 {
 	.base.cra_name		= "cbc(aes)",
@@ -905,8 +904,7 @@ static int nuvoton_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 		/* configure AES Key from Key Store */
 		u8  *key = (u8 *)ctx->aes_key;
 
-		nu_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2],
-				AES_KSCTL);
+		nu_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
 	} else {
 		/* program AES key */
 		nu_write_reg(dd, 0, AES_KSCTL);
@@ -922,8 +920,7 @@ static int nuvoton_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 	for (i = 0; i < 4; i++)
 		nu_write_reg(dd, 0, AES_IV(i));
 
-	nu_write_reg(dd, nu_read_reg(dd, INTEN) | (INTEN_AESIEN |
-			INTEN_AESEIEN), INTEN);
+	nu_write_reg(dd, nu_read_reg(dd, INTEN) | (INTEN_AESIEN | INTEN_AESEIEN), INTEN);
 	nu_write_reg(dd, 0, AES_CTL);
 	nu_write_reg(dd, (INTSTS_AESIF | INTSTS_AESEIF), INTSTS);
 
@@ -1271,8 +1268,7 @@ static int nuvoton_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 		/* configure AES Key from Key Store */
 		u8  *key = (u8 *)ctx->aes_key;
 
-		nu_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2],
-				AES_KSCTL);
+		nu_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
 	} else {
 		/* program AES key */
 		nu_write_reg(dd, 0, AES_KSCTL);
@@ -1280,8 +1276,7 @@ static int nuvoton_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 			nu_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
 	}
 
-	nu_write_reg(dd, nu_read_reg(dd, INTEN) | (INTEN_AESIEN |
-			INTEN_AESEIEN), INTEN);
+	nu_write_reg(dd, nu_read_reg(dd, INTEN) | (INTEN_AESIEN | INTEN_AESEIEN), INTEN);
 	nu_write_reg(dd, 0, AES_CTL);
 	nu_write_reg(dd, (INTSTS_AESIF | INTSTS_AESEIF), INTSTS);
 
@@ -1453,10 +1448,8 @@ static void nuvoton_aes_done_task(unsigned long data)
 {
 	struct nu_aes_dev *dd = (struct nu_aes_dev *)data;
 
-	dma_unmap_single(dd->dev, dd->dma_inbuf, AES_BUFF_SIZE,
-				DMA_TO_DEVICE);
-	dma_unmap_single(dd->dev, dd->dma_outbuf, AES_BUFF_SIZE,
-				DMA_FROM_DEVICE);
+	dma_unmap_single(dd->dev, dd->dma_inbuf, AES_BUFF_SIZE, DMA_TO_DEVICE);
+	dma_unmap_single(dd->dev, dd->dma_outbuf, AES_BUFF_SIZE, DMA_FROM_DEVICE);
 
 	(void)dd->resume(dd, 0);
 }
@@ -1480,13 +1473,12 @@ static int nuvoton_register_gcm_ccm(struct device *dev)
 	/*
 	 *  Register AES CCM algorithms
 	 */
-	err = crypto_register_aeads(nuvoton_aes_ccm_alg,
-					ARRAY_SIZE(nuvoton_aes_ccm_alg));
+	err = crypto_register_aeads(nuvoton_aes_ccm_alg, ARRAY_SIZE(nuvoton_aes_ccm_alg));
 	if (err) {
 		for (i = 0; i < ARRAY_SIZE(nuvoton_aes_algs); i++)
 			crypto_unregister_skcipher(&nuvoton_aes_algs[i]);
-		crypto_unregister_aeads(nuvoton_aes_gcm_alg,
-					ARRAY_SIZE(nuvoton_aes_gcm_alg));
+
+		crypto_unregister_aeads(nuvoton_aes_gcm_alg, ARRAY_SIZE(nuvoton_aes_gcm_alg));
 		dev_err(dev, "Could not register nuvoton_aes_ccm_algs!\n");
 		return err;
 	}
@@ -1505,29 +1497,30 @@ int nuvoton_aes_probe(struct device *dev,
 	aes_dd->octx = NULL;
 
 #ifdef CONFIG_OPTEE
-	/*
-	 * Open AES context with TEE driver
-	 */
-	aes_dd->octx = tee_client_open_context(NULL, optee_ctx_match,
-					       NULL, NULL);
-	if (IS_ERR(aes_dd->octx))
-		return 0; /* TEE is not ready, do not use H/W AES */
+	if (nu_cryp_dev->use_optee == true) {
+		/*
+		 * Open AES context with TEE driver
+		 */
+		aes_dd->octx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
+		if (IS_ERR(aes_dd->octx))
+			return 0; /* TEE is not ready, do not use H/W AES */
 
-	/*
-	 * Allocate handshake buffer from OP-TEE share memory
-	 */
-	aes_dd->shm_pool = tee_shm_alloc(aes_dd->octx, CRYPTO_SHM_SIZE,
-					 TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
-	if (IS_ERR(aes_dd->shm_pool)) {
-		pr_err("%s tee_shm_alloc failed\n", __func__);
-		return -EINVAL;
-	}
+		/*
+		 * Allocate handshake buffer from OP-TEE share memory
+		 */
+		aes_dd->shm_pool = tee_shm_alloc(aes_dd->octx, CRYPTO_SHM_SIZE,
+						 TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+		if (IS_ERR(aes_dd->shm_pool)) {
+			pr_err("%s tee_shm_alloc failed\n", __func__);
+			return -EINVAL;
+		}
 
-	aes_dd->va_shm = tee_shm_get_va(aes_dd->shm_pool, 0);
-	if (IS_ERR(aes_dd->va_shm)) {
-		tee_shm_free(aes_dd->shm_pool);
-		pr_err("%s tee_shm_get_va failed\n", __func__);
-		return -EINVAL;
+		aes_dd->va_shm = tee_shm_get_va(aes_dd->shm_pool, 0);
+		if (IS_ERR(aes_dd->va_shm)) {
+			tee_shm_free(aes_dd->shm_pool);
+			pr_err("%s tee_shm_get_va failed\n", __func__);
+			return -EINVAL;
+		}
 	}
 #endif
 
@@ -1544,7 +1537,6 @@ int nuvoton_aes_probe(struct device *dev,
 	spin_lock(&nu_aes.lock);
 	list_add_tail(&aes_dd->list, &nu_aes.dev_list);
 	spin_unlock(&nu_aes.lock);
-
 
 	/*
 	 *  Register AES/SM4 algorithms
@@ -1576,8 +1568,7 @@ err_algs:
 	return err;
 }
 
-int nuvoton_aes_remove(struct device *dev,
-		       struct nu_crypto_dev *nu_cryp_dev)
+int nuvoton_aes_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_aes_dev  *aes_dd = &nu_cryp_dev->aes_dd;
 	int i;
@@ -1588,10 +1579,8 @@ int nuvoton_aes_remove(struct device *dev,
 	for (i = 0; i < ARRAY_SIZE(nuvoton_aes_algs); i++)
 		crypto_unregister_skcipher(&nuvoton_aes_algs[i]);
 
-	crypto_unregister_aeads(nuvoton_aes_gcm_alg,
-				ARRAY_SIZE(nuvoton_aes_gcm_alg));
-	crypto_unregister_aeads(nuvoton_aes_ccm_alg,
-				ARRAY_SIZE(nuvoton_aes_ccm_alg));
+	crypto_unregister_aeads(nuvoton_aes_gcm_alg, ARRAY_SIZE(nuvoton_aes_gcm_alg));
+	crypto_unregister_aeads(nuvoton_aes_ccm_alg, ARRAY_SIZE(nuvoton_aes_ccm_alg));
 
 	spin_lock(&nu_aes.lock);
 	list_del(&aes_dd->list);
@@ -1606,5 +1595,3 @@ int nuvoton_aes_remove(struct device *dev,
 #endif
 	return 0;
 }
-
-
