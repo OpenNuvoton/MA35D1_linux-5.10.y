@@ -118,7 +118,7 @@
 			no-map;
 		};
 		rpmsg_buf: rpmsg_buf@0 {
-			reg = <0x0 0x80080000 0x0 0x8000>; /* maximun tx+rx 16+16KB */
+			reg = <0x0 0x84000000 0x0 0x8000>; /* maximun tx+rx 16+16KB */
 			no-map;
 		};
 	};
