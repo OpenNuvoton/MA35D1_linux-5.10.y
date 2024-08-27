@@ -304,10 +304,10 @@ static int ma35d1_keypad_probe(struct platform_device *pdev)
 	of_property_read_u32(pdev->dev.of_node, "debounce-period",
 									&(keypad->debounce_val));
 
-	of_property_read_u32(pdev->dev.of_node, "per-scale",
+	of_property_read_u32(pdev->dev.of_node, "pre-scale",
 									&(keypad->pre_scale));
 
-	of_property_read_u32(pdev->dev.of_node, "per-scalediv",
+	of_property_read_u32(pdev->dev.of_node, "pre-scalediv",
 									&(keypad->pre_scale_divider));
 
 	__set_bit(EV_REP, input_dev->evbit);
