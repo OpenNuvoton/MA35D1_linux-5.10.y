@@ -168,7 +168,8 @@ static void dwmac1000_set_filter(struct mac_device_info *hw,
 		value = GMAC_FRAME_FILTER_PM;	/* pass all multi */
 	} else if (!netdev_mc_empty(dev) && (mcbitslog2 == 0)) {
 		/* Fall back to all multicast if we've no filter */
-		value = GMAC_FRAME_FILTER_PM;
+		if (dev->flags & IFF_MULTICAST)
+			value = GMAC_FRAME_FILTER_PM;
 	} else if (!netdev_mc_empty(dev)) {
 		struct netdev_hw_addr *ha;
 

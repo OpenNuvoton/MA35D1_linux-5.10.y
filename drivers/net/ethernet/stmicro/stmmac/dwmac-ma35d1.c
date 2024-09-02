@@ -131,6 +131,7 @@ static int nvt_gmac_probe(struct platform_device *pdev)
 
 	plat_dat->has_gmac = 1;
 	plat_dat->pmt = 1;
+	plat_dat->multicast_filter_bins = 0;
 
 	plat_dat->bsp_priv = nvt_gmac_setup(pdev, plat_dat);
 	if (IS_ERR(plat_dat->bsp_priv)) {
