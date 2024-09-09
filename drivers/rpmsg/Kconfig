@@ -28,6 +28,19 @@ config MA35D1_RPMSG
 	  providing communication channels to remote processors in MA35D1
 	  platforms.
 
+config MA35_AMP
+	tristate "MA35 series AMP Driver"
+	depends on (ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0)
+	select RPMSG
+	select RPMSG_CHAR
+    	select MA35D1_TIMER if ARCH_MA35D1
+    	select MA35D0_TIMER if ARCH_MA35D0
+    	select MA35H0_TIMER if ARCH_MA35H0
+	help
+	  Say y here to enable support for the MA35 series AMP Driver
+	  providing communication channels to remote processors in MA35
+	  platforms.
+
 config RPMSG_MTK_SCP
 	tristate "MediaTek SCP"
 	depends on MTK_SCP

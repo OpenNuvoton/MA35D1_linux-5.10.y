@@ -121,6 +121,10 @@
 			reg = <0x0 0x84000000 0x0 0x8000>; /* maximun tx+rx 16+16KB */
 			no-map;
 		};
+		amp_buf: amp_buf@0 {
+			reg = <0x0 0x8A000000 0x0 0x20000>; /* 128KB for amp shared memory */
+			no-map;
+		};
 	};
 
 	timer {
@@ -706,6 +710,14 @@
 		/* rpmsg-ddr-buf; */
 		/* memory-region = <&rpmsg_buf>; */
 		status = "okay";
+	};
+
+	amp: amp {
+		compatible = "nuvoton,ma35-amp";
+		memory-region = <&amp_buf>;
+		rxipi = <&timer8>;
+		txipi = <&timer9>;
+		status = "disable";
 	};
 
 	gmac0: ethernet@40120000 {

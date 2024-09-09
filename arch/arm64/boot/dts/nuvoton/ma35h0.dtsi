@@ -479,15 +479,6 @@
 		status = "okay";
 	};
 
-	rpmsg {
-		compatible = "nuvoton,ma35h0-rpmsg";
-		share-mem-addr = <0x2401ff00>;
-		mboxes = <&wormhole 2>;
-		tx-smem-size = <128>;
-		rx-smem-size = <128>;
-		status = "okay";
-	};
-
 	emac0: ethernet@40120000 {
 		compatible = "nuvoton,ma35h0-emac";
 		reg = <0x0 0x40120000 0x0 0x10000>;

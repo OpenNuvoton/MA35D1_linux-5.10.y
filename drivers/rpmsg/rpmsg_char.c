@@ -77,6 +77,7 @@ struct rpmsg_eptdev {
 	struct sk_buff_head queue;
 	wait_queue_head_t readq;
 };
+unsigned int qtoeptdev = offsetof(struct rpmsg_eptdev, queue);
 
 static int rpmsg_eptdev_destroy(struct device *dev, void *data)
 {
@@ -341,7 +342,7 @@ static int rpmsg_eptdev_create(struct rpmsg_ctrldev *ctrldev,
 	struct rpmsg_device *rpdev = ctrldev->rpdev;
 	struct rpmsg_eptdev *eptdev;
 	struct device *dev;
-	int ret;
+	int ret, ret1;
 
 	eptdev = kzalloc(sizeof(*eptdev), GFP_KERNEL);
 	if (!eptdev)
@@ -376,9 +377,11 @@ static int rpmsg_eptdev_create(struct rpmsg_ctrldev *ctrldev,
 	dev->id = ret;
 	dev_set_name(dev, "rpmsg%d", ret);
 
-	ret = cdev_device_add(&eptdev->cdev, &eptdev->dev);
-	if (ret)
+	ret1 = cdev_device_add(&eptdev->cdev, &eptdev->dev);
+	if (ret1) {
+		ret = ret1;
 		goto free_ept_ida;
+	}
 
 	/* We can now rely on the release function for cleanup */
 	dev->release = rpmsg_eptdev_release_device;
