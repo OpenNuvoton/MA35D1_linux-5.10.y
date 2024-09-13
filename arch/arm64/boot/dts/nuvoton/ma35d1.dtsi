@@ -29,6 +29,7 @@
 	aliases {
 		ethernet0 = &gmac0;
 		ethernet1 = &gmac1;
+		i2c0 = &i2c2;
 	};
 
 	cpus {
