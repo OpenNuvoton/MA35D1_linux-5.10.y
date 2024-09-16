@@ -891,9 +891,13 @@ static int ma35d1serial_startup(struct uart_port *port)
 	/* Clear pending interrupts */
 	serial_out(up, UART_REG_ISR, 0xFFFFFFFF);
 
+#ifdef CONFIG_PREEMPT_RT
+	retval = request_irq(port->irq, ma35d1serial_interrupt, IRQF_ONESHOT,
+						tty ? tty->name : "ma35d1_serial", port);
+#else
 	retval = request_irq(port->irq, ma35d1serial_interrupt, 0,
 						tty ? tty->name : "ma35d1_serial", port);
-
+#endif
 	if (retval) {
 		dev_err(up->port.dev, "request irq failed.\n");
 		return retval;
