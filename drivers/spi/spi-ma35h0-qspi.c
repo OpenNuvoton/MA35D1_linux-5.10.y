@@ -12,6 +12,7 @@
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/spi/spi.h>
@@ -117,7 +118,11 @@ struct nuvoton_spi {
 	struct spi_master               *master;
 	struct device                   *dev;
 	struct nuvoton_qspi_info	*pdata;
+#ifdef CONFIG_PREEMPT_RT
+	struct mutex                    lock;
+#else
 	spinlock_t                      lock;
+#endif
 	struct resource                 *res;
 	struct ma35h0_dma_done          dma_slave_rxdone;
 	struct ma35h0_dma_done          dma_slave_txdone;
@@ -336,8 +341,11 @@ static int nuvoton_spi_setupxfer(struct spi_device *spi)
 
 static void nuvoton_spi_hw_init(struct nuvoton_spi *hw)
 {
+#ifdef CONFIG_PREEMPT_RT
+	mutex_init(&hw->lock);
+#else
 	spin_lock_init(&hw->lock);
-
+#endif
 	if (hw->pdata->spimode & SPI_CPOL)
 		hw->pdata->clkpol = 1;
 	else
@@ -822,12 +830,15 @@ static int nuvoton_spi_mem_exec_op(struct spi_mem *mem,
 					const struct spi_mem_op *op)
 {
 	struct nuvoton_spi *nuvoton = spi_master_get_devdata(mem->spi->master);
-	unsigned long flags;
 	int i, ret;
 	u8 addr[8];
 
+#ifdef CONFIG_PREEMPT_RT
+	mutex_lock(&nuvoton->lock);
+#else
+	unsigned long flags;
 	spin_lock_irqsave(&nuvoton->lock, flags);
-
+#endif
 	ret = nuvoton_spi_set_freq(nuvoton, mem->spi->max_speed_hz);
 	if (ret) {
 		printk("nuvoton_spi_set_freq failed!\n");
@@ -889,8 +900,11 @@ out:
 
 	nuvoton_spi_set_cs(mem->spi, 1); //Deactivate CS
 
+#ifdef CONFIG_PREEMPT_RT
+	mutex_unlock(&nuvoton->lock);
+#else
 	spin_unlock_irqrestore(&nuvoton->lock, flags);
-
+#endif
 	return ret;
 }
 
