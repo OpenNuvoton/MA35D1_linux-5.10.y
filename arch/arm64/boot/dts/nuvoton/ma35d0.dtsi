@@ -115,7 +115,7 @@
 		#size-cells = <2>;
 		ranges;
 		amp_buf: amp_buf@0 {
-			reg = <0x0 0x8A000000 0x0 0x20000>; /* 128KB for amp shared memory */
+			reg = <0x0 0x84008000 0x0 0x20000>; /* 128KB for amp shared memory */
 			no-map;
 		};
 	};

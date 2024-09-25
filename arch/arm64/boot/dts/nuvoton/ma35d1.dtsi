@@ -123,7 +123,7 @@
 			no-map;
 		};
 		amp_buf: amp_buf@0 {
-			reg = <0x0 0x8A000000 0x0 0x20000>; /* 128KB for amp shared memory */
+			reg = <0x0 0x84008000 0x0 0x20000>; /* 128KB for amp shared memory */
 			no-map;
 		};
 	};
@@ -718,7 +718,7 @@
 		memory-region = <&amp_buf>;
 		rxipi = <&timer8>;
 		txipi = <&timer9>;
-		status = "disable";
+		status = "disabled";
 	};
 
 	gmac0: ethernet@40120000 {
