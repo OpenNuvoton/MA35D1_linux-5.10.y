@@ -125,8 +125,10 @@ static int nvt_emac_probe(struct platform_device *pdev)
 		return PTR_ERR(plat_dat);
 
 	plat_dat->has_gmac = 1;
-	plat_dat->pmt = 1;
+	plat_dat->tx_fifo_size = 2048;
+	plat_dat->rx_fifo_size = 4096;
 	plat_dat->multicast_filter_bins = 0;
+	plat_dat->unicast_filter_entries = 8;
 
 	plat_dat->bsp_priv = nvt_emac_setup(pdev, plat_dat);
 	if (IS_ERR(plat_dat->bsp_priv)) {
@@ -137,6 +139,11 @@ static int nvt_emac_probe(struct platform_device *pdev)
 	ret = stmmac_dvr_probe(&pdev->dev, plat_dat, &stmmac_res);
 	if (ret)
 		goto err_remove_config_dt;
+
+	/* We support WoL by magic packet, override pmt to make it work! */
+	plat_dat->pmt = 1;
+	dev_info(&pdev->dev, "Wake-Up On Lan supported\n");
+	device_set_wakeup_capable(&pdev->dev, 1);
 
 	return 0;
 
