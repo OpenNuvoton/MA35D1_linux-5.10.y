@@ -41,6 +41,7 @@
 #define SDRAM_AUTOREF_DISABLE	0x1382
 #define FORCE_CHIP_RESET	0x1401
 #define GET_BL2_OFFSET		0x1501
+#define GET_REGISTER		0x1511
 
 struct ma35d1_misctrl {
 	int minor;
@@ -127,6 +128,10 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 
 	case GET_BL2_OFFSET:
 		arm_smccc_smc(MA35D1_SIP_BL2_OFFSET, 0, 0, 0, 0, 0, 0, 0, &res);
+		return res.a0;
+
+	case GET_REGISTER:
+		arm_smccc_smc(MA35D1_SIP_GET_REGISTER, arg, 0, 0, 0, 0, 0, 0, &res);
 		return res.a0;
 
 	default:

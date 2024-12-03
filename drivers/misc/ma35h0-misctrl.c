@@ -38,6 +38,7 @@
 #define SDRAM_AUTOREF_ENABLE	0x1381
 #define SDRAM_AUTOREF_DISABLE	0x1382
 #define FORCE_CHIP_RESET	0x1401
+#define GET_REGISTER		0x1511
 
 struct ma35h0_misctrl {
 	int minor;
@@ -113,6 +114,10 @@ static long ma35h0_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 	case FORCE_CHIP_RESET:
 		arm_smccc_smc(MA35H0_SIP_CHIP_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
 		break;
+
+	case GET_REGISTER:
+		arm_smccc_smc(MA35H0_SIP_GET_REGISTER, arg, 0, 0, 0, 0, 0, 0, &res);
+		return res.a0;
 
 	default:
 		return -EINVAL;
