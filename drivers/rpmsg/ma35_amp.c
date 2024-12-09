@@ -78,6 +78,8 @@ struct ma35_rpmsg_priv {
 	spinlock_t lock;
 	struct task_struct *bdthread;
 	wait_queue_head_t bd_event;
+	struct delayed_work dwork;
+	u32 resumeflow;
 
 	// desc
 	u32 desc_num;
@@ -440,6 +442,7 @@ static int ma35_request_tx_desc(struct rpmsg_endpoint *ept, struct rpmsg_channel
 	// desc get, waiting to be binded by remote
 	desc = ept_priv->pDesc;
 	desc->CMD = VRING_DESC_CMD_CLAIM;
+	desc->STS = 0;
 	strncpy((char *)desc + rpmsg_priv->ns_offset, chinfo.name, rpmsg_priv->ns_size);
 
 	return ret;
@@ -618,7 +621,7 @@ static struct rpmsg_endpoint *ma35_rpmsg_create_ept(struct rpmsg_device *rpdev, 
 
 	rpmsg_priv = ma35_rpdev->rpmsg_priv;
 
-	if (!rpmsg_priv->ready) {
+	if (!rpmsg_priv->ready || rpmsg_priv->resumeflow) {
 		dev_err(&rpmsg_priv->dev, "Parse remote failed.\n");
 		return NULL;
 	}
@@ -974,6 +977,9 @@ static int ma35_rsc_table_parser(struct ma35_rpmsg_priv *priv, struct device_nod
 	struct fw_rsc_vdev *rsc_vdev;
 	struct fw_rsc_vdev_vring *vring0, *vring1;
 
+	if(priv->ready)
+		goto resu;
+
 	rsc_table = (struct resource_table *)priv->shmem_base;
 	if(rsc_table->ver != DRIVER_VERSION || rsc_table->num != 1) {
 		dev_err(&priv->dev, "Nuvoton AMP version not match %d\n\n", rsc_table->ver);
@@ -1020,12 +1026,14 @@ static int ma35_rsc_table_parser(struct ma35_rpmsg_priv *priv, struct device_nod
 			rsc_table->ver, priv->shmem_tx_size >> 10, priv->shmem_rx_size >> 10, priv->ns_size);
 	}
 
-	ma35_rsc_table_update(priv);
-	rsc_table->reserved[0] = 0;
-
-	ma35_desc_init(priv);
 	spin_lock_init(&priv->lock);
 	priv->ready = 1;
+resu:
+	ma35_rsc_table_update(priv);
+	rsc_table->reserved[0] = 0;
+	ma35_desc_init(priv);
+	if (priv->resumeflow)
+		priv->resumeflow = 0;
 
 	return 0;
 err:
@@ -1240,6 +1248,53 @@ static int ma35_rpmsg_remove(struct platform_device *pdev)
 	return ret;
 }
 
+static int ma35_rpmsg_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	return 0;
+}
+
+static void periodic_work_handler(struct work_struct *work)
+{
+	struct ma35_rpmsg_priv *rpmsg_priv = container_of(to_delayed_work(work), struct ma35_rpmsg_priv, dwork);
+	struct resource_table *rsc_table;
+
+	rsc_table = (struct resource_table *)rpmsg_priv->shmem_base;
+	if(rpmsg_priv->resumeflow) {
+		rsc_table->reserved[1] = IPI_CMD_REQUEST;
+		ma35_rpmsg_notify_remote(rpmsg_priv);
+		schedule_delayed_work(&rpmsg_priv->dwork, msecs_to_jiffies(500));
+	} else {
+		cancel_delayed_work(&rpmsg_priv->dwork);
+	}
+}
+
+static int ma35_rpmsg_resume_priv(struct device *dev, void *data)
+{
+	struct ma35_rpmsg_priv *rpmsg_priv;
+	struct delayed_work *dwork;
+
+	rpmsg_priv = to_ma35_rpmsg_priv(dev);
+	if (rpmsg_priv && rpmsg_priv->ready) {
+		rpmsg_priv->resumeflow = IPI_CMD_REQUEST; // start resume flow
+		dwork = &rpmsg_priv->dwork;
+		INIT_DELAYED_WORK(dwork, periodic_work_handler);
+		schedule_delayed_work(dwork, msecs_to_jiffies(500)); // issue delay work
+	}
+
+	return 0;
+}
+
+static int ma35_rpmsg_resume(struct platform_device *pdev)
+{
+	int ret;
+
+	ret = device_for_each_child(&pdev->dev, NULL, ma35_rpmsg_resume_priv);
+	if (ret)
+		dev_warn(&pdev->dev, "Reset remote core failed: %d\n", ret);
+
+	return ret;
+}
+
 static const struct of_device_id ma35_amp_of_match[] = {
 	{ .compatible = "nuvoton,ma35-amp" },
 	{}
@@ -1249,6 +1304,8 @@ MODULE_DEVICE_TABLE(of, ma35_amp_of_match);
 static struct platform_driver ma35_rpmsg_driver = {
 	.probe = ma35_rpmsg_probe,
 	.remove = ma35_rpmsg_remove,
+	.suspend = ma35_rpmsg_suspend,
+	.resume = ma35_rpmsg_resume,
 	.driver = {
 		.name = "ma35-amp",
 		.of_match_table = ma35_amp_of_match,
