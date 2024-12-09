@@ -365,13 +365,13 @@ static int nvt_gpio_core_direction_out(struct gpio_chip *gc,
 	struct nvt_pin_bank *bank = gpiochip_get_data(gc);
 	void __iomem *base = bank->reg_base;
 
+	spin_lock_irqsave(&bank->lock, flags);
 	value = readl(base + GPIO_DOUT);
 	if (val)
 		writel(value|(1<<gpio_num), base + GPIO_DOUT);
 	else
 		writel(value&~(1<<gpio_num), base + GPIO_DOUT);
 
-	spin_lock_irqsave(&bank->lock, flags);
 	value = readl(base + GPIO_MODE);
 	value &= ~GPIO_SET_MODE(gpio_num, GPIO_MODE_QUASI);
 	value |= GPIO_SET_MODE(gpio_num, GPIO_MODE_OUTPUT);
