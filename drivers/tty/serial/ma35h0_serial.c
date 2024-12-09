@@ -891,17 +891,16 @@ static int ma35h0serial_startup(struct uart_port *port)
 	/* Clear pending interrupts */
 	serial_out(up, UART_REG_ISR, 0xFFFFFFFF);
 
-#ifdef CONFIG_PREEMPT_RT
-	retval = request_irq(port->irq, ma35h0serial_interrupt, IRQF_ONESHOT,
-						tty ? tty->name : "ma35h0_serial", port);
-#else
+	spin_unlock_irqrestore(&up->port.lock, flags);
+
 	retval = request_irq(port->irq, ma35h0serial_interrupt, 0,
 						tty ? tty->name : "ma35h0_serial", port);
-#endif
 	if (retval) {
 		dev_err(up->port.dev, "request irq failed.\n");
 		return retval;
 	}
+
+	spin_lock_irqsave(&up->port.lock, flags);
 
 	/* Now, initialize the UART */
 	/* FIFO trigger level 4 byte */

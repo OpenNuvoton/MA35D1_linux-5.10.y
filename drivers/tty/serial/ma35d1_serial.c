@@ -891,17 +891,17 @@ static int ma35d1serial_startup(struct uart_port *port)
 	/* Clear pending interrupts */
 	serial_out(up, UART_REG_ISR, 0xFFFFFFFF);
 
-#ifdef CONFIG_PREEMPT_RT
-	retval = request_irq(port->irq, ma35d1serial_interrupt, IRQF_ONESHOT,
-						tty ? tty->name : "ma35d1_serial", port);
-#else
+	spin_unlock_irqrestore(&up->port.lock, flags);
+
 	retval = request_irq(port->irq, ma35d1serial_interrupt, 0,
 						tty ? tty->name : "ma35d1_serial", port);
-#endif
+
 	if (retval) {
 		dev_err(up->port.dev, "request irq failed.\n");
 		return retval;
 	}
+
+	spin_lock_irqsave(&up->port.lock, flags);
 
 	/* Now, initialize the UART */
 	/* FIFO trigger level 4 byte */
@@ -1254,6 +1254,7 @@ static void ma35d1serial_console_putchar(struct uart_port *port, int ch)
 
 	do {
 	} while (!(serial_in(up, UART_REG_FSR) & TX_EMPTY));
+
 	serial_out(up, UART_REG_THR, ch);
 }
 
@@ -1286,6 +1287,7 @@ static void ma35d1serial_console_write(struct console *co, const char *s,
 	 */
 	do {
 	} while (!(serial_in(up, UART_REG_FSR) & TX_EMPTY));
+
 	serial_out(up, UART_REG_IER, ier);
 
 	spin_unlock_irqrestore(&up->port.lock, flags);
