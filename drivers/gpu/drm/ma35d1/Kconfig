@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config DRM_MA35D1
+	tristate "DRM Support for MA35D1 SoC LCD display controller"
+	depends on DRM && OF
+	depends on COMMON_CLK
+        select DRM_GEM_CMA_HELPER
+        select DRM_KMS_CMA_HELPER
+	select DRM_KMS_HELPER
+	help
+	  Enable DRM support for MA35D1 SoC LCD display controller
+
+	  If M is selected the module will be called ma35d1_drm.

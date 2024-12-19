@@ -368,6 +368,8 @@ source "drivers/gpu/drm/zte/Kconfig"
 
 source "drivers/gpu/drm/mxsfb/Kconfig"
 
+source "drivers/gpu/drm/ma35d1/Kconfig"
+
 source "drivers/gpu/drm/meson/Kconfig"
 
 source "drivers/gpu/drm/tiny/Kconfig"
