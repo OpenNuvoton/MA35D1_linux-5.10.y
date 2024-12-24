@@ -1739,7 +1739,7 @@
 		status = "disabled";
 	};
 
-	display_drm: display-drm@40260000 {
+	display: display@40260000 {
 		compatible = "nuvoton,ma35d1-drm";
 		reg = <0x0 0x40260000 0x0 0x2000>;
 		interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
