@@ -1,7 +1,7 @@
 /*
- *  linux/drivers/rpmsg/ma35_amp.c
+ *  linux/drivers/rpmsg/ma35d1_ampm.c
  *
- *  MA35 series AMP-A driver
+ *  MA35D1 AMP-M driver
  *
  *  Copyright (C) 2024 Nuvoton Technology Corp.
  *
@@ -34,6 +34,7 @@
 #include <linux/workqueue.h>
 #include <linux/delay.h>
 #include <linux/skbuff.h>
+#include <linux/hwspinlock.h>
 #include <linux/remoteproc.h>
 #include "rpmsg_internal.h"
 
@@ -67,9 +68,11 @@ struct ma35_rpmsg_priv {
 
 	/* Tx IPI */
 	u32 ipi_txch;
+	struct hwspinlock *txhwspin;
 	void __iomem *ipi_txbase;
 	/* Rx IPI */
 	u32 ipi_rxch;
+	struct hwspinlock *rxhwspin;
 	void __iomem *ipi_rxbase;
 	int irq_num;
 
@@ -172,16 +175,15 @@ struct ma35_rpmsg_endpoint {
 
 #define IPI_CMD_REQUEST        0x10
 #define IPI_CMD_REPLY          0x11
+#define IPI_CMD_RELOAD         0x12
 #define IPI_CMD_MODIFY         0x20
 #define IPI_CMD_UPDATE         0x22
 
-#define IPI_REG_CTL            0x0
-#define IPI_REG_CMP            0x4
-#define IPI_REG_INTSTS         0x8
-
-#define IPI_CTL_INTEN          (0x1 << 29)
-#define IPI_CTL_CNTEN          (0x1 << 30)
-#define IPI_INTSTS_TIF         (0x1 << 0)
+#define IPI_REG_CTL            0x00
+#define IPI_REG_INTENA35       0x04 // A35 R/W, CM4 R
+#define IPI_REG_INTENM4        0x08 // A35 R, CM4 R/W
+#define IPI_REG_INTSTSA35      0x0C // A35 R/W, CM4 R
+#define IPI_REG_INTSTSM4       0x10 // A35 R, CM4 R/W
 
 #define EPT_TYPE_TX            0x01
 #define EPT_TYPE_RX            0x10
@@ -208,13 +210,21 @@ static irqreturn_t ma35_rpmsg_ipi_isr(int irq, void *data)
 	rpmsg_priv = data;
 	rsc_table = (struct resource_table *)rpmsg_priv->shmem_base;
 
-	flag = readl_relaxed(rpmsg_priv->ipi_rxbase + IPI_REG_INTSTS) & IPI_INTSTS_TIF;
+	flag = readl_relaxed(rpmsg_priv->ipi_rxbase + IPI_REG_INTSTSA35) & (rpmsg_priv->ipi_rxch | rpmsg_priv->ipi_txch);
 	if (flag)
-		writel_relaxed(flag, rpmsg_priv->ipi_rxbase + IPI_REG_INTSTS);
+		writel_relaxed(flag, rpmsg_priv->ipi_rxbase + IPI_REG_INTSTSA35);
+	else
+		return IRQ_HANDLED;
 
 	// check CMD
 	if (rsc_table->reserved[0] == IPI_CMD_REPLY) {
 		ma35_rsc_table_parser(rpmsg_priv, NULL);
+		return IRQ_HANDLED;
+	} else if (rsc_table->reserved[0] == IPI_CMD_RELOAD) {
+		if (!rpmsg_priv->resumeflow) {
+			rpmsg_priv->resumeflow = IPI_CMD_RELOAD;
+			schedule_delayed_work(&rpmsg_priv->dwork, msecs_to_jiffies(500));
+		}
 		return IRQ_HANDLED;
 	}
 
@@ -254,9 +264,27 @@ static irqreturn_t ma35_rpmsg_ipi_isr(int irq, void *data)
 /* send irq to remote */
 static int ma35_rpmsg_notify_remote(struct ma35_rpmsg_priv *rpmsg_priv)
 {
-	writel_relaxed((IPI_CTL_INTEN | IPI_CTL_CNTEN), rpmsg_priv->ipi_txbase + IPI_REG_CTL);
+	int ret;
+	struct resource_table *rsc_table;
 
-	return 0;
+	if(!(readl_relaxed(rpmsg_priv->ipi_txbase + IPI_REG_INTENM4) & rpmsg_priv->ipi_txch)) {
+		return -EACCES; // remote INT not enabled
+	}
+	if(readl_relaxed(rpmsg_priv->ipi_txbase + IPI_REG_INTSTSM4) & rpmsg_priv->ipi_txch) {
+		return -EBUSY; // remote busy
+	}
+
+	if(rpmsg_priv->resumeflow) {
+		rsc_table = (struct resource_table *)rpmsg_priv->shmem_base;
+		rsc_table->reserved[1] = IPI_CMD_REQUEST;
+	}
+
+	/* lock and unlock with IRQ disabled for fastest signal */
+	ret = __hwspin_trylock(rpmsg_priv->txhwspin, HWLOCK_IRQ, NULL);
+	if(!ret)
+		__hwspin_unlock(rpmsg_priv->txhwspin, HWLOCK_IRQ, NULL);
+
+	return ret;
 }
 
 static int ma35_rpmsg_ns_bind_remote(struct rpmsg_endpoint *ept, char *ns, bool wait)
@@ -991,7 +1019,7 @@ static int ma35_rsc_table_parser(struct ma35_rpmsg_priv *priv, struct device_nod
 	}
 	vring0 = (struct fw_rsc_vdev_vring *)(priv->shmem_base + rsc_table->offset[1]);
 	vring1 = (struct fw_rsc_vdev_vring *)(priv->shmem_base + rsc_table->offset[2]);
-	if(vring0->notifyid != 1 || vring1->notifyid != 2) {
+	if(vring0->notifyid != 3 || vring1->notifyid != 4) {
 		dev_err(&priv->dev, "notifyid: %d %d\n", vring0->notifyid, vring1->notifyid);
 		goto err;
 	}
@@ -1019,7 +1047,7 @@ static int ma35_rsc_table_parser(struct ma35_rpmsg_priv *priv, struct device_nod
 		goto err;
 	}
 	else {
-		dev_info(&priv->dev, "AMPv%d with Tx/Rx shmem %d/%d KiB, naming space %d letters.\n",
+		dev_info(&priv->dev, "AMP-Mv%d with Tx/Rx shmem %d/%d KiB, naming space %d letters.\n",
 			rsc_table->ver, priv->shmem_tx_size >> 10, priv->shmem_rx_size >> 10, priv->ns_size);
 	}
 
@@ -1038,44 +1066,56 @@ err:
 	return -1;
 }
 
+static void periodic_work_handler(struct work_struct *work)
+{
+	struct ma35_rpmsg_priv *rpmsg_priv = container_of(to_delayed_work(work), struct ma35_rpmsg_priv, dwork);
+
+	if(rpmsg_priv->resumeflow) {
+		ma35_rpmsg_notify_remote(rpmsg_priv);
+		schedule_delayed_work(&rpmsg_priv->dwork, msecs_to_jiffies(1000));
+	} else {
+		cancel_delayed_work(&rpmsg_priv->dwork);
+	}
+}
+
 static int ma35_ipi_register(struct ma35_rpmsg_priv *rpmsg_priv, struct device_node *node)
 {
 	struct device *dev = &rpmsg_priv->dev;
-	struct device_node *ipi_np, *node1;
+	struct device_node *node1;
+	struct of_phandle_args ipi_np;
 	struct resource r;
-	struct resource_table *rsc_table;
 	u64 base;
 	u32 size, ch[2];
 	int irq_num, ret;
 
-	/* register rx IPI, default is timer8 */
-	ipi_np = of_parse_phandle(node, "rxipi", 0);
-	if (ipi_np) {
-		ret = of_address_to_resource(ipi_np, 0, &r);
+	/* register rx IPI, default is hwsem6 */
+	if (of_parse_phandle_with_args(node, "rxipi", "#hwsem-cells", 0, &ipi_np) == 0) {
+		ret = of_address_to_resource(ipi_np.np, 0, &r);
 		if (ret == 0) {
 			base = r.start;
 			size = resource_size(&r);
 		} else {
 			goto out2;
 		}
+		ch[0] = ipi_np.args[0];
 	} else {
 		goto out2;
 	}
 
-	if (of_property_read_u32_array(ipi_np, "port-number", ch, 1) != 0) {
-		pr_err("%s can not get port-number from timer!\n", __func__);
-		return -EINVAL;
-	}
-	rpmsg_priv->ipi_rxch = ch[0];
+	rpmsg_priv->ipi_rxch = BIT(ch[0]);
 	rpmsg_priv->ipi_rxbase = ioremap(base, size);
 
-	/* clk init done in tmr driver */
-	writel_relaxed(0x2, rpmsg_priv->ipi_rxbase + IPI_REG_CMP); // fastest
-	writel_relaxed(IPI_CTL_INTEN, rpmsg_priv->ipi_rxbase + IPI_REG_CTL); // INTEN
-	writel_relaxed(readl_relaxed(rpmsg_priv->ipi_rxbase + IPI_REG_INTSTS) & IPI_INTSTS_TIF,
-					rpmsg_priv->ipi_rxbase + IPI_REG_INTSTS); // clear
+	/* Request hwsem and enable IRQ for rx signal purpose */
+	rpmsg_priv->rxhwspin = devm_hwspin_lock_request_specific(dev, ch[0]); // reserved for remote
+	// writel_relaxed(rpmsg_priv->ipi_rxch, rpmsg_priv->ipi_rxbase + IPI_REG_CTL); // reset
+	writel_relaxed(readl_relaxed(rpmsg_priv->ipi_rxbase + IPI_REG_INTENA35) | rpmsg_priv->ipi_rxch,
+					rpmsg_priv->ipi_rxbase + IPI_REG_INTENA35); // INTEN
+	writel_relaxed(readl_relaxed(rpmsg_priv->ipi_rxbase + IPI_REG_INTSTSA35) & rpmsg_priv->ipi_rxch,
+					rpmsg_priv->ipi_rxbase + IPI_REG_INTSTSA35); // clear
 	/* request irq handler */
-	irq_num = of_irq_get(ipi_np, 0);
+	irq_num = of_irq_get(ipi_np.np, 0);
+	if (irq_num < 0)
+		goto out2;
 	if (devm_request_irq(dev, irq_num, ma35_rpmsg_ipi_isr,
 			IRQF_NO_SUSPEND, dev_name(dev), rpmsg_priv)) {
 		pr_debug("register irq failed %d\n", irq_num);
@@ -1084,32 +1124,27 @@ static int ma35_ipi_register(struct ma35_rpmsg_priv *rpmsg_priv, struct device_n
 	}
 	rpmsg_priv->irq_num = irq_num;
 
-	/* register tx IPI, default is timer9 */
-	ipi_np = of_parse_phandle(node, "txipi", 0);
-	if (ipi_np) {
-		ret = of_address_to_resource(ipi_np, 0, &r);
+	/* register tx IPI, default is hwsem7 */
+	if (of_parse_phandle_with_args(node, "txipi", "#hwsem-cells", 0, &ipi_np) == 0) {
+		ret = of_address_to_resource(ipi_np.np, 0, &r);
 		if (ret == 0) {
 			base = r.start;
 			size = resource_size(&r);
 		} else {
 			goto out1;
 		}
+		ch[1] = ipi_np.args[0];
 	} else {
 		goto out1;
 	}
 
-	if (of_property_read_u32_array(ipi_np, "port-number", ch, 1) != 0) {
-		pr_err("%s can not get port-number from timer!\n", __func__);
-		return -EINVAL;
-	}
-	rpmsg_priv->ipi_txch = ch[0];
+	rpmsg_priv->ipi_txch = BIT(ch[1]);
 	rpmsg_priv->ipi_txbase = ioremap(base, size);
 
-	/* clk init done in tmr driver */
-	writel_relaxed(0x2, rpmsg_priv->ipi_txbase + IPI_REG_CMP); // fastest
-	writel_relaxed(IPI_CTL_INTEN, rpmsg_priv->ipi_txbase + IPI_REG_CTL); // INTEN
-	writel_relaxed(readl_relaxed(rpmsg_priv->ipi_txbase + IPI_REG_INTSTS) & IPI_INTSTS_TIF,
-					rpmsg_priv->ipi_txbase + IPI_REG_INTSTS); // clear
+	/* Request hwsem tx signal purpose */
+	rpmsg_priv->txhwspin = devm_hwspin_lock_request_specific(dev, ch[1]);
+	// writel_relaxed(rpmsg_priv->ipi_txch, rpmsg_priv->ipi_txbase + IPI_REG_CTL); // reset
+	/* INTEN must be done by remote */
 	/* Irq handler requested by remote */
 
 	/* get shared momory region */
@@ -1119,7 +1154,7 @@ static int ma35_ipi_register(struct ma35_rpmsg_priv *rpmsg_priv, struct device_n
 		if (ret == 0) {
 			base = r.start;
 			size = resource_size(&r);
-			rpmsg_priv->shmem_base = memremap(base, size, MEMREMAP_WB);
+			rpmsg_priv->shmem_base = memremap(base, size, MEMREMAP_WC);
 			rpmsg_priv->shmem_size = size;
 		}
 	} else {
@@ -1129,10 +1164,10 @@ static int ma35_ipi_register(struct ma35_rpmsg_priv *rpmsg_priv, struct device_n
 
 	rpmsg_priv->node = node;
 
-	rsc_table = (struct resource_table *)rpmsg_priv->shmem_base;
-
-	rsc_table->reserved[1] = IPI_CMD_REQUEST;
-	ma35_rpmsg_notify_remote(rpmsg_priv);
+	rpmsg_priv->resumeflow = IPI_CMD_REQUEST;
+	/* start a periodic task to try to sync with remote */
+	INIT_DELAYED_WORK(&rpmsg_priv->dwork, periodic_work_handler);
+	schedule_delayed_work(&rpmsg_priv->dwork, msecs_to_jiffies(1000)); // issue delay work
 
 	dev_info(dev, "IPI device registered.\n");
 
@@ -1163,7 +1198,7 @@ static struct ma35_rpmsg_priv *ma35_rpmsg_register(struct device *parent, struct
 	rpmsg_priv->dev.release = ma35_rpmsg_release;
 	rpmsg_priv->dev.of_node = node;
 
-	dev_set_name(&rpmsg_priv->dev, "ma35-amp");
+	dev_set_name(&rpmsg_priv->dev, "ma35d1-ampm");
 
 	ret = device_register(&rpmsg_priv->dev);
 	if (ret) {
@@ -1250,21 +1285,6 @@ static int ma35_rpmsg_suspend(struct platform_device *pdev, pm_message_t state)
 	return 0;
 }
 
-static void periodic_work_handler(struct work_struct *work)
-{
-	struct ma35_rpmsg_priv *rpmsg_priv = container_of(to_delayed_work(work), struct ma35_rpmsg_priv, dwork);
-	struct resource_table *rsc_table;
-
-	rsc_table = (struct resource_table *)rpmsg_priv->shmem_base;
-	if(rpmsg_priv->resumeflow) {
-		rsc_table->reserved[1] = IPI_CMD_REQUEST;
-		ma35_rpmsg_notify_remote(rpmsg_priv);
-		schedule_delayed_work(&rpmsg_priv->dwork, msecs_to_jiffies(500));
-	} else {
-		cancel_delayed_work(&rpmsg_priv->dwork);
-	}
-}
-
 static int ma35_rpmsg_resume_priv(struct device *dev, void *data)
 {
 	struct ma35_rpmsg_priv *rpmsg_priv;
@@ -1274,7 +1294,7 @@ static int ma35_rpmsg_resume_priv(struct device *dev, void *data)
 	if (rpmsg_priv && rpmsg_priv->ready) {
 		rpmsg_priv->resumeflow = IPI_CMD_REQUEST; // start resume flow
 		dwork = &rpmsg_priv->dwork;
-		INIT_DELAYED_WORK(dwork, periodic_work_handler);
+		// INIT_DELAYED_WORK(dwork, periodic_work_handler);
 		schedule_delayed_work(dwork, msecs_to_jiffies(500)); // issue delay work
 	}
 
@@ -1293,7 +1313,7 @@ static int ma35_rpmsg_resume(struct platform_device *pdev)
 }
 
 static const struct of_device_id ma35_amp_of_match[] = {
-	{ .compatible = "nuvoton,ma35-amp" },
+	{ .compatible = "nuvoton,ma35d1-ampm" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, ma35_amp_of_match);
@@ -1304,7 +1324,7 @@ static struct platform_driver ma35_rpmsg_driver = {
 	.suspend = ma35_rpmsg_suspend,
 	.resume = ma35_rpmsg_resume,
 	.driver = {
-		.name = "ma35-amp",
+		.name = "ma35d1-ampm",
 		.of_match_table = ma35_amp_of_match,
 	},
 };
@@ -1317,5 +1337,5 @@ static void __exit ma35_rpmsg_dev_exit(void)
 module_exit(ma35_rpmsg_dev_exit);
 
 
-MODULE_DESCRIPTION("Nuvoton MA35 series AMP driver");
+MODULE_DESCRIPTION("Nuvoton MA35D1 AMP-M driver");
 MODULE_LICENSE("GPL v2");

@@ -119,11 +119,7 @@
 			no-map;
 		};
 		rpmsg_buf: rpmsg_buf@0 {
-			reg = <0x0 0x84000000 0x0 0x8000>; /* maximun tx+rx 16+16KB */
-			no-map;
-		};
-		amp_buf: amp_buf@0 {
-			reg = <0x0 0x84008000 0x0 0x20000>; /* 128KB for amp shared memory */
+			reg = <0x0 0x84000000 0x0 0x8000>;
 			no-map;
 		};
 	};
@@ -672,7 +668,9 @@
 		reg = <0x0 0x40380000 0x0 0x1000>;
 		clocks = <&clk HWS_GATE>;
 		clock-names = "hws_gate";
+		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
 		nuvoton,sys = <&sys>;
+		#hwsem-cells = <1>;
 		status = "okay";
 	};
 
@@ -713,9 +711,17 @@
 		status = "okay";
 	};
 
+	ampm: ampm {
+		compatible = "nuvoton,ma35d1-ampm";
+		memory-region = <&rpmsg_buf>;
+		rxipi = <&hwsem 6>;
+		txipi = <&hwsem 7>;
+		status = "disabled";
+	};
+
 	amp: amp {
 		compatible = "nuvoton,ma35-amp";
-		memory-region = <&amp_buf>;
+		memory-region = <&rpmsg_buf>;
 		rxipi = <&timer8>;
 		txipi = <&timer9>;
 		status = "disabled";
