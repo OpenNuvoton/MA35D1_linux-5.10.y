@@ -840,7 +840,7 @@ static void ma35d1_drm_shutdown(struct platform_device *pdev)
 	drm_atomic_helper_shutdown(drm);
 }
 
-static struct platform_driver ma35d1_display_platform_driver = {
+static struct platform_driver ma35d1_drm_platform_driver = {
 	.probe		= ma35d1_drm_probe,
 	.remove		= ma35d1_drm_remove,
 	/* .shutdown 	= ma35d1_drm_shutdown, */
@@ -850,7 +850,23 @@ static struct platform_driver ma35d1_display_platform_driver = {
 	},
 };
 
-module_platform_driver(ma35d1_display_platform_driver);
+static struct platform_driver * const drivers[] = {
+	&ma35d1_drm_platform_driver,
+};
+
+static int __init ma35d1_drm_init(void)
+{
+	return platform_register_drivers(drivers, ARRAY_SIZE(drivers));
+}
+
+static void __exit ma35d1_drm_fini(void)
+{
+	platform_unregister_drivers(drivers, ARRAY_SIZE(drivers));
+}
+
+/* need late_initcall() so we load after mfd/sysctl's are loaded */
+late_initcall(ma35d1_drm_init);
+module_exit(ma35d1_drm_fini);
 
 MODULE_AUTHOR("Nuvoton Corporation <twjiang@nuvoton.com>");
 MODULE_DESCRIPTION("MA35D1 DRM/KMS driver");
