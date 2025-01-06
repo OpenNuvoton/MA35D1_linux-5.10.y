@@ -49,9 +49,9 @@
 #define LEAPYEAR        0x0001
 
 /* Interrupt Enable */
-#define TICKENB         0x80
-#define TICKINTENB      0x0002
-#define ALARMINTENB     0x0001
+#define PSWIEN          0x00000004
+#define TICKINTENB      0x00000002
+#define ALARMINTENB     0x00000001
 #define CLKFIEN         0x1000000
 #define CLKSTIEN        0x2000000
 
@@ -101,6 +101,13 @@ static irqreturn_t ma35d0_rtc_interrupt(int irq, void *_rtc)
 	unsigned long events = 0, rtc_irq;
 
 	rtc_irq = __raw_readl(rtc->rtc_reg + REG_RTC_RIIR);
+
+	if(rtc_irq & PSWIEN) {
+		rtc_reg_write(rtc, REG_RTC_RIIR, PSWIEN);
+		rtc_reg_write(rtc, REG_RTC_RIER,
+					(__raw_readl(rtc->rtc_reg + REG_RTC_RIER) &
+					~TICKINTENB));
+	}
 
 	if (rtc_irq & ALARMINTENB) {
 		rtc_reg_write(rtc, REG_RTC_RIIR, ALARMINTENB);
@@ -406,14 +413,14 @@ static int ma35d0_rtc_probe(struct platform_device *pdev)
 			(__raw_readl(ma35d0_rtc->rtc_reg + REG_RTC_CLKDCTL) | 0x1));
 		rtc_reg_write(ma35d0_rtc, REG_RTC_RIER,
 			(__raw_readl(ma35d0_rtc->rtc_reg + REG_RTC_RIER) |
-			TICKINTENB | CLKSTIEN | CLKFIEN));
+			TICKINTENB | CLKSTIEN | CLKFIEN | PSWIEN));
 	} else {
 		ma35d0_rtc->LXT_Detect = 0;
 		rtc_reg_write(ma35d0_rtc, REG_RTC_CDBR, 0x0);
 		rtc_reg_write(ma35d0_rtc, REG_RTC_CLKDCTL,
 			(__raw_readl(ma35d0_rtc->rtc_reg + REG_RTC_CLKDCTL) & ~0x1));
 		rtc_reg_write(ma35d0_rtc, REG_RTC_RIER,
-			(__raw_readl(ma35d0_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB));
+			(__raw_readl(ma35d0_rtc->rtc_reg + REG_RTC_RIER) | TICKINTENB | PSWIEN));
 	}
 
 	device_init_wakeup(&pdev->dev, true);
