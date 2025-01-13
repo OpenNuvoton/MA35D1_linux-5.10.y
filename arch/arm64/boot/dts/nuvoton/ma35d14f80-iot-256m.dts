@@ -18,6 +18,10 @@
 / {
 	model = "Nuvoton NuMaker-IoT-MA35D14F80";
 
+	aliases {
+		i2c0 = &i2c1;
+	};
+
 	chosen {
 		bootargs = "root=/dev/mmcblk1p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=256M";
 	};
