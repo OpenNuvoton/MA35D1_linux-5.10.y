@@ -53,29 +53,29 @@
  * 1 : Input video data and signals are latched
  *	by rising edge of Pixel Clock.
  */
-#define PCLKP_HI    0x100
+#define PCLKP_HI		0x100
 
-#define INFMT_YCbCr  0x0	/*  Sensor Input Data Format YCbCr422 */
-#define INFMT_RGB565 0x1	/*  Sensor Input Data Format RGB565 */
-#define INTYPE_CCIR601 (0x0<<1)	/*  Sensor Input Type CCIR601 */
-#define INTYPE_CCIR656 (0x1<<1)	/*  Sensor Input Type CCIR656 */
-#define INORD_YUYV  (0x0<<2)	/*  Sensor Input Data Order YUYV */
-#define INORD_YVYU  (0x1<<2)	/*  Sensor Input Data Order YVYU */
-#define INORD_UYVY  (0x2<<2)	/*  Sensor Input Data Order UYVY */
-#define INORD_VYUY  (0x3<<2)	/*  Sensor Input Data Order VYUY */
-#define INORD_RGGB  (0x0<<2)	/*  Sensor Input Data Order RGGB */
-#define INORD_BGGR  (0x1<<2)	/*  Sensor Input Data Order BGGR */
-#define INORD_GBRG  (0x2<<2)	/*  Sensor Input Data Order GBRG */
-#define INORD_GRBG  (0x3<<2)	/*  Sensor Input Data Order GRBG */
+#define INFMT_YCbCr		0x0 /*  Sensor Input Data Format YCbCr422 */
+#define INFMT_RGB565		0x1 /*  Sensor Input Data Format RGB565 */
+#define INTYPE_CCIR601		(0x0<<1) /*  Sensor Input Type CCIR601 */
+#define INTYPE_CCIR656		(0x1<<1) /*  Sensor Input Type CCIR656 */
+#define INORD_YUYV		(0x0<<2) /*  Sensor Input Data Order YUYV */
+#define INORD_YVYU		(0x1<<2) /*  Sensor Input Data Order YVYU */
+#define INORD_UYVY		(0x2<<2) /*  Sensor Input Data Order UYVY */
+#define INORD_VYUY		(0x3<<2) /*  Sensor Input Data Order VYUY */
+#define INORD_RGGB		(0x0<<2) /*  Sensor Input Data Order RGGB */
+#define INORD_BGGR		(0x1<<2) /*  Sensor Input Data Order BGGR */
+#define INORD_GBRG		(0x2<<2) /*  Sensor Input Data Order GBRG */
+#define INORD_GRBG		(0x3<<2) /*  Sensor Input Data Order GRBG */
 
 #define INMASK 0xF		/*  Sensor Input Mask */
-#define OUTFMT_YUV422	(0x0<<4)
-#define OUTFMT_Y	(0x1<<4)
-#define OUTFMT_RGB555	(0x2<<4)
-#define OUTFMT_RGB565	(0x3<<4)
+#define OUTFMT_YUV422		(0x0<<4)
+#define OUTFMT_Y		(0x1<<4)
+#define OUTFMT_RGB555		(0x2<<4)
+#define OUTFMT_RGB565		(0x3<<4)
 
-#define PLNFMT_YUV422	(0x0<<7)
-#define PLNFMT_YUV420	(0x1<<7)
+#define PLNFMT_YUV422		(0x0<<7)
+#define PLNFMT_YUV420		(0x1<<7)
 
 /* Mirror addresses are not available for all registers */
 #define CCAP_CTL		0x00
@@ -219,6 +219,20 @@ struct ccap_graph_entity {
 	struct v4l2_subdev *source;
 };
 
+#define IOCTL_CCAP_FBD_SET	_IOW ('v', 61, struct ccap_fb_direct)
+#define IOCTL_CCAP_FBD_GET	_IOW ('v', 62, struct ccap_fb_direct)
+
+struct ccap_fb_direct {
+	int enable;      /* 0: disable; 1: enable     */
+	int is_overlay;  /* 0: main frame; 1: overlay */
+	int fb_width;    /* frame buffer width        */
+	int fb_height;   /* frame buffer height       */
+	int img_x;       /* image render left x       */
+	int img_y;       /* image render top y        */
+	int img_width;   /* image width               */
+	int img_height;  /* image height              */
+};
+
 struct ccap_device {
 	struct device *dev;
 	struct v4l2_device v4l2_dev;
@@ -236,6 +250,10 @@ struct ccap_device {
 	unsigned int sequence;
 	struct mutex fop_lock;
 	struct ccap_data *pdata;
+
+	/* group for directly output to display frame buffer */
+	void __iomem *fb_base;
+	struct ccap_fb_direct fb_direct;
 
 	struct v4l2_format fmt;
 	struct v4l2_subdev *sensor;
@@ -447,6 +465,18 @@ static inline void ccap_schedule_next(struct ccap_device
 	dma_addr_t addr1;
 
 	addr1 = vb2_dma_contig_plane_dma_addr(&vbuf->vb2_buf, 0);
+
+	if (ccap_dev->fb_direct.enable) {
+		struct ccap_fb_direct *f = &ccap_dev->fb_direct;
+
+		if (f->is_overlay == 0)
+			addr1 = readl_relaxed(ccap_dev->fb_base + 0x1400);
+		else
+			addr1 = readl_relaxed(ccap_dev->fb_base + 0x15C0);
+
+		ccap_reg_write(ccap_dev, CCAP_STRIDE, f->fb_width);
+		addr1 += (f->img_y * f->fb_width + f->img_x) * 2;
+	}
 
 	if (ccap_dev->pdata->packet)
 		ccap_reg_write(ccap_dev, CCAP_PKTBA0, addr1);
@@ -1455,6 +1485,31 @@ static const struct v4l2_async_notifier_operations ccap_sensor_ops = {
 	.complete = ccap_sensor_complete,
 };
 
+static long ccap_ioctl_default(struct file *file, void *fh, bool valid_prio,
+			       unsigned int cmd, void *arg)
+{
+	struct ccap_device *ccap_dev = video_drvdata(file);
+	struct ccap_fb_direct *fb_direct = &ccap_dev->fb_direct;
+	int ret = 0;
+
+	switch (cmd) {
+	case IOCTL_CCAP_FBD_SET:
+		memcpy(fb_direct, arg, sizeof(*fb_direct));
+		if (fb_direct->enable == 0)
+			break;
+		break;
+
+	case IOCTL_CCAP_FBD_GET:
+		memcpy(arg, fb_direct, sizeof(*fb_direct));
+		break;
+
+	default:
+		ret = -EINVAL;
+		break;
+	}
+	return ret;
+}
+
 /* ma35d1_ccap display ioctl operations */
 static const struct v4l2_ioctl_ops ccap_ioctl_ops = {
 	.vidioc_querycap = ccap_querycap,
@@ -1475,6 +1530,7 @@ static const struct v4l2_ioctl_ops ccap_ioctl_ops = {
 	.vidioc_streamon = vb2_ioctl_streamon,
 	.vidioc_streamoff = vb2_ioctl_streamoff,
 	.vidioc_expbuf = vb2_ioctl_expbuf,
+	.vidioc_default = ccap_ioctl_default,
 };
 
 static const struct v4l2_file_operations ccap_fops = {
@@ -1631,6 +1687,13 @@ static int ccap_probe(struct platform_device *pdev)
 
 	ccap_dev->v4l2_dev.mdev = &ccap_dev->mdev;
 
+	ccap_dev->fb_base = ioremap(0x40260000, 0x2000);
+	if (!ccap_dev->fb_base) {
+		dev_err(ccap_dev->dev, "Failed to ioremap fb_base!\n");
+		return -ENOMEM;
+	}
+	ccap_dev->fb_direct.enable = 0;
+
 	/* Initialize media device */
 	strscpy(ccap_dev->mdev.model, DRV_NAME, sizeof(ccap_dev->mdev.model));
 	snprintf(ccap_dev->mdev.bus_info, sizeof(ccap_dev->mdev.bus_info),
@@ -1748,6 +1811,12 @@ static int ccap_remove(struct platform_device *pdev)
 						    v4l2_dev);
 
 	pm_runtime_disable(&pdev->dev);
+
+	if (ccap_dev->fb_base) {
+		iounmap(ccap_dev->fb_base);
+		ccap_dev->fb_base = NULL;
+	}
+
 	video_unregister_device(ccap_dev->vdev);
 	v4l2_device_unregister(&ccap_dev->v4l2_dev);
 	return 0;
