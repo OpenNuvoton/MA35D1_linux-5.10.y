@@ -219,18 +219,28 @@ struct ccap_graph_entity {
 	struct v4l2_subdev *source;
 };
 
-#define IOCTL_CCAP_FBD_SET	_IOW ('v', 61, struct ccap_fb_direct)
-#define IOCTL_CCAP_FBD_GET	_IOW ('v', 62, struct ccap_fb_direct)
+#define IOCTL_CCAP_FBD_SET		_IOW('v', 61, struct ccap_fb_direct)
+#define IOCTL_CCAP_FBD_GET		_IOW('v', 62, struct ccap_fb_direct)
+#define IOCTL_CCAP_SNAPSHOT_DO		_IOW('v', 65, int)
+#define IOCTL_CCAP_SNAPSHOT_IDLE	_IOW('v', 66, int)
 
 struct ccap_fb_direct {
-	int enable;      /* 0: disable; 1: enable     */
-	int is_overlay;  /* 0: main frame; 1: overlay */
-	int fb_width;    /* frame buffer width        */
-	int fb_height;   /* frame buffer height       */
-	int img_x;       /* image render left x       */
-	int img_y;       /* image render top y        */
-	int img_width;   /* image width               */
-	int img_height;  /* image height              */
+	int enable;       /* 0: disable; 1: enable     */
+	int wait_sync;    /* wait for LCD VSYNC        */
+	int is_overlay;   /* 0: main frame; 1: overlay */
+	int fb_width;     /* frame buffer width        */
+	int fb_height;    /* frame buffer height       */
+	int img_x;        /* image render left x       */
+	int img_y;        /* image render top y        */
+	int img_width;    /* image width               */
+	int img_height;   /* image height              */
+	int do_snapshot;  /* -1: idle; 0: doing; 1: to do */
+};
+
+struct image_buffer {
+	void *vaddr;
+	dma_addr_t paddr;
+	u32 size;
 };
 
 struct ccap_device {
@@ -254,6 +264,7 @@ struct ccap_device {
 	/* group for directly output to display frame buffer */
 	void __iomem *fb_base;
 	struct ccap_fb_direct fb_direct;
+	struct image_buffer img_buff;
 
 	struct v4l2_format fmt;
 	struct v4l2_subdev *sensor;
@@ -462,18 +473,22 @@ static const struct ccap_format ccap_formats[] = {
 static inline void ccap_schedule_next(struct ccap_device
 				      *ccap_dev, struct vb2_v4l2_buffer *vbuf)
 {
+	struct ccap_fb_direct *f = &ccap_dev->fb_direct;
 	dma_addr_t addr1;
 
 	addr1 = vb2_dma_contig_plane_dma_addr(&vbuf->vb2_buf, 0);
 
-	if (ccap_dev->fb_direct.enable) {
-		struct ccap_fb_direct *f = &ccap_dev->fb_direct;
-
-		if (f->is_overlay == 0)
+	if (f->enable) {
+		if (f->do_snapshot == 1) {
+			addr1 = ccap_dev->img_buff.paddr;
+			f->do_snapshot = 0;
+		} else if (f->is_overlay == 0) {
 			addr1 = readl_relaxed(ccap_dev->fb_base + 0x1400);
-		else
+			f->do_snapshot = -1;
+		} else {
 			addr1 = readl_relaxed(ccap_dev->fb_base + 0x15C0);
-
+			f->do_snapshot = -1;
+		}
 		ccap_reg_write(ccap_dev, CCAP_STRIDE, f->fb_width);
 		addr1 += (f->img_y * f->fb_width + f->img_x) * 2;
 	}
@@ -494,6 +509,15 @@ static inline void ccap_schedule_next(struct ccap_device
 		/* Setting planar buffer V address */
 		tmp = tmp + (ccap_dev->pix.width * ccap_dev->pix.height) / 2;
 		ccap_reg_write(ccap_dev, CCAP_VBA, tmp);
+	}
+
+	if (f->enable && f->wait_sync) {
+		u64 t0 = jiffies;
+
+		while (jiffies - t0 < 200) {
+			if (readl_relaxed(ccap_dev->fb_base + 0x147C))
+				break;
+		}
 	}
 
 	/* Update New frame */
@@ -1489,18 +1513,31 @@ static long ccap_ioctl_default(struct file *file, void *fh, bool valid_prio,
 			       unsigned int cmd, void *arg)
 {
 	struct ccap_device *ccap_dev = video_drvdata(file);
-	struct ccap_fb_direct *fb_direct = &ccap_dev->fb_direct;
+	struct ccap_fb_direct *f = &ccap_dev->fb_direct;
 	int ret = 0;
 
 	switch (cmd) {
 	case IOCTL_CCAP_FBD_SET:
-		memcpy(fb_direct, arg, sizeof(*fb_direct));
-		if (fb_direct->enable == 0)
+		memcpy(f, arg, sizeof(*f));
+		f->do_snapshot = -1;
+		if (f->enable == 0)
 			break;
 		break;
 
 	case IOCTL_CCAP_FBD_GET:
-		memcpy(arg, fb_direct, sizeof(*fb_direct));
+		memcpy(arg, f, sizeof(*f));
+		break;
+
+	case IOCTL_CCAP_SNAPSHOT_DO:
+		if (f->enable && (f->do_snapshot == -1))
+			f->do_snapshot = 1;
+		break;
+
+	case IOCTL_CCAP_SNAPSHOT_IDLE:
+		if (f->do_snapshot == -1)
+			ret = 0;
+		else
+			ret = -EAGAIN;
 		break;
 
 	default:
@@ -1508,6 +1545,28 @@ static long ccap_ioctl_default(struct file *file, void *fh, bool valid_prio,
 		break;
 	}
 	return ret;
+}
+
+static int nuvoton_ccap_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct ccap_device *ccap_dev = video_drvdata(file);
+	unsigned long pfn;
+	unsigned long size = vma->vm_end - vma->vm_start;
+
+	if (!ccap_dev->img_buff.vaddr)
+		return -EINVAL;
+
+	pfn = ccap_dev->img_buff.paddr >> PAGE_SHIFT;
+
+	if (size > ccap_dev->img_buff.size)
+		return -EINVAL;
+
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	if (remap_pfn_range(vma, vma->vm_start, pfn, size, vma->vm_page_prot))
+		return -EAGAIN;
+
+	return 0;
 }
 
 /* ma35d1_ccap display ioctl operations */
@@ -1543,15 +1602,12 @@ static const struct v4l2_file_operations ccap_fops = {
 	.write = vb2_fop_write,
 };
 
-static const struct video_device ccap_video_template = {
-	.name = "ma35d1_ccap",
-	.fops = &ccap_fops,
-	.ioctl_ops = &ccap_ioctl_ops,
-	/* PAL only supported in 8-bit non-bt656 mode */
-	.tvnorms = V4L2_STD_525_60,
-	.vfl_dir = VFL_DIR_RX,
-	.device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_READWRITE |
-	    V4L2_CAP_STREAMING,
+static const struct v4l2_file_operations ccap_mmap_fops = {
+	.owner = THIS_MODULE,
+	.open = ccap_open,
+	.release = ccap_release,
+	.unlocked_ioctl = video_ioctl2,
+	.mmap = nuvoton_ccap_mmap,
 };
 
 static int ccap_data_from_dt(struct platform_device *pdev,
@@ -1659,7 +1715,6 @@ static int ccap_graph_init(struct ccap_device *ccap)
 
 static int ccap_probe(struct platform_device *pdev)
 {
-	//struct v4l2_rect *rect;
 	struct v4l2_pix_format *pix;
 	struct video_device *vdev;
 	struct ccap_device *ccap_dev;
@@ -1693,6 +1748,20 @@ static int ccap_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 	ccap_dev->fb_direct.enable = 0;
+	ccap_dev->fb_direct.do_snapshot = -1;
+
+	if (!of_property_read_u32(pdev->dev.of_node, "nuvoton,mmap", &ccap_dev->img_buff.size)) {
+		/* use nuvoton ccap mmap instead of V4L2 mmap */
+		ccap_dev->img_buff.size += PAGE_SIZE;
+		ccap_dev->img_buff.vaddr = dma_alloc_coherent(&pdev->dev,
+							      ccap_dev->img_buff.size,
+							      &ccap_dev->img_buff.paddr,
+							      GFP_KERNEL);
+		if (!ccap_dev->img_buff.vaddr)
+			dev_err(&pdev->dev, "Failed to allocate memory for image buffer!\n");
+	} else {
+		ccap_dev->img_buff.vaddr = NULL;
+	}
 
 	/* Initialize media device */
 	strscpy(ccap_dev->mdev.model, DRV_NAME, sizeof(ccap_dev->mdev.model));
@@ -1746,6 +1815,8 @@ static int ccap_probe(struct platform_device *pdev)
 
 	/* Video node */
 	vdev->fops = &ccap_fops;
+	if (ccap_dev->img_buff.vaddr)
+		vdev->fops = &ccap_mmap_fops;
 	vdev->v4l2_dev = &ccap_dev->v4l2_dev;
 	vdev->queue = &ccap_dev->queue;
 	strscpy(vdev->name, KBUILD_MODNAME, sizeof(ccap_dev->vdev->name));
@@ -1815,6 +1886,11 @@ static int ccap_remove(struct platform_device *pdev)
 	if (ccap_dev->fb_base) {
 		iounmap(ccap_dev->fb_base);
 		ccap_dev->fb_base = NULL;
+	}
+
+	if (ccap_dev->img_buff.vaddr) {
+		dma_free_coherent(&pdev->dev, ccap_dev->img_buff.size,
+				  ccap_dev->img_buff.vaddr, ccap_dev->img_buff.paddr);
 	}
 
 	video_unregister_device(ccap_dev->vdev);
