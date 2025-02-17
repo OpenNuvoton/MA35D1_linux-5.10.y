@@ -98,6 +98,13 @@ struct m_can_classdev {
 	struct mram_cfg mcfg[MRAM_CFG_NUM];
 };
 
+struct m_can_plat_priv {
+	void __iomem *base;
+	void __iomem *mram_base;
+	spinlock_t	lock;
+	u32		version;
+};
+
 struct m_can_classdev *m_can_class_allocate_dev(struct device *dev);
 void m_can_class_free_dev(struct net_device *net);
 int m_can_class_register(struct m_can_classdev *cdev);
