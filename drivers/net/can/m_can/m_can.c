@@ -1461,6 +1461,7 @@ static int m_can_next_echo_skb_occupied(struct net_device *dev, int putidx)
 static netdev_tx_t m_can_tx_handler(struct m_can_classdev *cdev)
 {
 	struct canfd_frame *cf = (struct canfd_frame *)cdev->tx_skb->data;
+	struct m_can_plat_priv *priv = cdev->device_data;
 	struct net_device *dev = cdev->net;
 	struct sk_buff *skb = cdev->tx_skb;
 	u32 id, cccr, fdflags;
@@ -1569,14 +1570,16 @@ static netdev_tx_t m_can_tx_handler(struct m_can_classdev *cdev)
 		 */
 		can_put_echo_skb(skb, dev, putidx);
 
-		/* Make sure the MA35 series SoC data bus is ready.
-		 * if data bus cannot be ready in 10 ms, we still let it go
-		 * the original TX flow.
-		 */
-		check_idle_timeout = jiffies + msecs_to_jiffies(10);
-		while ((m_can_read(cdev, M_CAN_PSR) & 0x18) != 0x8) {
-			if (time_after(jiffies, check_idle_timeout))
-				break;
+		if(priv->version == 0) {
+			/* Make sure the MA35 series SoC data bus is ready.
+			 * if data bus cannot be ready in 10 ms, we still let it go
+			 * the original TX flow.
+			 */
+			check_idle_timeout = jiffies + msecs_to_jiffies(10);
+			while ((m_can_read(cdev, M_CAN_PSR) & 0x18) != 0x8) {
+				if (time_after(jiffies, check_idle_timeout))
+					break;
+			}
 		}
 
 		/* Enable TX FIFO element to start transfer  */

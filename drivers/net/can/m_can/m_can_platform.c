@@ -9,43 +9,41 @@
 
 #include "m_can.h"
 
-struct m_can_plat_priv {
-	void __iomem *base;
-	void __iomem *mram_base;
-	spinlock_t	lock;
-};
-
 #define REG_READ_TIME 20
 
 static u32 iomap_read_reg(struct m_can_classdev *cdev, int reg)
 {
 	struct m_can_plat_priv *priv = cdev->device_data;
 
-	u32 u32ReadReg = 0x0;
-	u32 u32ReadReg_1 = 0x0;
-	u32 u32TimeOutCnt = 0x0;
-	unsigned long flags;
+	if(priv->version == 0) {
+		u32 u32ReadReg = 0x0;
+		u32 u32ReadReg_1 = 0x0;
+		u32 u32TimeOutCnt = 0x0;
+		unsigned long flags;
 
-	spin_lock_irqsave(&priv->lock, flags);
+		spin_lock_irqsave(&priv->lock, flags);
 
-	u32ReadReg = readl(priv->base + reg);
+		u32ReadReg = readl(priv->base + reg);
 
-	do{
-		u32ReadReg_1 = readl(priv->base + reg);
+		do{
+			u32ReadReg_1 = readl(priv->base + reg);
 
-		if(u32ReadReg == u32ReadReg_1) {
-			u32TimeOutCnt++;
-		}
-		else {
-			u32ReadReg = u32ReadReg_1;
-			u32TimeOutCnt = 0;
-		}
+			if(u32ReadReg == u32ReadReg_1) {
+				u32TimeOutCnt++;
+			}
+			else {
+				u32ReadReg = u32ReadReg_1;
+				u32TimeOutCnt = 0;
+			}
 
-	}while(u32TimeOutCnt < REG_READ_TIME);
+		}while(u32TimeOutCnt < REG_READ_TIME);
 
-	spin_unlock_irqrestore(&priv->lock, flags);
-	
-	return u32ReadReg;
+		spin_unlock_irqrestore(&priv->lock, flags);
+
+		return u32ReadReg;
+	}
+	else
+		return readl(priv->base + reg);
 }
 
 
@@ -98,6 +96,7 @@ static int m_can_plat_probe(struct platform_device *pdev)
 	void __iomem *addr;
 	void __iomem *mram_addr;
 	int irq, ret = 0;
+	void __iomem *reg;
 
 	mcan_class = m_can_class_allocate_dev(&pdev->dev);
 	if (!mcan_class)
@@ -149,6 +148,19 @@ static int m_can_plat_probe(struct platform_device *pdev)
 	mcan_class->ops = &m_can_plat_ops;
 
 	mcan_class->is_peripheral = false;
+
+	reg = ioremap(0x404601f0, 0x10);
+	if (!reg)
+		printk("Error: couldn't map product number and revision register !!\n");
+	else
+		ret = readl(reg) & 0xf000000;
+
+	if(ret == 0)
+		priv->version = 0;
+	else
+		priv->version = 1;
+
+	iounmap(reg);
 
 	platform_set_drvdata(pdev, mcan_class->net);
 
