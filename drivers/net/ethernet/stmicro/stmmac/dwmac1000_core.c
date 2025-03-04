@@ -501,6 +501,61 @@ static void dwmac1000_debug(void __iomem *ioaddr, struct stmmac_extra_stats *x,
 		x->mac_gmii_rx_proto_engine++;
 }
 
+static int dwmac1000_flex_pps_config(void __iomem *ioaddr, int index,
+			   struct stmmac_pps_cfg *cfg, bool enable,
+			   u32 sub_second_inc, u32 systime_flags)
+{
+	u32 tnsec = readl(ioaddr + PPS_TTS);
+	u32 val = readl(ioaddr + PPS_PCR);
+	u64 period;
+
+	if(index != 0)
+		return -EINVAL;
+	if (!cfg->available)
+		return -EINVAL;
+	if (tnsec & PPS_TTN_TRGTBUSY0)
+		return -EBUSY;
+	if (!sub_second_inc || !systime_flags)
+		return -EINVAL;
+
+	val &= ~PPS_PCR_MASK;
+
+	if (!enable) {
+		val |= 0x5 & PPS_PCR_CMD_MASK; // STOP immediately
+		val |= PPS_PCR_EN;
+		writel(val, ioaddr + PPS_PCR);
+		return 0;
+	}
+
+	val |= FIELD_PREP(PPS_PCR_SEL_MASK, 0x2); // generate pps singal
+	val |= PPS_PCR_EN;
+	writel(val, ioaddr + PPS_PCR);
+
+	writel(cfg->start.tv_sec, ioaddr + PPS_TTS);
+	writel(cfg->start.tv_nsec, ioaddr + PPS_TTN);
+
+	period = cfg->period.tv_sec * 1000000000;
+	period += cfg->period.tv_nsec;
+
+	do_div(period, sub_second_inc);
+
+	if (period <= 1)
+		return -EINVAL;
+
+	writel(period - 1, ioaddr + PPSx_IR(index));
+
+	period >>= 1;
+	if (period <= 1)
+		return -EINVAL;
+
+	writel(period - 1, ioaddr + PPSx_WR(index)); // value must less than interval
+
+	/* Finally, activate it */
+	val |= 0x2 & PPS_PCR_CMD_MASK; // SRART
+	writel(val, ioaddr + PPS_PCR);
+	return 0;
+}
+
 static void dwmac1000_set_mac_loopback(void __iomem *ioaddr, bool enable)
 {
 	u32 value = readl(ioaddr + GMAC_CONTROL);
@@ -533,6 +588,7 @@ const struct stmmac_ops dwmac1000_ops = {
 	.pcs_ctrl_ane = dwmac1000_ctrl_ane,
 	.pcs_rane = dwmac1000_rane,
 	.pcs_get_adv_lp = dwmac1000_get_adv_lp,
+	.flex_pps_config = dwmac1000_flex_pps_config,
 	.set_mac_loopback = dwmac1000_set_mac_loopback,
 };
 

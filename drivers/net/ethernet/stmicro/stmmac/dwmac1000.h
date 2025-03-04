@@ -75,6 +75,22 @@ enum power_event {
 #define LPI_CTRL_STATUS_TLPIEX	0x00000002	/* Transmit LPI Exit */
 #define LPI_CTRL_STATUS_TLPIEN	0x00000001	/* Transmit LPI Entry */
 
+/* GMAC PPS regs */
+#define PTP_OFFSET		0x700
+#define	PPS_TTS		(PTP_OFFSET + 0x1C)
+#define	PPS_TTN		(PTP_OFFSET + 0x20)
+#define PPS_HWSR		(PTP_OFFSET + 0x24)
+#define PPS_TSR		(PTP_OFFSET + 0x28)
+#define PPS_PCR		(PTP_OFFSET + 0x2C)
+#define PPSx_IR(x)		(PTP_OFFSET + 0x60 + ((x) * 0x20))
+#define PPSx_WR(x)		(PTP_OFFSET + 0x64 + ((x) * 0x20))
+
+#define PPS_TTN_TRGTBUSY0	BIT(31)
+#define PPS_PCR_MASK		GENMASK(6, 0)
+#define PPS_PCR_CMD_MASK	GENMASK(3, 0)
+#define PPS_PCR_SEL_MASK	GENMASK(6, 5)
+#define PPS_PCR_EN		BIT(4)
+
 /* GMAC HW ADDR regs */
 #define GMAC_ADDR_HIGH(reg)	((reg > 15) ? 0x00000800 + (reg - 16) * 8 : \
 				 0x00000040 + (reg * 8))
