@@ -12,6 +12,7 @@
 #include <linux/i2c.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
+#include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
@@ -479,18 +480,25 @@ static inline void ccap_schedule_next(struct ccap_device
 	addr1 = vb2_dma_contig_plane_dma_addr(&vbuf->vb2_buf, 0);
 
 	if (f->enable) {
+		u32 reg_val;
+
 		if (f->do_snapshot == 1) {
 			addr1 = ccap_dev->img_buff.paddr;
 			f->do_snapshot = 0;
-		} else if (f->is_overlay == 0) {
-			addr1 = readl_relaxed(ccap_dev->fb_base + 0x1400);
-			f->do_snapshot = -1;
+			reg_val = (ccap_reg_read(ccap_dev, CCAP_STRIDE) & ~STRIDE_PKTSTRIDE) | f->img_width;
+			ccap_reg_write(ccap_dev, CCAP_STRIDE, reg_val);
 		} else {
-			addr1 = readl_relaxed(ccap_dev->fb_base + 0x15C0);
-			f->do_snapshot = -1;
+			if (f->is_overlay == 0) {
+				addr1 = readl_relaxed(ccap_dev->fb_base + 0x1400);
+				f->do_snapshot = -1;
+			} else {
+				addr1 = readl_relaxed(ccap_dev->fb_base + 0x15C0);
+				f->do_snapshot = -1;
+			}
+			reg_val = (ccap_reg_read(ccap_dev, CCAP_STRIDE) & ~STRIDE_PKTSTRIDE) | f->fb_width;
+			ccap_reg_write(ccap_dev, CCAP_STRIDE, reg_val);
+			addr1 += (f->img_y * f->fb_width + f->img_x) * 2;
 		}
-		ccap_reg_write(ccap_dev, CCAP_STRIDE, f->fb_width);
-		addr1 += (f->img_y * f->fb_width + f->img_x) * 2;
 	}
 
 	if (ccap_dev->pdata->packet)
