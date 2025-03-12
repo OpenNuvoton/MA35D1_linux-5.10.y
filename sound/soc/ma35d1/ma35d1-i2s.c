@@ -121,7 +121,7 @@ static int ma35d1_i2s_set_sysclk(struct snd_soc_dai *cpu_dai, int clk_id, unsign
 	bclkdiv = ((((i2s_clk * 10UL / bitrate) >> 1U) + 5UL) / 10UL) - 1U;
 
 
-	mclkdiv = (i2s_clk / 12000000) >> 1;
+	mclkdiv = (i2s_clk / ma35d1_audio->mclk_out) >> 1;
 
 	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CLKDIV, (bclkdiv << 8) | mclkdiv);
 
@@ -250,7 +250,7 @@ static const struct snd_soc_component_driver ma35d1_i2s_component = {
 static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 {
 	struct ma35d1_audio *ma35d1_audio;
-	u32	val32[4];
+	u32	val32[4], mclk_out;
 	u32	dma_tx_num, dma_rx_num;
 
 	int ret;
@@ -311,6 +311,11 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 		ret = -EBUSY;
 		goto out3;
 	}
+
+	if (of_property_read_u32(pdev->dev.of_node, "mclk_out", &mclk_out) != 0)
+		ma35d1_audio->mclk_out = 12000000;
+	else
+		ma35d1_audio->mclk_out = mclk_out;
 
 	ma35d1_i2s_data = ma35d1_audio;
 

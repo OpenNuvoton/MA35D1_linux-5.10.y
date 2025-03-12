@@ -637,6 +637,7 @@
 		resets = <&reset MA35D1_RESET_I2S0>;
 		pdma_reqsel_tx = <86>;
 		pdma_reqsel_rx = <87>;
+		mclk_out = <12000000>;
 		status = "disable";
 	};
 
@@ -648,6 +649,7 @@
 		resets = <&reset MA35D1_RESET_I2S1>;
 		pdma_reqsel_tx = <88>;
 		pdma_reqsel_rx = <89>;
+		mclk_out = <12000000>;
 		status = "disable";
 	};
 

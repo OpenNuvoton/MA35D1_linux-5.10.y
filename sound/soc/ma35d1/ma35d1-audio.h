@@ -151,6 +151,7 @@ struct ma35d1_audio {
 	struct ma35d1_peripheral pcfg_tx;
 	struct ma35d1_peripheral pcfg_rx;
 	unsigned int phyaddr;
+	unsigned int mclk_out;
 	struct gpio_desc *pwdn_gpio;
 
 };
