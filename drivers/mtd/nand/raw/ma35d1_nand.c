@@ -600,6 +600,7 @@ static void ma35d1_nand_command(struct nand_chip *chip,
 
 	case NAND_CMD_RESET:
 		writel(command, nand->base+REG_NFI_NANDCMD);
+		ma35d1_waitfunc(chip);
 		break;
 
 	case NAND_CMD_READID:
