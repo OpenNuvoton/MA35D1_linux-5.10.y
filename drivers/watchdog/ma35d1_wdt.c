@@ -149,12 +149,13 @@ static int ma35d1wdt_set_timeout(struct watchdog_device *wdd, unsigned int timeo
 	} else {
 
 		if (timeout < 2)
-			val |= 0x5 << 8;
-		else if (timeout < 11)
-			val |= 0x6 << 8;
+			val |= 0x5 << 8;   /* 0.512s */
+		else if (timeout < 5)
+			val |= 0x6 << 8;   /* 2.048s */
+		else if (timeout < 10)
+			val |= 0x7 << 8;   /* 8.192s */
 		else
-			val |= 0x7 << 8;
-
+			val |= 0x8 << 8;   /* 32.768s */
 	}
 
 	local_irq_save(flags);
@@ -259,7 +260,7 @@ static int ma35d1wdt_probe(struct platform_device *pdev)
 		heartbeat = 11;
 		ma35d1_wdd.timeout = 11;	// default time out = 11.2 sec
 		ma35d1_wdd.min_timeout = 1;	// min time out = 1.4 sec
-		ma35d1_wdd.max_timeout = 11;	// max time out = 11.2 sec
+		ma35d1_wdd.max_timeout = 33;	// max time out = 32.768 sec
 	}
 	watchdog_set_drvdata(&ma35d1_wdd, ma35d1_wdt);
 	watchdog_set_nowayout(&ma35d1_wdd, nowayout);
