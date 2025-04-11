@@ -951,7 +951,7 @@
 		max-frequency = <200000000>;
 		sdhci-caps-mask = <0x4 0x0>;  /* No support DDR50 mode */
 		status = "disabled";
-		wp-gpios = <&gpioj 4 GPIO_ACTIVE_LOW>;
+		wp-gpios = <&gpioj 4 GPIO_ACTIVE_HIGH>;
 		assigned-clocks = <&clk SDH1_MUX>;
 		assigned-clock-parents = <&clk APLL>;
 	};
