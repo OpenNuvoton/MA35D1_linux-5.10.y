@@ -211,7 +211,7 @@ static const struct sdhci_ops sdhci_ma35d1_ops = {
 static const struct sdhci_pltfm_data sdhci_ma35d1_pdata = {
 	.ops = &sdhci_ma35d1_ops,
 	.quirks = SDHCI_QUIRK_CAP_CLOCK_BASE_BROKEN,
-	.quirks2 = SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
+	.quirks2 = SDHCI_QUIRK2_PRESET_VALUE_BROKEN | SDHCI_QUIRK2_ACMD23_BROKEN,
 };
 
 static void ma35d1_shutdown(struct platform_device *pdev)
