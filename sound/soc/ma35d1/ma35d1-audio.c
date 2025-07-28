@@ -31,10 +31,8 @@ static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct sn
 	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(cpu_dai->dev);
-	unsigned int i2s_clk, cpu_mclk;
+	unsigned int cpu_mclk;
 	int ret;
-
-	unsigned int sample_rate = params_rate(params);
 
 	/* set codec DAI configuration */
 	ret = snd_soc_dai_set_fmt(codec_dai, fmt);
@@ -46,32 +44,12 @@ static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct sn
 	if (ret < 0)
 		return ret;
 
-	cpu_dai->channels = params_channels(params);
-	cpu_dai->rate = params_rate(params);
-	cpu_dai->sample_bits = params_width(params);
-
-	i2s_clk = clk_get_rate(ma35d1_audio->clk);
-	cpu_mclk = i2s_clk/(2*8);
+	cpu_mclk = ma35d1_audio->mclk_out;
 
 	/* set the codec system clock */
-	ret = snd_soc_dai_set_sysclk(codec_dai, NAU8822_CLK_PLL,
+	ret = snd_soc_dai_set_sysclk(codec_dai, NAU8822_CLK_MCLK,
 				      cpu_mclk, SND_SOC_CLOCK_IN);
 	if (ret < 0 )
-		return ret;
-
-	ret = snd_soc_dai_set_pll(codec_dai, 0, 0,
-				  cpu_mclk, 256 * params_rate(params));
-	if (ret < 0 )
-		return ret;
-
-	/* set prescaler division for sample rate */
-	ret = snd_soc_dai_set_sysclk(cpu_dai, MA35D1_AUDIO_CLKDIV, sample_rate, SND_SOC_CLOCK_OUT);
-	if (ret < 0)
-		return ret;
-
-	/* set MCLK division for sample rate */
-	ret = snd_soc_dai_set_sysclk(cpu_dai, MA35D1_AUDIO_SAMPLECLK, sample_rate, SND_SOC_CLOCK_OUT);
-	if (ret < 0)
 		return ret;
 
 	return 0;

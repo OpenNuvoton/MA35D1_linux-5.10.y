@@ -36,9 +36,17 @@ static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params,
 				struct snd_soc_dai *dai)
 {
+	unsigned int i2s_clk, bitrate, mclkdiv, bclkdiv;
 	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(dai->dev);
 	unsigned channels = params_channels(params);
+	unsigned sample_rate = params_rate(params) ;
 	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
+
+	i2s_clk = clk_get_rate(ma35d1_audio->clk);
+	bitrate = sample_rate * 2U * 16U;
+	bclkdiv = ((((i2s_clk * 10UL / bitrate) >> 1U) + 5UL) / 10UL) - 1U;
+	mclkdiv = (i2s_clk / ma35d1_audio->mclk_out) >> 1;
+	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CLKDIV, (bclkdiv << 8) | mclkdiv);
 
 	switch (params_width(params)) {
 	case 8:
@@ -108,25 +116,6 @@ static int ma35d1_i2s_set_fmt(struct snd_soc_dai *cpu_dai, unsigned int fmt)
 	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
 
 	return 0;
-}
-
-static int ma35d1_i2s_set_sysclk(struct snd_soc_dai *cpu_dai, int clk_id, unsigned int freq, int dir)
-{
-	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(cpu_dai->dev);
-	unsigned int i2s_clk, bitrate, mclkdiv, bclkdiv;
-
-	i2s_clk = clk_get_rate(ma35d1_audio->clk);
-
-	bitrate = freq * 2U * 16U;
-	bclkdiv = ((((i2s_clk * 10UL / bitrate) >> 1U) + 5UL) / 10UL) - 1U;
-
-
-	mclkdiv = (i2s_clk / ma35d1_audio->mclk_out) >> 1;
-
-	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CLKDIV, (bclkdiv << 8) | mclkdiv);
-
-	return 0;
-
 }
 
 static int ma35d1_i2s_trigger(struct snd_pcm_substream *substream, int cmd, struct snd_soc_dai *dai)
@@ -220,7 +209,6 @@ static struct snd_soc_dai_ops ma35d1_i2s_dai_ops = {
 	.trigger    = ma35d1_i2s_trigger,
 	.hw_params  = ma35d1_i2s_hw_params,
 	.set_fmt    = ma35d1_i2s_set_fmt,
-	.set_sysclk = ma35d1_i2s_set_sysclk,
 };
 
 struct snd_soc_dai_driver ma35d1_i2s_dai = {
@@ -245,7 +233,6 @@ struct snd_soc_dai_driver ma35d1_i2s_dai = {
 static const struct snd_soc_component_driver ma35d1_i2s_component = {
 	.name       = "ma35d1-i2s",
 };
-
 
 static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 {
@@ -328,6 +315,11 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 		goto out3;
 	}
 
+#ifdef CONFIG_SND_SIMPLE_CARD
+	ret = ma35d1_dma_pcm_register(&pdev->dev);
+	if (ret)
+		dev_err(&pdev->dev, "Could not register PCM: %d\n", ret);
+#endif
 	return 0;
 
 out3:
@@ -349,6 +341,9 @@ MODULE_DEVICE_TABLE(of, ma35d1_audio_i2s_of_match);
 
 static int ma35d1_i2s_drvremove(struct platform_device *pdev)
 {
+#ifdef CONFIG_SND_SIMPLE_CARD
+	ma35d1_dma_pcm_unregister(&pdev->dev);
+#endif
 	snd_soc_unregister_component(&pdev->dev);
 
 	clk_put(ma35d1_i2s_data->clk);

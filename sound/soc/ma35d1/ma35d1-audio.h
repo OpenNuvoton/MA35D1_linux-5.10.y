@@ -161,6 +161,9 @@ extern struct ma35d1_audio *ma35d1_i2s_data;
 int ma35d1_dma_create(struct ma35d1_audio *ma35d1_audio);
 int ma35d1_dma_destroy(struct ma35d1_audio *ma35d1_audio);
 
+int ma35d1_dma_pcm_register(struct device *dev);
+int ma35d1_dma_pcm_unregister(struct device *dev);
+
 #define DRV_NAME "ma35d1-dai"
 
 #endif /*end _MA35D1_AUDIO_H */

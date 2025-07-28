@@ -45,6 +45,20 @@ static const struct snd_dmaengine_pcm_config ma35d1_dmaengine_pcm_config = {
 	.prealloc_buffer_size = 32 * 1024,
 };
 
+int ma35d1_dma_pcm_register(struct device *dev)
+{
+	return devm_snd_dmaengine_pcm_register(dev, &ma35d1_dmaengine_pcm_config,
+						SND_DMAENGINE_PCM_FLAG_COMPAT);
+}
+EXPORT_SYMBOL_GPL(ma35d1_dma_pcm_register);
+
+int ma35d1_dma_pcm_unregister(struct device *dev)
+{
+	snd_dmaengine_pcm_unregister(dev);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ma35d1_dma_pcm_unregister);
+
 static int ma35d1_soc_platform_probe(struct platform_device *pdev)
 {
 	return devm_snd_dmaengine_pcm_register(&pdev->dev, &ma35d1_dmaengine_pcm_config,
