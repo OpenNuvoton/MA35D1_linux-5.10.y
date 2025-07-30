@@ -38,7 +38,7 @@
 #include <linux/platform_data/dma-ma35h0.h>
 #include "ma35_serial.h"
 
-#define EN_UART_PDMA_RX 1
+//#define EN_UART_PDMA_RX
 
 #define UART_NR 17
 #define UART_RX_BUF_SIZE 4096
@@ -304,10 +304,8 @@ static void set_pdma_flag(struct uart_ma35h0_port *p, int id)
 void ma35h0_uart_cal_pdma_time_out(struct uart_ma35h0_port *p, unsigned int baud)
 {
 	unsigned int lcr;
-	/* 180M*Time_Out_Frame_Count/256 */
-	unsigned int pdma_time_out_base =
-		180000000 * Time_Out_Frame_Count / 256;
-	unsigned int time_out_prescaler = 0;
+	unsigned int pdma_time_out_base = 180000000 * Time_Out_Frame_Count / 256;
+	unsigned int time_out_prescaler = 1;
 	unsigned int bit_length;
 	unsigned int time_out;
 
