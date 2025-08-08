@@ -1728,6 +1728,10 @@
 		clock-names = "eadc_gate";
 		eadc-frequency = <10000000>;
 		eadc-channels = <0 1 2 3 4 5 6 7>;
+		use_pdma = <1>;
+		dmas = <&pdma2 4>;
+		dma-names = "rx";
+		pdma_reqsel_rx = <146>;
 		status = "disabled";
 	};
 
