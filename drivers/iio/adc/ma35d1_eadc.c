@@ -132,7 +132,7 @@ struct ma35d1_adc_device {
 	unsigned int scan_chancnt;
 	char chan_name[EADC_CH_MAX][EADC_CH_SZ];
 	unsigned int use_pdma;
-	spinlock_t lock; /* interrupt lock */
+	spinlock_t lock;
 	unsigned int pdma_reqsel_rx;
 	struct ma35d1_ip_dma dma;
 	unsigned int phyaddr;
@@ -145,17 +145,80 @@ static const struct iio_chan_spec ma35d1_adc_iio_channels[] = {
 
 };
 
+static unsigned int ma35d1_adc_dma_residue(struct ma35d1_adc_device *info)
+{
+	struct dma_tx_state state;
+	enum dma_status status;
+
+	status = dmaengine_tx_status(info->dma.chan_rx,
+				     info->dma.chan_rx->cookie, &state);
+	if (status == DMA_IN_PROGRESS) {
+		unsigned int i = info->dma.rx_buf_sz - state.residue;
+		unsigned int size;
+
+		if (i >= info->bufi)
+			size = i - info->bufi;
+		else
+			size = info->dma.rx_buf_sz + i - info->bufi;
+
+		return size;
+	}
+
+	return 0;
+}
+
+static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
+{
+	struct iio_poll_func *pf = p;
+	struct iio_dev *indio_dev = pf->indio_dev;
+	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+	int ret_push;
+
+	if (!info->dma.chan_rx) {
+		/* reset buffer index */
+		info->bufi = 0;
+		ret_push = iio_push_to_buffers_with_timestamp(
+			indio_dev, info->buffer, pf->timestamp);
+		if (ret_push) {
+			/* Set trigger source to software trigger (clear ADINT0 trigger) */
+			writel((readl(info->regs + SCTL0) & ~TRGSELMSK),
+			       info->regs + SCTL0);
+		}
+	} else {
+		int residue = ma35d1_adc_dma_residue(info);
+		int dma_available = info->dma.rx_buf_sz - residue;
+
+		while (dma_available >= indio_dev->scan_bytes) {
+			u16 *buffer = (u16 *)&info->dma.rx_buf[info->bufi];
+
+			iio_push_to_buffers_with_timestamp(indio_dev, buffer,
+							   pf->timestamp);
+
+			info->bufi += indio_dev->scan_bytes;
+			if (info->bufi >= info->dma.rx_buf_sz)
+				info->bufi = 0;
+
+			dma_available -= indio_dev->scan_bytes;
+		}
+	}
+
+	iio_trigger_notify_done(indio_dev->trig);
+
+	/* re-enable eoc irq */
+	writel(readl(info->regs + CTL) | ADCIEN0, info->regs + CTL);
+
+	return IRQ_HANDLED;
+}
+
 static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 {
 	struct iio_dev *indio_dev = data;
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
 	int i;
 
-	if (readl(info->regs + STATUS2) & 1) { /* check ADIF0 */
-		writel(1, info->regs + STATUS2); /* clear ADIF0 */
+	if (readl(info->regs + STATUS2) & 1) {
+		writel(1, info->regs + STATUS2);
 
-		/* Reading DR also clears EOC status flag */
-		/* Check if IIO buffer enabled */
 		if (iio_buffer_enabled(indio_dev)) {
 			if (!info->dma.chan_rx) {
 				for (i = 0; i < info->scan_chancnt; i++) {
@@ -166,7 +229,6 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 					info->bufi++;
 				}
 				if (info->bufi >= info->num_conv) {
-					/* disable ADCIEN0 */
 					writel(readl(info->regs + CTL) &
 						       ~ADCIEN0,
 					       info->regs + CTL);
@@ -181,7 +243,7 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 		return IRQ_HANDLED;
 	}
 
-	return IRQ_HANDLED;
+	return IRQ_NONE;
 }
 
 static void ma35d1_adc_channels_remove(struct iio_dev *indio_dev)
@@ -270,7 +332,6 @@ static int ma35d1_adc_chan_of_init(struct iio_dev *indio_dev)
 			return -EINVAL;
 		}
 
-		/* Channel can't be configured both as single-ended & diff */
 		for (i = 0; i < num_diff; i++) {
 			if (val == diff[i].vinp) {
 				dev_err(&indio_dev->dev,
@@ -302,36 +363,91 @@ static int ma35d1_adc_chan_of_init(struct iio_dev *indio_dev)
 	return 0;
 }
 
+static void ma35d1_adc_dma_buffer_done(void *data)
+{
+	struct iio_dev *indio_dev = data;
+	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+	int residue = ma35d1_adc_dma_residue(info);
+
+	while (residue >= indio_dev->scan_bytes) {
+		u16 *buffer = (u16 *)&info->dma.rx_buf[info->bufi];
+
+		iio_push_to_buffers(indio_dev, buffer);
+
+		residue -= indio_dev->scan_bytes;
+		info->bufi += indio_dev->scan_bytes;
+		if (info->bufi >= info->dma.rx_buf_sz)
+			info->bufi = 0;
+	}
+}
+
+static int ma35d1_adc_dma_start(struct iio_dev *indio_dev)
+{
+	struct ma35d1_adc_device *info = iio_priv(indio_dev);
+	struct ma35d1_peripheral pcfg;
+	dma_cookie_t cookie;
+	int ret;
+
+	if (!info->dma.chan_rx)
+		return 0;
+
+	dmaengine_terminate_all(info->dma.chan_rx);
+	pcfg.reqsel = info->pdma_reqsel_rx;
+	info->dma.slave_config.peripheral_config = &pcfg;
+	info->dma.slave_config.peripheral_size = sizeof(pcfg);
+	dmaengine_slave_config(info->dma.chan_rx, &(info->dma.slave_config));
+
+	info->dma.rxdesc = dmaengine_prep_dma_cyclic(
+		info->dma.chan_rx, info->dma.rx_dma_buf, info->dma.rx_buf_sz,
+		info->dma.rx_buf_sz / 2, DMA_DEV_TO_MEM, DMA_PREP_INTERRUPT);
+	if (!info->dma.rxdesc)
+		return -EBUSY;
+
+	info->dma.rxdesc->callback = ma35d1_adc_dma_buffer_done;
+	info->dma.rxdesc->callback_param = indio_dev;
+
+	cookie = dmaengine_submit(info->dma.rxdesc);
+	ret = dma_submit_error(cookie);
+
+	if (ret) {
+		dmaengine_terminate_sync(info->dma.chan_rx);
+		return ret;
+	}
+
+	dma_async_issue_pending(info->dma.chan_rx);
+	writel(1, info->regs + SWTRG);
+	return 0;
+}
+
 static int ma35d1_adc_dma_request(struct device *dev, struct iio_dev *indio_dev)
 {
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
 	int ret;
 
 	info->dma.chan_rx = dma_request_slave_channel(dev, "rx");
-	if (IS_ERR(info->dma.chan_rx)) {
+	if (!(info->dma.chan_rx)) {
 		ret = PTR_ERR(info->dma.chan_rx);
 		if (ret != -ENODEV)
-			return dev_err_probe(
-				dev, ret, "DMA channel request failed with\n");
+			return dev_err_probe(dev, ret,
+					     "DMA channel request failed\n");
 
-		pr_info("%s:dma_request_chan failed info->dma.chan_rx = NULL\n",
-			__func__);
-		/* DMA is optional: fall back to IRQ mode */
+		dev_err(dev,
+			"dma_request_chan failed, DMA channel not available.\n");
 		info->dma.chan_rx = NULL;
 		return 0;
 	}
 
-	info->dma.rx_buf_sz = 1024;
+	info->dma.rx_buf_sz = MA35D1_DMA_BUFFER_SIZE;
 	info->dma.rx_buf =
 		dma_alloc_coherent(info->dma.chan_rx->device->dev,
 				   info->dma.rx_buf_sz, &info->dma.rx_dma_buf,
 				   GFP_KERNEL);
 	if (!info->dma.rx_buf) {
-		pr_info("%s:dma_alloc_coherent failed dma_release_channel\n",
-			__func__);
+		dev_err(dev, "dma_alloc_coherent failed, releasing channel\n");
 		ret = -ENOMEM;
 		goto err_release;
 	}
+
 	info->dma.slave_config.direction = DMA_DEV_TO_MEM;
 	info->dma.slave_config.src_addr_width = DMA_SLAVE_BUSWIDTH_2_BYTES;
 	info->dma.slave_config.src_addr = info->phyaddr + CURDAT;
@@ -366,24 +482,20 @@ static int ma35d1_adc_read_raw(struct iio_dev *indio_dev,
 
 	reinit_completion(&info->completion);
 
-	/* enable channel */
 	writel((readl(info->regs + SCTL0) & ~CHSELMSK) | chan->channel,
 	       info->regs + SCTL0);
 
-	/* check if the channel is designated as differential channel */
 	if (chan->differential)
 		writel((readl(info->regs + CTL) | DIFFEN), info->regs + CTL);
 	else
 		writel((readl(info->regs + CTL) & ~DIFFEN), info->regs + CTL);
 
-	/* software trigger sample module 0 */
 	writel(1, info->regs + SWTRG);
 
 	timeout = wait_for_completion_interruptible_timeout(&info->completion,
 							    MA35D1_ADC_TIMEOUT);
 
 	*val = readl(info->regs + DAT0) & DATMSK;
-	/* *val = info->buffer[0]; */
 
 	mutex_unlock(&indio_dev->mlock);
 
@@ -401,24 +513,18 @@ static int ma35d1_adc_conf_scan_seq(struct iio_dev *indio_dev,
 	u32 bit;
 	int i = 0;
 
-	for_each_set_bit (bit, scan_mask, indio_dev->masklength) {
+	for_each_set_bit(bit, scan_mask, indio_dev->masklength) {
 		chan = indio_dev->channels + bit;
-		/*
-		 * Assign one channel per Sample module
-		 */
 
 		dev_dbg(&indio_dev->dev, "%s chan %d to Sample module %d\n",
 			__func__, chan->channel, i);
 
-		/* configure sample module trigger source to ADINT0 */
 		writel((readl(info->regs + SCTL0 + (i << 2)) & ~TRGSELMSK) |
 			       ADINT0TRG,
 		       info->regs + SCTL0 + (i << 2));
-		/* configure sample module channel select */
 		writel((readl(info->regs + SCTL0 + (i << 2)) & ~CHSELMSK) |
 			       chan->channel,
 		       info->regs + SCTL0 + (i << 2));
-		/* check if the channel is designated as differential channel */
 		if (chan->differential)
 			writel((readl(info->regs + CTL) | DIFFEN),
 			       info->regs + CTL);
@@ -451,145 +557,6 @@ static int ma35d1_adc_update_scan_mode(struct iio_dev *indio_dev,
 	return ret;
 }
 
-static unsigned int ma35d1_adc_dma_residue(struct ma35d1_adc_device *info)
-{
-	struct dma_tx_state state;
-	enum dma_status status;
-
-	status = dmaengine_tx_status(info->dma.chan_rx,
-				     info->dma.chan_rx->cookie, &state);
-	if (status == DMA_IN_PROGRESS) {
-		/* Residue is size in bytes from end of buffer */
-		unsigned int i = info->dma.rx_buf_sz - state.residue;
-		unsigned int size;
-
-		/* Return available bytes */
-		if (i >= info->bufi)
-			size = i - info->bufi;
-		else
-			size = info->dma.rx_buf_sz + i - info->bufi;
-
-		return size;
-	}
-
-	return 0;
-}
-
-static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
-{
-	struct iio_poll_func *pf = p;
-	struct iio_dev *indio_dev = pf->indio_dev;
-	struct ma35d1_adc_device *info = iio_priv(indio_dev);
-	int channel;
-	int ret_push;
-
-	if (!info->dma.chan_rx) {
-		channel = find_first_bit(indio_dev->active_scan_mask,
-					 indio_dev->masklength);
-
-		/* reset buffer index */
-		info->bufi = 0;
-		ret_push = iio_push_to_buffers_with_timestamp(
-			indio_dev, info->buffer, pf->timestamp);
-		if (ret_push) {
-			/* Set trigger source to software trigger (clear ADINT0 trigger) */
-			writel((readl(info->regs + SCTL0) & ~TRGSELMSK),
-			       info->regs + SCTL0);
-		}
-	} else {
-		int residue = ma35d1_adc_dma_residue(info);
-		int dma_available = info->dma.rx_buf_sz - residue;
-
-		while (dma_available >= indio_dev->scan_bytes) {
-			u16 *buffer = (u16 *)&info->dma.rx_buf[info->bufi];
-
-			iio_push_to_buffers_with_timestamp(indio_dev, buffer,
-							   pf->timestamp);
-
-			info->bufi += indio_dev->scan_bytes;
-			if (info->bufi >= info->dma.rx_buf_sz)
-				info->bufi = 0;
-
-			dma_available -= indio_dev->scan_bytes;
-		}
-	}
-
-	iio_trigger_notify_done(indio_dev->trig);
-	/* re-enable eoc irq */
-	writel(readl(info->regs + CTL) | ADCIEN0, info->regs + CTL);
-	return IRQ_HANDLED;
-}
-
-static void ma35d1_adc_dma_buffer_done(void *data)
-{
-	struct iio_dev *indio_dev = data;
-	struct ma35d1_adc_device *info = iio_priv(indio_dev);
-	int residue = ma35d1_adc_dma_residue(info);
-
-	/*
-	 * In DMA mode the trigger services of IIO are not used
-	 * (e.g. no call to iio_trigger_poll).
-	 * Calling irq handler associated to the hardware trigger is not
-	 * relevant as the conversions have already been done. Data
-	 * transfers are performed directly in DMA callback instead.
-	 * This implementation avoids to call trigger irq handler that
-	 * may sleep, in an atomic context (DMA irq handler context).
-	 */
-	//pr_info("%s\n",__func__);
-
-	//dev_info(&indio_dev->dev, "%s bufi=%d\n", __func__, info->bufi);
-
-	while (residue >= indio_dev->scan_bytes) {
-		u16 *buffer = (u16 *)&info->dma.rx_buf[info->bufi];
-
-		iio_push_to_buffers(indio_dev, buffer);
-
-		residue -= indio_dev->scan_bytes;
-		info->bufi += indio_dev->scan_bytes;
-		if (info->bufi >= info->dma.rx_buf_sz)
-			info->bufi = 0;
-	}
-}
-
-static int ma35d1_adc_dma_start(struct iio_dev *indio_dev)
-{
-	struct ma35d1_adc_device *info = iio_priv(indio_dev);
-	struct ma35d1_peripheral pcfg;
-	dma_cookie_t cookie;
-	int ret;
-	if (!info->dma.chan_rx)
-		return 0;
-
-	dmaengine_terminate_all(info->dma.chan_rx);
-	pcfg.reqsel = info->pdma_reqsel_rx;
-	info->dma.slave_config.peripheral_config = &pcfg;
-	info->dma.slave_config.peripheral_size = sizeof(pcfg);
-	dmaengine_slave_config(info->dma.chan_rx, &(info->dma.slave_config));
-
-	/* Prepare a DMA cyclic transaction */
-	info->dma.rxdesc = dmaengine_prep_dma_cyclic(
-		info->dma.chan_rx, info->dma.rx_dma_buf, info->dma.rx_buf_sz,
-		info->dma.rx_buf_sz / 2, DMA_DEV_TO_MEM, DMA_PREP_INTERRUPT);
-	if (!info->dma.rxdesc)
-		return -EBUSY;
-
-	info->dma.rxdesc->callback = ma35d1_adc_dma_buffer_done;
-	info->dma.rxdesc->callback_param = indio_dev;
-
-	cookie = dmaengine_submit(info->dma.rxdesc);
-	ret = dma_submit_error(cookie);
-
-	if (ret) {
-		dmaengine_terminate_sync(info->dma.chan_rx);
-		return ret;
-	}
-
-	/* Issue pending DMA requests */
-	dma_async_issue_pending(info->dma.chan_rx);
-	writel(1, info->regs + SWTRG);
-	return 0;
-}
-
 static int __ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 {
 	struct ma35d1_adc_device *info = iio_priv(indio_dev);
@@ -600,35 +567,24 @@ static int __ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 	chan_idx = find_first_bit(indio_dev->active_scan_mask,
 				  indio_dev->masklength);
 	chan = &indio_dev->channels[chan_idx];
-	/* Reset adc buffer index */
+
 	info->bufi = 0;
-	/* clear ADIF0 */
 	writel(1, info->regs + STATUS2);
 
 	if (info->dma.chan_rx) {
-		/* Disable interrupt */
 		writel(readl(info->regs + CTL) & ~ADCIEN0, info->regs + CTL);
-
 		writel(readl(info->regs + INTSRC0) | 1, info->regs + INTSRC0);
-		/* Enable DAT0 PDMA */
 		writel(0x3FF, info->regs + PDMACTL);
-		/* set reference voltage from external Vref pin */
 		writel(readl(info->regs + REFADJCTL) | 1,
 		       info->regs + REFADJCTL);
-		/* set sampling time */
 		writel(readl(info->regs + SELSMP0) | 3, info->regs + SELSMP0);
-		/* set trigger delay count */
 		writel(readl(info->regs + SCTL0) | TRGDLYMSK,
 		       info->regs + SCTL0);
-		/* Set trigger source to ADINT0 */
 		writel((readl(info->regs + SCTL0) & ~TRGSELMSK) | ADINT0TRG,
 		       info->regs + SCTL0);
-
-		/* enable channel */
 		writel((readl(info->regs + SCTL0) & ~CHSELMSK) | chan->channel,
 		       info->regs + SCTL0);
 
-		/* check if the channel is designated as differential channel */
 		if (chan->differential)
 			writel((readl(info->regs + CTL) | DIFFEN),
 			       info->regs + CTL);
@@ -644,26 +600,17 @@ static int __ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 			info->dma.chan_rx = NULL;
 		}
 
-		//writel(1, info->regs + SWTRG);
 	} else {
-		pr_info("%s NO DMA MODE", __func__);
-		/* enable ADCIEN0 */
 		writel(readl(info->regs + CTL) | ADCIEN0, info->regs + CTL);
-		/* enable ADINT0 for sample module 0 */
 		writel(readl(info->regs + INTSRC0) | 1, info->regs + INTSRC0);
-		/* set reference voltage from external Vref pin */
 		writel(readl(info->regs + REFADJCTL) | 1,
 		       info->regs + REFADJCTL);
-		/* set sampling time */
 		writel(readl(info->regs + SELSMP0) | 3, info->regs + SELSMP0);
-		/* set trigger delay count */
 		writel(readl(info->regs + SCTL0) | TRGDLYMSK,
 		       info->regs + SCTL0);
-		/* Set trigger source to ADINT0 */
 		writel((readl(info->regs + SCTL0) & ~TRGSELMSK) | ADINT0TRG,
 		       info->regs + SCTL0);
 
-		/* software trigger sample module 0 */
 		writel(1, info->regs + SWTRG);
 	}
 
@@ -675,7 +622,6 @@ static int ma35d1_adc_buffer_postenable(struct iio_dev *indio_dev)
 	int ret;
 
 	ret = __ma35d1_adc_buffer_postenable(indio_dev);
-
 	return ret;
 }
 
@@ -685,16 +631,13 @@ static void __ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
 
 	if (info->dma.chan_rx)
 		dmaengine_terminate_sync(info->dma.chan_rx);
-	/* disable ADCIEN0 */
 	writel(readl(info->regs + CTL) & ~ADCIEN0, info->regs + CTL);
-	/* Clear trigger source to software trigger, not ADINT0 trigger */
 	writel((readl(info->regs + SCTL0) & ~TRGSELMSK), info->regs + SCTL0);
 }
 
 static int ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
 {
 	__ma35d1_adc_buffer_predisable(indio_dev);
-
 	return 0;
 }
 
@@ -723,24 +666,26 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 
 	indio_dev = devm_iio_device_alloc(&pdev->dev,
 					  sizeof(struct ma35d1_adc_device));
-	if (!indio_dev) {
+	if (indio_dev == NULL) {
 		dev_err(&pdev->dev, "failed to allocate iio device\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto err_ret;
 	}
 
 	info = iio_priv(indio_dev);
-	spin_lock_init(&info->lock);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res) {
+	if (res == NULL) {
 		dev_err(&pdev->dev, "cannot find IO resource\n");
-		return -ENOENT;
+		ret = -ENOENT;
+		goto err_ret;
 	}
 
-	info->regs = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(info->regs)) {
+	info->regs = ioremap(res->start, resource_size(res));
+	if (info->regs == NULL) {
 		dev_err(&pdev->dev, "cannot map IO\n");
-		return PTR_ERR(info->regs);
+		ret = -ENXIO;
+		goto err_ret;
 	}
 
 	indio_dev->dev.parent = &pdev->dev;
@@ -750,11 +695,11 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	indio_dev->info = &ma35d1_adc_info;
 	indio_dev->num_channels = 8;
 	indio_dev->channels = ma35d1_adc_iio_channels;
+
 	indio_dev->masklength = indio_dev->num_channels - 1;
 
-	if (of_property_read_u32(pdev->dev.of_node, "eadc-frequency", &freq)) {
+	if (of_property_read_u32(pdev->dev.of_node, "eadc-frequency", &freq))
 		panic("missing 'eadc-frequency' property");
-	}
 
 	of_property_read_string(pdev->dev.of_node, "clock-enable", &clkgate);
 	info->eclk = devm_clk_get(&pdev->dev, "eadc_gate");
@@ -765,8 +710,10 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	}
 
 	err = clk_prepare_enable(info->eclk);
-	if (err)
-		return -ENOENT;
+	if (err) {
+		err = -ENOENT;
+		goto err_ret;
+	}
 
 	clk_set_rate(info->eclk, freq);
 
@@ -784,8 +731,6 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 		}
 
 		info->phyaddr = val32[1];
-		dev_err(&pdev->dev, "info->phyaddr = 0x%lx\n",
-			(ulong)info->phyaddr);
 
 		ret = of_property_read_u32(pdev->dev.of_node, "pdma_reqsel_rx",
 					   &info->pdma_reqsel_rx);
@@ -799,29 +744,28 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	if (irq < 0) {
 		dev_err(&pdev->dev, "no irq resource?\n");
 		ret = irq;
-		goto err_clk_disable;
+		goto err_ret;
 	}
 
 	info->irq = irq;
 	init_completion(&info->completion);
 
-	ret = devm_request_irq(&pdev->dev, info->irq, ma35d1_adc_isr, 0,
-			       dev_name(&pdev->dev), indio_dev);
-	if (ret) {
+	ret = request_irq(info->irq, ma35d1_adc_isr, 0, dev_name(&pdev->dev),
+			  indio_dev);
+	if (ret < 0) {
 		dev_err(&pdev->dev, "failed requesting irq, irq = %d\n",
 			info->irq);
-		goto err_clk_disable;
+		goto err_ret;
 	}
 
 	ret = ma35d1_adc_chan_of_init(indio_dev);
-	if (ret) {
-		goto err_clk_disable;
-	}
+	if (ret)
+		return ret;
 
 	if (info->use_pdma) {
 		ret = ma35d1_adc_dma_request(&pdev->dev, indio_dev);
 		if (ret)
-			goto err_clk_disable;
+			goto err_ret;
 	}
 	writel(readl(info->regs + CTL) | ADCEN, info->regs + CTL);
 	writel(1, info->regs + STATUS2);
@@ -836,7 +780,7 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	ret = iio_triggered_buffer_setup(indio_dev, &iio_pollfunc_store_time,
 					 handler, &ma35d1_ring_setup_ops);
 	if (ret)
-		goto err_disable_adc;
+		goto err_free_channels;
 
 	ret = iio_device_register(indio_dev);
 	if (ret) {
@@ -847,16 +791,18 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, indio_dev);
 	dev_dbg(&pdev->dev, "%s: ma35d1 EADC\n", indio_dev->name);
 
-	//writel(1, info->regs + SWTRG);
+	/* dummy conversion, since the first conversion is incorrect */
+	writel(1, info->regs + SWTRG);
 
 	return 0;
 
 err_cleanup_buffer:
 	iio_triggered_buffer_cleanup(indio_dev);
-err_disable_adc:
+err_free_channels:
+	/* disable ADCEN */
 	writel(readl(info->regs + CTL) & ~ADCEN, info->regs + CTL);
-err_clk_disable:
-	clk_disable_unprepare(info->eclk);
+	ma35d1_adc_channels_remove(indio_dev);
+err_ret:
 	return ret;
 }
 
@@ -867,14 +813,9 @@ static int ma35d1_adc_remove(struct platform_device *pdev)
 
 	iio_device_unregister(indio_dev);
 	ma35d1_adc_channels_remove(indio_dev);
-
 	iio_device_free(indio_dev);
-
-	/* disable ADCEN */
 	writel(readl(info->regs + CTL) & ~ADCEN, info->regs + CTL);
-
 	clk_disable_unprepare(info->eclk);
-
 	ma35d1_adc_buffer_remove(indio_dev);
 	free_irq(info->irq, info);
 
