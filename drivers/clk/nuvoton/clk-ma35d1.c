@@ -793,7 +793,7 @@ static int ma35d1_clocks_probe(struct platform_device *pdev)
 
 	/* ADC */
 	hws[ADC_DIV] = ma35d1_reg_adc_clkdiv(dev, "adc_div", "pclk0", 0,
-		clk_base + REG_CLK_CLKDIV4, 4, 17, 0x1ffff);
+		clk_base + REG_CLK_CLKDIV4, 4, 17, 0);
 	hws[ADC_GATE] = ma35d1_clk_gate("adc_gate", "adc_div",
 		clk_base + REG_CLK_APBCLK2, 24);
 
