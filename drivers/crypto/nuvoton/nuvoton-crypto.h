@@ -316,7 +316,7 @@
 #define MODOP_SUB		(0x3 << ECC_CTL_MODOP_OFFSET)
 
 #define AES_BUFF_SIZE		(PAGE_SIZE)
-#define SHA_BUFF_SIZE		(PAGE_SIZE)
+#define SHA_BUFF_SIZE		(PAGE_SIZE * 4)
 #define SHA_FDBCK_SIZE		(HMAC_FDBCK_WCNT * 4)
 #define HMAC_KEY_BUFF_SIZE	(1024)
 #define AES_KS_KEYLEN		17
@@ -400,30 +400,32 @@ struct nu_sha_dev;
 
 struct nu_sha_ctx {
 	struct nu_sha_dev  *dd;
-	u32	    hash_mode;
-	int	    hmac_key_len;	   /* HMAC key length in bytes       */
-	int	    keybufcnt;
-	u8	    keybuf[HMAC_KEY_BUFF_SIZE] __aligned(32);
-	int         bufcnt;                /* byte count in buffer           */
-	u8	    buffer[SHA_BUFF_SIZE] __aligned(32); /* data buffer      */
-	dma_addr_t  dma_buff;		   /* DMA mapping address of buffer[]*/
-	u8	    fdbck[SHA_FDBCK_SIZE] __aligned(32); /* feedback buffer  */
-	dma_addr_t  dma_fdbck;		   /* DMA mapping address of fdbck[] */
+	u32         hash_mode;
+	int         hmac_key_len;          /* HMAC key length in bytes       */
+	int         keybufcnt;
+	u8          keybuf[HMAC_KEY_BUFF_SIZE] __aligned(32);
 };
 
 struct nu_sha_reqctx {
 	struct nu_sha_dev  *dd;
-	u32	   flags;
-	u32	   op;
-	u32	   reg_ctl;		   /* SHA control register setting   */
+	u32         tsi_sid;               /* TSI SHA session ID             */
+	u32         flags;
+	u32         op;
+	u32         reg_ctl;               /* SHA control register setting   */
 
-	int	   digest_len;		   /* digest length in bytes	     */
-	int	   block_size;             /* SHA block size		     */
-	int	   dma_max_size;           /* Maximum DMA buffer size used   */
+	int         digest_len;            /* digest length in bytes	     */
+	int         block_size;            /* SHA block size		     */
+	int         dma_max_size;          /* Maximum DMA buffer size used   */
 
 	struct scatterlist  *sg;
-	u32        sg_off;                 /* offset in sg		     */
-	u32        req_len;		   /* remaining data count of request*/
+	u32         sg_off;                /* offset in sg		     */
+	u32         req_len;               /* remaining data count of request*/
+
+	int         bufcnt;                /* byte count in buffer           */
+	u8          *buffer;               /* dma data buffer      */
+	dma_addr_t  dma_buff;              /* DMA mapping address of buffer[]*/
+	u8	    fdbck[SHA_FDBCK_SIZE] __aligned(32); /* feedback buffer  */
+	dma_addr_t  dma_fdbck;             /* DMA mapping address of fdbck[] */
 };
 
 struct nu_sha_dev {
@@ -448,7 +450,6 @@ struct nu_sha_dev {
 	u32			session_id;  /* optee session */
 	struct tee_shm		*shm_pool;
 	u32			*va_shm;
-	u32			crypto_session_id;  /* crypto session */
 };
 
 

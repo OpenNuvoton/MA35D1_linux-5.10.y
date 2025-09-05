@@ -113,39 +113,39 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	int  err;
 #endif
 	dma_cnt = 0;
-	tctx->dma_buff = 0;
+	ctx->dma_buff = 0;
 	if (is_key_block) {
-		tctx->dma_buff = dma_map_single(dd->dev, tctx->keybuf,
+		ctx->dma_buff = dma_map_single(dd->dev, tctx->keybuf,
 				HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
 		if (unlikely(dma_mapping_error(dd->dev,
-				tctx->dma_buff))) {
+				ctx->dma_buff))) {
 			dev_err(dd->dev, "SHA keybuf dma map error\n");
 			return -EINVAL;
 		}
-		dma_sync_single_for_cpu(dd->dev, tctx->dma_buff,
+		dma_sync_single_for_cpu(dd->dev, ctx->dma_buff,
 				 HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
 		dma_cnt = tctx->keybufcnt;
 	} else {
-		tctx->dma_buff = dma_map_single(dd->dev, tctx->buffer,
+		ctx->dma_buff = dma_map_single(dd->dev, ctx->buffer,
 				    SHA_BUFF_SIZE, DMA_TO_DEVICE);
 		if (unlikely(dma_mapping_error(dd->dev,
-				tctx->dma_buff))) {
+				ctx->dma_buff))) {
 			dev_err(dd->dev, "SHA buffer dma map error\n");
 			return -EINVAL;
 		}
-		dma_sync_single_for_cpu(dd->dev, tctx->dma_buff,
+		dma_sync_single_for_cpu(dd->dev, ctx->dma_buff,
 					SHA_BUFF_SIZE, DMA_TO_DEVICE);
-		dma_cnt = tctx->bufcnt;
+		dma_cnt = ctx->bufcnt;
 	}
 
-	tctx->dma_fdbck = dma_map_single(dd->dev, tctx->fdbck,
+	ctx->dma_fdbck = dma_map_single(dd->dev, ctx->fdbck,
 					SHA_FDBCK_SIZE, DMA_BIDIRECTIONAL);
-	if (unlikely(dma_mapping_error(dd->dev, tctx->dma_fdbck))) {
+	if (unlikely(dma_mapping_error(dd->dev, ctx->dma_fdbck))) {
 		dev_err(dd->dev, "dma map bytes error\n");
 		return -EINVAL;
 	}
 
-	dma_sync_single_for_cpu(dd->dev, tctx->dma_buff, dma_cnt,
+	dma_sync_single_for_cpu(dd->dev, ctx->dma_buff, dma_cnt,
 					DMA_FROM_DEVICE);
 
 	ctx->reg_ctl |= HMAC_CTL_INSWAP | HMAC_CTL_OUTSWAP | HMAC_CTL_FBOUT |
@@ -166,7 +166,7 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 			ctx->reg_ctl &= ~HMAC_CTL_DMACSCAD;
 	}
 
-	if ((tctx->hash_mode & HMAC_CTL_SHA3EN) && (tctx->bufcnt == 0)) {
+	if ((tctx->hash_mode & HMAC_CTL_SHA3EN) && (ctx->bufcnt == 0)) {
 		/* workaround for MA35D1 SHA3 in case of DMACNT is 0 */
 		ctx->reg_ctl |= HMAC_CTL_DMACSCAD;
 	}
@@ -181,9 +181,9 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 			(INTEN_HMACIEN | INTEN_HMACEIEN), INTEN);
 
 	nu_write_reg(dd, tctx->hmac_key_len, HMAC_KEYCNT);
-	nu_write_reg(dd, dma_cnt,            HMAC_DMACNT);
-	nu_write_reg(dd, tctx->dma_buff,     HMAC_SADDR);
-	nu_write_reg(dd, tctx->dma_fdbck,    HMAC_FBADDR);
+	nu_write_reg(dd, dma_cnt, HMAC_DMACNT);
+	nu_write_reg(dd, ctx->dma_buff, HMAC_SADDR);
+	nu_write_reg(dd, ctx->dma_fdbck, HMAC_FBADDR);
 	nu_write_reg(dd, ctx->reg_ctl, HMAC_CTL);
 
 #ifdef CONFIG_OPTEE
@@ -217,7 +217,7 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 				inv_arg.ret);
 			return -EINVAL;
 		}
-		dd->crypto_session_id = param[1].u.value.a;
+		ctx->tsi_sid = param[1].u.value.a;
 
 		/*
 		 * Invoke PTA_CMD_CRYPTO_SHA_START
@@ -235,15 +235,15 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 
-		param[0].u.value.a = dd->crypto_session_id;
+		param[0].u.value.a = ctx->tsi_sid;
 		param[1].u.value.a = ctx->reg_ctl;
 		param[1].u.value.b = 0;
 		param[2].u.value.a = tctx->hmac_key_len;
 
 		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
 		if ((err < 0) || (inv_arg.ret != 0)) {
-			pr_err("PTA_CMD_CRYPTO_SHA_START err: %x\n",
-				inv_arg.ret);
+			pr_err("PTA_CMD_CRYPTO_SHA_START err: %x. %d\n",
+				inv_arg.ret, tctx->hmac_key_len);
 			return -EINVAL;
 		}
 	}
@@ -266,7 +266,7 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
 
-	param[0].u.value.a = dd->crypto_session_id;
+	param[0].u.value.a = ctx->tsi_sid;
 	param[0].u.value.b = ctx->digest_len;
 	param[1].u.memref.shm = dd->shm_pool;
 	param[1].u.memref.size = CRYPTO_SHM_SIZE;
@@ -277,8 +277,6 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 		pr_err("PTA_CMD_CRYPTO_SHA_UPDATE err: %x\n", inv_arg.ret);
 		return -EINVAL;
 	}
-
-	tasklet_schedule(&dd->done_task);
 
 	if (ctx->flags & SHA_FLAGS_FINAL_DMA) {
 		/*
@@ -297,15 +295,18 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 
 		param[0].u.value.a = C_CODE_SHA;
-		param[1].u.value.a = dd->crypto_session_id;
+		param[1].u.value.a = ctx->tsi_sid;
 
 		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
 		if ((err < 0) || (inv_arg.ret != 0)) {
-			pr_err("PTA_CMD_CRYPTO_CLOSE_SESSION err: %x\n",
-				inv_arg.ret);
+			pr_err("PTA_CMD_CRYPTO_CLOSE_SESSION err: %x\n", inv_arg.ret);
+			tasklet_schedule(&dd->done_task);
 			return -EINVAL;
 		}
 	}
+
+	tasklet_schedule(&dd->done_task);
+
 #endif  /* CONFIG_OPTEE */
 	return -EINPROGRESS;
 }
@@ -337,9 +338,12 @@ static void nuvoton_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
 	/*
 	 *  In case of error occurred or it's the completion of final request
 	 */
-	if ((ctx->flags & SHA_FLAGS_FINAL_DMA) && !err) {
-		/* success and get output digest */
-		nuvoton_sha_get_result(req);
+	if (ctx->flags & SHA_FLAGS_FINAL_DMA) {
+		if (!err)
+			nuvoton_sha_get_result(req);
+		kfree(ctx->buffer);
+		ctx->buffer = NULL;
+		ctx->bufcnt = 0;
 	}
 	req->base.complete(&req->base, err);
 
@@ -428,12 +432,17 @@ static int nuvoton_sha_init(struct ahash_request *req)
 	default:
 		return -EINVAL;
 	}
-	ctx->dma_max_size = (SHA_BUFF_SIZE / ctx->block_size) *
-				ctx->block_size;
+
+	ctx->buffer = kmalloc(SHA_BUFF_SIZE, GFP_KERNEL | GFP_DMA);
+	if (!ctx->buffer)
+		return -ENOMEM;
+
+	ctx->bufcnt = 0;
+	ctx->dma_max_size = (SHA_BUFF_SIZE / ctx->block_size) * ctx->block_size;
 
 	if (!(tctx->hash_mode & HMAC_CTL_HMACEN)) {
 		tctx->hmac_key_len = 0;
-		tctx->bufcnt = 0;
+		ctx->bufcnt = 0;
 		return 0;
 	}
 
@@ -456,23 +465,21 @@ static int nuvoton_sha_init(struct ahash_request *req)
 	return 0;
 }
 
-static void nuvoton_sha_sg_to_dma_buffer(struct ahash_request *req,
-					 struct nu_sha_ctx *tctx,
-					 struct nu_sha_reqctx *ctx)
+static void nuvoton_sha_sg_to_dma_buffer(struct ahash_request *req, struct nu_sha_reqctx *ctx)
 {
 	int	copy_len;
 
 	while (ctx->sg && (ctx->req_len > 0) &&
-		(tctx->bufcnt < ctx->dma_max_size)) {
+		(ctx->bufcnt < ctx->dma_max_size)) {
 		copy_len = min((int)ctx->sg->length - ctx->sg_off,
 				ctx->req_len);
-		if (ctx->dma_max_size - tctx->bufcnt < copy_len)
-			copy_len = ctx->dma_max_size - tctx->bufcnt;
+		if (ctx->dma_max_size - ctx->bufcnt < copy_len)
+			copy_len = ctx->dma_max_size - ctx->bufcnt;
 
-		memcpy(&tctx->buffer[tctx->bufcnt], (u8 *)sg_virt(ctx->sg)
+		memcpy(&ctx->buffer[ctx->bufcnt], (u8 *)sg_virt(ctx->sg)
 				+ ctx->sg_off, copy_len);
 
-		tctx->bufcnt += copy_len;
+		ctx->bufcnt += copy_len;
 		ctx->req_len -= copy_len;
 		ctx->sg_off += copy_len;
 
@@ -486,15 +493,14 @@ static void nuvoton_sha_sg_to_dma_buffer(struct ahash_request *req,
 static int nuvoton_sha_update_start(struct nu_sha_dev *dd)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(dd->req->base.tfm);
 	int err = 0;
 
-	if ((ctx->req_len > 0) &&  (tctx->bufcnt < ctx->dma_max_size))
-		nuvoton_sha_sg_to_dma_buffer(dd->req, tctx, ctx);
+	if ((ctx->req_len > 0) &&  (ctx->bufcnt < ctx->dma_max_size))
+		nuvoton_sha_sg_to_dma_buffer(dd->req, ctx);
 
 	if (ctx->flags & SHA_FLAGS_KEY_BLK) {
 		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
-		    (tctx->bufcnt == 0) && (dd->req->nbytes == 0)) {
+		    (ctx->bufcnt == 0) && (dd->req->nbytes == 0)) {
 			pr_err("MA35D1 HMAC does not support 0 data length!\n");
 			nuvoton_sha_finish_req(ctx, -EINVAL);
 			return -EINVAL;
@@ -504,7 +510,7 @@ static int nuvoton_sha_update_start(struct nu_sha_dev *dd)
 			/* DMA trigger failed, abort! */
 			nuvoton_sha_finish_req(ctx, err);
 		}
-	} else if (tctx->bufcnt == ctx->dma_max_size) {
+	} else if (ctx->bufcnt == ctx->dma_max_size) {
 		/*
 		 * DMA buffer is full, start DMA.
 		 */
@@ -576,13 +582,13 @@ static int nuvoton_sha_handle_queue(struct nu_sha_dev *dd,
 	req = ahash_request_cast(async_req);
 	ctx = ahash_request_ctx(req);
 	dd->req = req;
+
 	return nuvoton_sha_update_start(dd);
 }
 
 static void nuvoton_sha_dma_complete(struct nu_sha_reqctx *ctx)
 {
-	struct nu_sha_dev	*dd = ctx->dd;
-	struct nu_sha_ctx	*tctx = crypto_tfm_ctx(dd->req->base.tfm);
+	struct nu_sha_dev *dd = ctx->dd;
 
 	ctx->flags &= ~SHA_FLAGS_FIRST;     /* clear FIRST flag anyway     */
 
@@ -591,7 +597,7 @@ static void nuvoton_sha_dma_complete(struct nu_sha_reqctx *ctx)
 		nuvoton_sha_update_start(dd);
 		return;
 	}
-	tctx->bufcnt = 0;	    /* reset DMA buffer count      */
+	ctx->bufcnt = 0;	    /* reset DMA buffer count      */
 	if (ctx->req_len == 0) {
 		/* the current request H/W processing done */
 		nuvoton_sha_finish_req(ctx, 0);
@@ -603,14 +609,13 @@ static void nuvoton_sha_dma_complete(struct nu_sha_reqctx *ctx)
 static int nuvoton_sha_update(struct ahash_request *req)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(req);
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(req->base.tfm);
 
 	ctx->sg = req->src;
 	ctx->sg_off = 0;
 	ctx->req_len = req->nbytes;
 
-	nuvoton_sha_sg_to_dma_buffer(req, tctx, ctx);
-	if (tctx->bufcnt + ctx->req_len <= ctx->dma_max_size)
+	nuvoton_sha_sg_to_dma_buffer(req, ctx);
+	if (ctx->bufcnt + ctx->req_len <= ctx->dma_max_size)
 		return 0;
 	return nuvoton_sha_handle_queue(ctx->dd, req);
 }
@@ -738,7 +743,7 @@ static struct ahash_alg  nuvoton_sha_algs[] = {
 	.digest		= nuvoton_sha_digest,
 	.export		= nuvoton_sha_export,
 	.import		= nuvoton_sha_import,
-	.	halg.digestsize	= SHA1_DIGEST_SIZE,
+	.halg.digestsize	= SHA1_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha1",
@@ -1145,7 +1150,6 @@ static void nuvoton_sha_done_task(unsigned long data)
 {
 	struct nu_sha_dev *dd = (struct nu_sha_dev *)data;
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(dd->req->base.tfm);
 	int   map_size;
 
 	if (ctx->flags & SHA_FLAGS_KEY_BLK)
@@ -1153,12 +1157,10 @@ static void nuvoton_sha_done_task(unsigned long data)
 	else
 		map_size = SHA_BUFF_SIZE;
 
-	dma_unmap_single(dd->dev, tctx->dma_fdbck, SHA_FDBCK_SIZE,
-			DMA_BIDIRECTIONAL);
+	dma_unmap_single(dd->dev, ctx->dma_fdbck, SHA_FDBCK_SIZE, DMA_BIDIRECTIONAL);
 
-	if (tctx->dma_buff != 0)
-		dma_unmap_single(dd->dev, tctx->dma_buff, map_size,
-			DMA_TO_DEVICE);
+	if (ctx->dma_buff != 0)
+		dma_unmap_single(dd->dev, ctx->dma_buff, map_size, DMA_TO_DEVICE);
 
 	nuvoton_sha_dma_complete(ctx);
 }
