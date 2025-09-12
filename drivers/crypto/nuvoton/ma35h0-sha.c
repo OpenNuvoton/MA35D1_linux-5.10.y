@@ -2,7 +2,7 @@
 /*
  * linux/driver/crypto/nuvoton/ma35h0-sha.c
  *
- * Copyright (c) 2023 Nuvoton technology corporation.
+ * Copyright (c) 2020 Nuvoton technology corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,11 +50,6 @@ struct nu_sha_drv {
 	/* Device list lock */
 	spinlock_t lock;
 };
-
-#ifdef CONFIG_OPTEE
-static int  optee_sha_open(struct nu_sha_dev *dd);
-static void optee_sha_close(struct nu_sha_dev *dd);
-#endif
 
 static struct nu_sha_drv nu_sha = {
 	.dev_list = LIST_HEAD_INIT(nu_sha.dev_list),
@@ -116,40 +111,39 @@ static int ma35h0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 #endif
 
 	dma_cnt = 0;
-	tctx->dma_buff = 0;
+	ctx->dma_buff = 0;
 	if (is_key_block) {
-		tctx->dma_buff = dma_map_single(dd->dev, tctx->keybuf,
-						HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
+		ctx->dma_buff = dma_map_single(dd->dev, tctx->keybuf,
+					       HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
 
-		if (unlikely(dma_mapping_error(dd->dev, tctx->dma_buff))) {
+		if (unlikely(dma_mapping_error(dd->dev, ctx->dma_buff))) {
 			dev_err(dd->dev, "SHA keybuf dma map error\n");
 			return -EINVAL;
 		}
-		dma_sync_single_for_cpu(dd->dev, tctx->dma_buff,
+		dma_sync_single_for_cpu(dd->dev, ctx->dma_buff,
 					HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
 		dma_cnt = tctx->keybufcnt;
 	} else {
-		tctx->dma_buff = dma_map_single(dd->dev, tctx->buffer,
-						SHA_BUFF_SIZE, DMA_TO_DEVICE);
+		ctx->dma_buff = dma_map_single(dd->dev, ctx->buffer,
+					       SHA_BUFF_SIZE, DMA_TO_DEVICE);
 
-		if (unlikely(dma_mapping_error(dd->dev, tctx->dma_buff))) {
+		if (unlikely(dma_mapping_error(dd->dev, ctx->dma_buff))) {
 			dev_err(dd->dev, "SHA buffer dma map error\n");
 			return -EINVAL;
 		}
-		dma_sync_single_for_cpu(dd->dev, tctx->dma_buff,
+		dma_sync_single_for_cpu(dd->dev, ctx->dma_buff,
 					SHA_BUFF_SIZE, DMA_TO_DEVICE);
-		dma_cnt = tctx->bufcnt;
+		dma_cnt = ctx->bufcnt;
 	}
 
-	tctx->dma_fdbck = dma_map_single(dd->dev, tctx->fdbck,
+	ctx->dma_fdbck = dma_map_single(dd->dev, ctx->fdbck,
 					SHA_FDBCK_SIZE, DMA_BIDIRECTIONAL);
-	if (unlikely(dma_mapping_error(dd->dev, tctx->dma_fdbck))) {
+	if (unlikely(dma_mapping_error(dd->dev, ctx->dma_fdbck))) {
 		dev_err(dd->dev, "dma map bytes error\n");
 		return -EINVAL;
 	}
 
-	dma_sync_single_for_cpu(dd->dev, tctx->dma_buff, dma_cnt,
-					DMA_FROM_DEVICE);
+	dma_sync_single_for_cpu(dd->dev, ctx->dma_buff, dma_cnt, DMA_FROM_DEVICE);
 
 	ctx->reg_ctl |= HMAC_CTL_INSWAP | HMAC_CTL_OUTSWAP | HMAC_CTL_FBOUT |
 			HMAC_CTL_DMACSCAD | HMAC_CTL_DMAEN | HMAC_CTL_START;
@@ -169,23 +163,24 @@ static int ma35h0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 			ctx->reg_ctl &= ~HMAC_CTL_DMACSCAD;
 	}
 
-	if ((tctx->hash_mode & HMAC_CTL_SHA3EN) && (tctx->bufcnt == 0)) {
-		/* workaround for MA35H0 SHA3 in case of DMACNT is 0 */
+	if ((tctx->hash_mode & HMAC_CTL_SHA3EN) && (ctx->bufcnt == 0)) {
+		/* workaround for MA35D1 SHA3 in case of DMACNT is 0 */
 		ctx->reg_ctl |= HMAC_CTL_DMACSCAD;
 	}
 
-	pr_debug("Write HMAC_CTL = 0x%x, dma_cnt = %d, key_len = %d/%d\n",
-		ctx->reg_ctl, dma_cnt, tctx->hmac_key_len, ctx->block_size);
+	pr_debug("Write HMAC_CTL = 0x%x, dma_cnt = %d, key_len = %d/%d\n", ctx->reg_ctl,
+		 dma_cnt, tctx->hmac_key_len, ctx->block_size);
 
 	nu_write_reg(dd, 0, HMAC_KSCTL);
 
 	nu_write_reg(dd, (INTSTS_HMACIF | INTSTS_HMACEIF), INTSTS);
-	nu_write_reg(dd, nu_read_reg(dd, INTEN) | (INTEN_HMACIEN | INTEN_HMACEIEN), INTEN);
+	nu_write_reg(dd, nu_read_reg(dd, INTEN) |
+			(INTEN_HMACIEN | INTEN_HMACEIEN), INTEN);
 
 	nu_write_reg(dd, tctx->hmac_key_len, HMAC_KEYCNT);
 	nu_write_reg(dd, dma_cnt, HMAC_DMACNT);
-	nu_write_reg(dd, tctx->dma_buff, HMAC_SADDR);
-	nu_write_reg(dd, tctx->dma_fdbck, HMAC_FBADDR);
+	nu_write_reg(dd, ctx->dma_buff, HMAC_SADDR);
+	nu_write_reg(dd, ctx->dma_fdbck, HMAC_FBADDR);
 	nu_write_reg(dd, ctx->reg_ctl, HMAC_CTL);
 
 #ifdef CONFIG_OPTEE
@@ -219,7 +214,7 @@ static int ma35h0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 				inv_arg.ret);
 			return -EINVAL;
 		}
-		dd->crypto_session_id = param[1].u.value.a;
+		ctx->tsi_sid = param[1].u.value.a;
 
 		/*
 		 * Invoke PTA_CMD_CRYPTO_SHA_START
@@ -237,15 +232,15 @@ static int ma35h0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 
-		param[0].u.value.a = dd->crypto_session_id;
+		param[0].u.value.a = ctx->tsi_sid;
 		param[1].u.value.a = ctx->reg_ctl;
 		param[1].u.value.b = 0;
 		param[2].u.value.a = tctx->hmac_key_len;
 
 		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
 		if ((err < 0) || (inv_arg.ret != 0)) {
-			pr_err("PTA_CMD_CRYPTO_SHA_START err: %x\n",
-				inv_arg.ret);
+			pr_err("PTA_CMD_CRYPTO_SHA_START err: %x. %d\n",
+				inv_arg.ret, tctx->hmac_key_len);
 			return -EINVAL;
 		}
 	}
@@ -268,7 +263,7 @@ static int ma35h0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
 
-	param[0].u.value.a = dd->crypto_session_id;
+	param[0].u.value.a = ctx->tsi_sid;
 	param[0].u.value.b = ctx->digest_len;
 	param[1].u.memref.shm = dd->shm_pool;
 	param[1].u.memref.size = CRYPTO_SHM_SIZE;
@@ -279,8 +274,6 @@ static int ma35h0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 		pr_err("PTA_CMD_CRYPTO_SHA_UPDATE err: %x\n", inv_arg.ret);
 		return -EINVAL;
 	}
-
-	tasklet_schedule(&dd->done_task);
 
 	if (ctx->flags & SHA_FLAGS_FINAL_DMA) {
 		/*
@@ -299,15 +292,18 @@ static int ma35h0_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
 
 		param[0].u.value.a = C_CODE_SHA;
-		param[1].u.value.a = dd->crypto_session_id;
+		param[1].u.value.a = ctx->tsi_sid;
 
 		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
 		if ((err < 0) || (inv_arg.ret != 0)) {
-			pr_err("PTA_CMD_CRYPTO_CLOSE_SESSION err: %x\n",
-				inv_arg.ret);
+			pr_err("PTA_CMD_CRYPTO_CLOSE_SESSION err: %x\n", inv_arg.ret);
+			tasklet_schedule(&dd->done_task);
 			return -EINVAL;
 		}
 	}
+
+	tasklet_schedule(&dd->done_task);
+
 #endif  /* CONFIG_OPTEE */
 	return -EINPROGRESS;
 }
@@ -325,7 +321,7 @@ static void  ma35h0_sha_get_result(struct ahash_request *req)
 	for (i = 0; i < ctx->digest_len/4; i++)
 		result[i] = nu_read_reg(ctx->dd, HMAC_DGST(i));
 	pr_debug("Digest: %08x %08x %08x %08x %08x\n", result[0], result[1],
-		 result[2], result[3], result[4]);
+			result[2], result[3], result[4]);
 }
 
 /*
@@ -333,15 +329,18 @@ static void  ma35h0_sha_get_result(struct ahash_request *req)
  */
 static void ma35h0_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
 {
-	struct nu_sha_dev *dd = ctx->dd;
-	struct ahash_request *req = dd->req;
+	struct nu_sha_dev	*dd = ctx->dd;
+	struct ahash_request	*req = dd->req;
 
 	/*
 	 *  In case of error occurred or it's the completion of final request
 	 */
-	if ((ctx->flags & SHA_FLAGS_FINAL_DMA) && !err) {
-		/* success and get output digest */
-		ma35h0_sha_get_result(req);
+	if (ctx->flags & SHA_FLAGS_FINAL_DMA) {
+		if (!err)
+			ma35h0_sha_get_result(req);
+		kfree(ctx->buffer);
+		ctx->buffer = NULL;
+		ctx->bufcnt = 0;
 	}
 	req->base.complete(&req->base, err);
 
@@ -430,18 +429,25 @@ static int ma35h0_sha_init(struct ahash_request *req)
 	default:
 		return -EINVAL;
 	}
+
+	ctx->buffer = kmalloc(SHA_BUFF_SIZE, GFP_KERNEL | GFP_DMA);
+	if (!ctx->buffer)
+		return -ENOMEM;
+
+	ctx->bufcnt = 0;
 	ctx->dma_max_size = (SHA_BUFF_SIZE / ctx->block_size) * ctx->block_size;
 
 	if (!(tctx->hash_mode & HMAC_CTL_HMACEN)) {
 		tctx->hmac_key_len = 0;
-		tctx->bufcnt = 0;
+		ctx->bufcnt = 0;
 		return 0;
 	}
 
 	/* is HMAC, check key length */
 	if (((tctx->hmac_key_len + ctx->block_size - 1) >
 		HMAC_KEY_BUFF_SIZE) ||	(tctx->hmac_key_len == 0)) {
-		pr_err("HMAC key length %d is not supported!\n", tctx->hmac_key_len);
+		pr_err("HMAC key length %d is not supported!\n",
+				tctx->hmac_key_len);
 		return -EINVAL;
 	}
 
@@ -456,23 +462,21 @@ static int ma35h0_sha_init(struct ahash_request *req)
 	return 0;
 }
 
-static void ma35h0_sha_sg_to_dma_buffer(struct ahash_request *req,
-					 struct nu_sha_ctx *tctx,
-					 struct nu_sha_reqctx *ctx)
+static void ma35h0_sha_sg_to_dma_buffer(struct ahash_request *req, struct nu_sha_reqctx *ctx)
 {
 	int	copy_len;
 
 	while (ctx->sg && (ctx->req_len > 0) &&
-		(tctx->bufcnt < ctx->dma_max_size)) {
-		copy_len = min((int)ctx->sg->length - ctx->sg_off, ctx->req_len);
+		(ctx->bufcnt < ctx->dma_max_size)) {
+		copy_len = min((int)ctx->sg->length - ctx->sg_off,
+				ctx->req_len);
+		if (ctx->dma_max_size - ctx->bufcnt < copy_len)
+			copy_len = ctx->dma_max_size - ctx->bufcnt;
 
-		if (ctx->dma_max_size - tctx->bufcnt < copy_len)
-			copy_len = ctx->dma_max_size - tctx->bufcnt;
+		memcpy(&ctx->buffer[ctx->bufcnt], (u8 *)sg_virt(ctx->sg)
+				+ ctx->sg_off, copy_len);
 
-		memcpy(&tctx->buffer[tctx->bufcnt], (u8 *)sg_virt(ctx->sg) +
-			ctx->sg_off, copy_len);
-
-		tctx->bufcnt += copy_len;
+		ctx->bufcnt += copy_len;
 		ctx->req_len -= copy_len;
 		ctx->sg_off += copy_len;
 
@@ -486,16 +490,15 @@ static void ma35h0_sha_sg_to_dma_buffer(struct ahash_request *req,
 static int ma35h0_sha_update_start(struct nu_sha_dev *dd)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(dd->req->base.tfm);
 	int err = 0;
 
-	if ((ctx->req_len > 0) &&  (tctx->bufcnt < ctx->dma_max_size))
-		ma35h0_sha_sg_to_dma_buffer(dd->req, tctx, ctx);
+	if ((ctx->req_len > 0) &&  (ctx->bufcnt < ctx->dma_max_size))
+		ma35h0_sha_sg_to_dma_buffer(dd->req, ctx);
 
 	if (ctx->flags & SHA_FLAGS_KEY_BLK) {
 		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
-		    (tctx->bufcnt == 0) && (dd->req->nbytes == 0)) {
-			pr_err("MA35H0 HMAC does not support 0 data length!\n");
+		    (ctx->bufcnt == 0) && (dd->req->nbytes == 0)) {
+			pr_err("MA35D1 HMAC does not support 0 data length!\n");
 			ma35h0_sha_finish_req(ctx, -EINVAL);
 			return -EINVAL;
 		}
@@ -504,13 +507,14 @@ static int ma35h0_sha_update_start(struct nu_sha_dev *dd)
 			/* DMA trigger failed, abort! */
 			ma35h0_sha_finish_req(ctx, err);
 		}
-	} else if (tctx->bufcnt == ctx->dma_max_size) {
+	} else if (ctx->bufcnt == ctx->dma_max_size) {
 		/*
 		 * DMA buffer is full, start DMA.
 		 */
 
 		/* Check if it's the final DMA */
-		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) && (ctx->req_len == 0))
+		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
+		    (ctx->req_len == 0))
 			ctx->flags |= SHA_FLAGS_FINAL_DMA;
 
 		err = ma35h0_sha_dma_run(dd, 0);
@@ -575,13 +579,13 @@ static int ma35h0_sha_handle_queue(struct nu_sha_dev *dd,
 	req = ahash_request_cast(async_req);
 	ctx = ahash_request_ctx(req);
 	dd->req = req;
+
 	return ma35h0_sha_update_start(dd);
 }
 
 static void ma35h0_sha_dma_complete(struct nu_sha_reqctx *ctx)
 {
-	struct nu_sha_dev	*dd = ctx->dd;
-	struct nu_sha_ctx	*tctx = crypto_tfm_ctx(dd->req->base.tfm);
+	struct nu_sha_dev *dd = ctx->dd;
 
 	ctx->flags &= ~SHA_FLAGS_FIRST;     /* clear FIRST flag anyway     */
 
@@ -590,7 +594,7 @@ static void ma35h0_sha_dma_complete(struct nu_sha_reqctx *ctx)
 		ma35h0_sha_update_start(dd);
 		return;
 	}
-	tctx->bufcnt = 0;	    /* reset DMA buffer count      */
+	ctx->bufcnt = 0;	    /* reset DMA buffer count      */
 	if (ctx->req_len == 0) {
 		/* the current request H/W processing done */
 		ma35h0_sha_finish_req(ctx, 0);
@@ -602,14 +606,13 @@ static void ma35h0_sha_dma_complete(struct nu_sha_reqctx *ctx)
 static int ma35h0_sha_update(struct ahash_request *req)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(req);
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(req->base.tfm);
 
 	ctx->sg = req->src;
 	ctx->sg_off = 0;
 	ctx->req_len = req->nbytes;
 
-	ma35h0_sha_sg_to_dma_buffer(req, tctx, ctx);
-	if (tctx->bufcnt + ctx->req_len <= ctx->dma_max_size)
+	ma35h0_sha_sg_to_dma_buffer(req, ctx);
+	if (ctx->bufcnt + ctx->req_len <= ctx->dma_max_size)
 		return 0;
 	return ma35h0_sha_handle_queue(ctx->dd, req);
 }
@@ -649,7 +652,8 @@ static int ma35h0_sha_digest(struct ahash_request *req)
 	return ma35h0_sha_init(req) ?: ma35h0_sha_finup(req);
 }
 
-static int ma35h0_sha_setkey(struct crypto_ahash *tfm, const u8 *key, u32 keylen)
+static int ma35h0_sha_setkey(struct crypto_ahash *tfm, const u8 *key,
+			      u32 keylen)
 {
 	struct nu_sha_ctx *tctx = crypto_ahash_ctx(tfm);
 
@@ -680,10 +684,11 @@ static int ma35h0_sha_import(struct ahash_request *req, const void *in)
 	return 0;
 }
 
-static int ma35h0_sha_cra_init_alg(struct crypto_tfm *tfm, const char *alg_base)
+static int ma35h0_sha_cra_init_alg(struct crypto_tfm *tfm,
+				    const char *alg_base)
 {
 	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
-	struct nu_sha_dev *dd;
+	struct nu_sha_dev *dd = ma35h0_sha_find_dev(tctx);
 
 	dd = ma35h0_sha_find_dev(tctx);
 	if (!dd)
@@ -695,34 +700,11 @@ static int ma35h0_sha_cra_init_alg(struct crypto_tfm *tfm, const char *alg_base)
 
 static int ma35h0_sha_cra_init(struct crypto_tfm *tfm)
 {
-#ifdef CONFIG_OPTEE
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
-	struct nu_sha_dev *dd;
-
-	dd = ma35h0_sha_find_dev(tctx);
-	if (!dd)
-		return -ENODEV;
-
-	if (dd->nu_cdev->use_optee) {
-		if (optee_sha_open(dd) != 0)
-			return -ENODEV;
-	}
-#endif
 	return ma35h0_sha_cra_init_alg(tfm, NULL);
 }
 
 static void ma35h0_sha_cra_exit(struct crypto_tfm *tfm)
 {
-#ifdef CONFIG_OPTEE
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
-	struct nu_sha_dev *dd;
-
-	dd = ma35h0_sha_find_dev(tctx);
-	if (dd) {
-		if (dd->nu_cdev->use_optee)
-			optee_sha_close(dd);
-	}
-#endif
 }
 
 static struct ahash_alg  ma35h0_sha_algs[] = {
@@ -734,11 +716,11 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.digest		= ma35h0_sha_digest,
 	.export		= ma35h0_sha_export,
 	.import		= ma35h0_sha_import,
-	.	halg.digestsize	= SHA1_DIGEST_SIZE,
+	.halg.digestsize	= SHA1_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha1",
-		.cra_driver_name	= "nuvoton-sha1",
+		.cra_driver_name	= "ma35h0-sha1",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA1_BLOCK_SIZE,
@@ -761,7 +743,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha224",
-		.cra_driver_name	= "nuvoton-sha224",
+		.cra_driver_name	= "ma35h0-sha224",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA224_BLOCK_SIZE,
@@ -784,7 +766,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha256",
-		.cra_driver_name	= "nuvoton-sha256",
+		.cra_driver_name	= "ma35h0-sha256",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA256_BLOCK_SIZE,
@@ -807,7 +789,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha384",
-		.cra_driver_name	= "nuvoton-sha384",
+		.cra_driver_name	= "ma35h0-sha384",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA384_BLOCK_SIZE,
@@ -830,7 +812,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha512",
-		.cra_driver_name	= "nuvoton-sha512",
+		.cra_driver_name	= "ma35h0-sha512",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA512_BLOCK_SIZE,
@@ -854,7 +836,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "hmac(sha1)",
-		.cra_driver_name	= "nuvoton-hmac-sha1",
+		.cra_driver_name	= "ma35h0-hmac-sha1",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA1_BLOCK_SIZE,
@@ -878,7 +860,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "hmac(sha224)",
-		.cra_driver_name	= "nuvoton-hmac-sha224",
+		.cra_driver_name	= "ma35h0-hmac-sha224",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA224_BLOCK_SIZE,
@@ -902,7 +884,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "hmac(sha256)",
-		.cra_driver_name	= "nuvoton-hmac-sha256",
+		.cra_driver_name	= "ma35h0-hmac-sha256",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA256_BLOCK_SIZE,
@@ -926,7 +908,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "hmac(sha384)",
-		.cra_driver_name	= "nuvoton-hmac-sha384",
+		.cra_driver_name	= "ma35h0-hmac-sha384",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA384_BLOCK_SIZE,
@@ -950,7 +932,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "hmac(sha512)",
-		.cra_driver_name	= "nuvoton-hmac-sha512",
+		.cra_driver_name	= "ma35h0-hmac-sha512",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA512_BLOCK_SIZE,
@@ -973,7 +955,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sm3",
-		.cra_driver_name	= "nuvoton-sm3",
+		.cra_driver_name	= "ma35h0-sm3",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SM3_BLOCK_SIZE,
@@ -996,7 +978,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "md5",
-		.cra_driver_name	= "nuvoton-md5",
+		.cra_driver_name	= "ma35h0-md5",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= MD5_HMAC_BLOCK_SIZE,
@@ -1019,7 +1001,7 @@ static struct ahash_alg  ma35h0_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "md5",
-		.cra_driver_name	= "nuvoton-md5",
+		.cra_driver_name	= "ma35h0-md5",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= MD5_HMAC_BLOCK_SIZE,
@@ -1045,7 +1027,7 @@ static struct ahash_alg  ma35h0_sha3_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha3-224",
-		.cra_driver_name	= "nuvoton-sha3-224",
+		.cra_driver_name	= "ma35h0-sha3-224",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA3_224_BLOCK_SIZE,
@@ -1068,7 +1050,7 @@ static struct ahash_alg  ma35h0_sha3_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha3-256",
-		.cra_driver_name	= "nuvoton-sha3-256",
+		.cra_driver_name	= "ma35h0-sha3-256",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA3_256_BLOCK_SIZE,
@@ -1091,7 +1073,7 @@ static struct ahash_alg  ma35h0_sha3_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha3-384",
-		.cra_driver_name	= "nuvoton-sha3-384",
+		.cra_driver_name	= "ma35h0-sha3-384",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA3_384_BLOCK_SIZE,
@@ -1114,7 +1096,7 @@ static struct ahash_alg  ma35h0_sha3_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base	= {
 		.cra_name		= "sha3-512",
-		.cra_driver_name	= "nuvoton-sha3-512",
+		.cra_driver_name	= "ma35h0-sha3-512",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= SHA3_512_BLOCK_SIZE,
@@ -1141,7 +1123,6 @@ static void ma35h0_sha_done_task(unsigned long data)
 {
 	struct nu_sha_dev *dd = (struct nu_sha_dev *)data;
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(dd->req->base.tfm);
 	int   map_size;
 
 	if (ctx->flags & SHA_FLAGS_KEY_BLK)
@@ -1149,86 +1130,16 @@ static void ma35h0_sha_done_task(unsigned long data)
 	else
 		map_size = SHA_BUFF_SIZE;
 
-	dma_unmap_single(dd->dev, tctx->dma_fdbck, SHA_FDBCK_SIZE, DMA_BIDIRECTIONAL);
+	dma_unmap_single(dd->dev, ctx->dma_fdbck, SHA_FDBCK_SIZE, DMA_BIDIRECTIONAL);
 
-	if (tctx->dma_buff != 0)
-		dma_unmap_single(dd->dev, tctx->dma_buff, map_size, DMA_TO_DEVICE);
+	if (ctx->dma_buff != 0)
+		dma_unmap_single(dd->dev, ctx->dma_buff, map_size, DMA_TO_DEVICE);
 
 	ma35h0_sha_dma_complete(ctx);
 }
 
-#ifdef CONFIG_OPTEE
-static int  optee_sha_open(struct nu_sha_dev *dd)
-{
-	struct tee_ioctl_open_session_arg sess_arg;
-	int   err;
-
-	err = ma35h0_crypto_optee_init(dd->nu_cdev);
-	if (err)
-		return err;
-	/*
-	 * Open SHA context with TEE driver
-	 */
-	dd->octx = tee_client_open_context(NULL, optee_ctx_match,
-					       NULL, NULL);
-	if (IS_ERR(dd->octx)) {
-		pr_err("%s open context failed, err: %x\n", __func__,
-			sess_arg.ret);
-		return err;
-	}
-
-	/*
-	 * Open SHA session with Crypto Trusted App
-	 */
-	memset(&sess_arg, 0, sizeof(sess_arg));
-	memcpy(sess_arg.uuid, dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
-	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
-	sess_arg.num_params = 0;
-
-	err = tee_client_open_session(dd->octx, &sess_arg, NULL);
-	if ((err < 0) || (sess_arg.ret != 0)) {
-		pr_err("%s open session failed, err: %x\n", __func__,
-			sess_arg.ret);
-		err = -EINVAL;
-		goto out_ctx;
-	}
-	dd->session_id = sess_arg.session;
-
-	/*
-	 * Allocate handshake buffer from OP-TEE share memory
-	 */
-	dd->shm_pool = tee_shm_alloc(dd->octx, CRYPTO_SHM_SIZE,
-				TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
-	if (IS_ERR(dd->shm_pool)) {
-		pr_err("%s tee_shm_alloc failed\n", __func__);
-		goto out_sess;
-	}
-
-	dd->va_shm = tee_shm_get_va(dd->shm_pool, 0);
-	if (IS_ERR(dd->va_shm)) {
-		tee_shm_free(dd->shm_pool);
-		pr_err("%s tee_shm_get_va failed\n", __func__);
-		goto out_sess;
-	}
-	return 0;
-
-out_sess:
-	tee_client_close_session(dd->octx, dd->session_id);
-out_ctx:
-	tee_client_close_context(dd->octx);
-	return err;
-}
-
-static void optee_sha_close(struct nu_sha_dev *dd)
-{
-	tee_shm_free(dd->shm_pool);
-	tee_client_close_session(dd->octx, dd->session_id);
-	tee_client_close_context(dd->octx);
-	dd->octx = NULL;
-}
-#endif
-
-int ma35h0_sha_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
+int ma35h0_sha_probe(struct device *dev,
+		      struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
 	int   i, err = 0;
@@ -1236,12 +1147,65 @@ int ma35h0_sha_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 	sha_dd->dev = dev;
 	sha_dd->nu_cdev = nu_cryp_dev;
 	sha_dd->reg_base = nu_cryp_dev->reg_base;
+	sha_dd->octx = NULL;
+
+#ifdef CONFIG_OPTEE
+	if (nu_cryp_dev->use_optee == true) {
+		struct tee_ioctl_open_session_arg sess_arg;
+
+		err = ma35h0_crypto_optee_init(nu_cryp_dev);
+		if (err)
+			return err;
+
+		/* Open SHA context with TEE driver */
+		sha_dd->octx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
+		if (IS_ERR(sha_dd->octx)) {
+			pr_err("%s open context failed, err: %x\n", __func__, sess_arg.ret);
+			return err;
+		}
+
+		/*
+		 * Open SHA session with Crypto Trusted App
+		 */
+		memset(&sess_arg, 0, sizeof(sess_arg));
+		memcpy(sess_arg.uuid, sha_dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
+		sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
+		sess_arg.num_params = 0;
+
+		err = tee_client_open_session(sha_dd->octx, &sess_arg, NULL);
+		if ((err < 0) || (sess_arg.ret != 0)) {
+			pr_err("%s open session failed, err: %x\n", __func__, sess_arg.ret);
+			err = -EINVAL;
+			goto out_ctx;
+		}
+		sha_dd->session_id = sess_arg.session;
+
+		/*
+		 * Allocate handshake buffer from OP-TEE share memory
+		 */
+		sha_dd->shm_pool = tee_shm_alloc(sha_dd->octx, CRYPTO_SHM_SIZE,
+						 TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+		if (IS_ERR(sha_dd->shm_pool)) {
+			pr_err("%s tee_shm_alloc failed\n", __func__);
+			goto out_sess;
+		}
+
+		sha_dd->va_shm = tee_shm_get_va(sha_dd->shm_pool, 0);
+		if (IS_ERR(sha_dd->va_shm)) {
+			tee_shm_free(sha_dd->shm_pool);
+			pr_err("%s tee_shm_get_va failed\n", __func__);
+			goto out_sess;
+		}
+	}
+#endif
 
 	INIT_LIST_HEAD(&sha_dd->list);
 	spin_lock_init(&sha_dd->lock);
 
-	tasklet_init(&sha_dd->done_task, ma35h0_sha_done_task, (unsigned long)sha_dd);
-	tasklet_init(&sha_dd->queue_task, ma35h0_sha_queue_task, (unsigned long)sha_dd);
+	tasklet_init(&sha_dd->done_task, ma35h0_sha_done_task,
+			(unsigned long)sha_dd);
+	tasklet_init(&sha_dd->queue_task, ma35h0_sha_queue_task,
+			(unsigned long)sha_dd);
 
 	crypto_init_queue(&sha_dd->queue, 32);
 
@@ -1261,7 +1225,7 @@ int ma35h0_sha_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 			goto err_register;
 	}
 
-	pr_info("MA35H0 Crypto SHA engine enabled.\n");
+	pr_info("MA35D1 Crypto SHA engine enabled.\n");
 	return 0;
 
 err_register:
@@ -1280,11 +1244,18 @@ err_register:
 
 	dev_err(dev, "SHA initialization failed. %d\n", err);
 
+#ifdef CONFIG_OPTEE
+out_sess:
+	if (nu_cryp_dev->use_optee == true)
+		tee_client_close_session(sha_dd->octx, sha_dd->session_id);
+out_ctx:
+	if (nu_cryp_dev->use_optee == true)
+		tee_client_close_context(sha_dd->octx);
+#endif
 	return err;
 }
 
-int ma35h0_sha_remove(struct device *dev,
-		       struct nu_crypto_dev *nu_cryp_dev)
+int ma35h0_sha_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
 	int	i;
@@ -1306,9 +1277,14 @@ int ma35h0_sha_remove(struct device *dev,
 	tasklet_kill(&sha_dd->queue_task);
 
 #ifdef CONFIG_OPTEE
-	if (nu_cryp_dev->use_optee)
-		optee_sha_close(sha_dd);
-#endif
+	if (nu_cryp_dev->use_optee == true) {
+		tee_shm_free(sha_dd->shm_pool);
+		tee_client_close_session(sha_dd->octx, sha_dd->session_id);
+		tee_client_close_context(sha_dd->octx);
 
+	}
+#endif
 	return 0;
 }
+
+

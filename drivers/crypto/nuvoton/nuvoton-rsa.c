@@ -33,7 +33,6 @@
 
 #include "nuvoton-crypto.h"
 
-static int  optee_rsa_open(struct nu_rsa_dev *dd);
 static struct nu_rsa_dev  *__rsa_dd;
 
 struct nu_rsa_drv {
@@ -186,10 +185,9 @@ static int nuvoton_rsa_enc(struct akcipher_request *req)
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
 
-	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
-		if (optee_rsa_open(dd) != 0)
-			return -ENODEV;
-	}
+	if (dd->nu_cdev->use_optee && (dd->octx == NULL))
+		return -ENODEV;
+
 	ctx->dd = dd;
 	keyleng = ctx->rsa_bit_len/1024 - 1;
 
@@ -298,10 +296,9 @@ static int nuvoton_rsa_dec(struct akcipher_request *req)
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
 
-	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
-		if (optee_rsa_open(dd) != 0)
-			return -ENODEV;
-	}
+	if (dd->nu_cdev->use_optee && (dd->octx == NULL))
+		return -ENODEV;
+
 	ctx->dd = dd;
 	keyleng = (ctx->rsa_bit_len - 1024) / 1024;
 
@@ -731,10 +728,10 @@ static int nvt_rsa_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	rsa_ctx->dd = __rsa_dd;
 	file->private_data = rsa_ctx;
-	if ((__rsa_dd->nu_cdev->use_optee) && (__rsa_dd->octx == NULL)) {
-		if (optee_rsa_open(__rsa_dd) != 0)
-			return -ENODEV;
-	}
+
+	if ((__rsa_dd->nu_cdev->use_optee) && (__rsa_dd->octx == NULL))
+		return -ENODEV;
+
 	return 0;
 }
 
@@ -762,8 +759,7 @@ static struct miscdevice nvt_rsa_dev = {
 	.fops		= &nvt_rsa_fops,
 };
 
-int nuvoton_rsa_probe(struct device *dev,
-		      struct nu_crypto_dev *nu_cryp_dev)
+int nuvoton_rsa_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_rsa_dev  *rsa_dd = &nu_cryp_dev->rsa_dd;
 	int   err = 0;
@@ -773,6 +769,11 @@ int nuvoton_rsa_probe(struct device *dev,
 	rsa_dd->nu_cdev = nu_cryp_dev;
 	rsa_dd->reg_base = nu_cryp_dev->reg_base;
 	rsa_dd->octx = NULL;
+
+	if (__rsa_dd->nu_cdev->use_optee) {
+		if (optee_rsa_open(rsa_dd) != 0)
+			return -ENODEV;
+	}
 
 	spin_lock(&nu_rsa.lock);
 	list_add_tail(&rsa_dd->list, &nu_rsa.dev_list);
@@ -817,6 +818,7 @@ int nuvoton_rsa_remove(struct device *dev,
 
 	if (nu_cryp_dev->use_optee)
 		optee_rsa_close(rsa_dd);
+
 	return 0;
 }
 

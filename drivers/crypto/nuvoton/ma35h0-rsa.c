@@ -33,9 +33,6 @@
 
 #include "ma35h0-crypto.h"
 
-#ifdef CONFIG_OPTEE
-static int  optee_rsa_open(struct nu_rsa_dev *dd);
-#endif
 static struct nu_rsa_dev  *__rsa_dd;
 
 struct nu_rsa_drv {
@@ -199,10 +196,8 @@ static int ma35h0_rsa_enc(struct akcipher_request *req)
 #endif
 
 #ifdef CONFIG_OPTEE
-	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
-		if (optee_rsa_open(dd) != 0)
-			return -ENODEV;
-	}
+	if (dd->nu_cdev->use_optee && (dd->octx == NULL))
+		return -ENODEV;
 #endif
 	ctx->dd = dd;
 	keyleng = ctx->rsa_bit_len/1024 - 1;
@@ -322,10 +317,8 @@ static int ma35h0_rsa_dec(struct akcipher_request *req)
 #endif
 
 #ifdef CONFIG_OPTEE
-	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
-		if (optee_rsa_open(dd) != 0)
-			return -ENODEV;
-	}
+	if (dd->nu_cdev->use_optee && (dd->octx == NULL))
+		return -ENODEV;
 #endif
 	ctx->dd = dd;
 	keyleng = (ctx->rsa_bit_len - 1024) / 1024;
@@ -430,7 +423,7 @@ static int ma35h0_rsa_dec(struct akcipher_request *req)
 }
 
 static int ma35h0_rsa_set_pub_key(struct crypto_akcipher *tfm, const void *key,
-			   unsigned int keylen)
+				  unsigned int keylen)
 {
 	struct nu_rsa_ctx  *ctx = akcipher_tfm_ctx(tfm);
 	struct rsa_key raw_key = {0};
@@ -772,12 +765,10 @@ static int nvt_rsa_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	rsa_ctx->dd = __rsa_dd;
 	file->private_data = rsa_ctx;
-#ifdef CONFIG_OPTEE
-	if ((__rsa_dd->nu_cdev->use_optee) && (__rsa_dd->octx == NULL)) {
-		if (optee_rsa_open(__rsa_dd) != 0)
-			return -ENODEV;
-	}
-#endif
+
+	if (__rsa_dd->nu_cdev->use_optee && (__rsa_dd->octx == NULL))
+		return -ENODEV;
+
 	return 0;
 }
 
@@ -815,6 +806,13 @@ int ma35h0_rsa_probe(struct device *dev,
 	rsa_dd->dev = dev;
 	rsa_dd->nu_cdev = nu_cryp_dev;
 	rsa_dd->reg_base = nu_cryp_dev->reg_base;
+
+#ifdef CONFIG_OPTEE
+	if (rsa_dd->nu_cdev->use_optee) {
+		if (optee_rsa_open(rsa_dd) != 0)
+			return -ENODEV;
+	}
+#endif
 
 	spin_lock(&nu_rsa.lock);
 	list_add_tail(&rsa_dd->list, &nu_rsa.dev_list);

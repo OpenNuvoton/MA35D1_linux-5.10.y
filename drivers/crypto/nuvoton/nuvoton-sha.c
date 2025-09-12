@@ -109,24 +109,25 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	struct tee_param param[4];
 	int  err;
 #endif
+
 	dma_cnt = 0;
 	ctx->dma_buff = 0;
 	if (is_key_block) {
 		ctx->dma_buff = dma_map_single(dd->dev, tctx->keybuf,
-				HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
-		if (unlikely(dma_mapping_error(dd->dev,
-				ctx->dma_buff))) {
+					       HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
+
+		if (unlikely(dma_mapping_error(dd->dev, ctx->dma_buff))) {
 			dev_err(dd->dev, "SHA keybuf dma map error\n");
 			return -EINVAL;
 		}
 		dma_sync_single_for_cpu(dd->dev, ctx->dma_buff,
-				 HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
+					HMAC_KEY_BUFF_SIZE, DMA_TO_DEVICE);
 		dma_cnt = tctx->keybufcnt;
 	} else {
 		ctx->dma_buff = dma_map_single(dd->dev, ctx->buffer,
-				    SHA_BUFF_SIZE, DMA_TO_DEVICE);
-		if (unlikely(dma_mapping_error(dd->dev,
-				ctx->dma_buff))) {
+					       SHA_BUFF_SIZE, DMA_TO_DEVICE);
+
+		if (unlikely(dma_mapping_error(dd->dev, ctx->dma_buff))) {
 			dev_err(dd->dev, "SHA buffer dma map error\n");
 			return -EINVAL;
 		}
@@ -142,8 +143,7 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 		return -EINVAL;
 	}
 
-	dma_sync_single_for_cpu(dd->dev, ctx->dma_buff, dma_cnt,
-					DMA_FROM_DEVICE);
+	dma_sync_single_for_cpu(dd->dev, ctx->dma_buff, dma_cnt, DMA_FROM_DEVICE);
 
 	ctx->reg_ctl |= HMAC_CTL_INSWAP | HMAC_CTL_OUTSWAP | HMAC_CTL_FBOUT |
 			HMAC_CTL_DMACSCAD | HMAC_CTL_DMAEN | HMAC_CTL_START;

@@ -2,7 +2,7 @@
 /*
  * Nuvoton Cryptographic Accelerator registers and data
  *
- * Copyright (c) 2023 Nuvoton technology corporation.
+ * Copyright (c) 2020 Nuvoton technology corporation.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -281,21 +281,21 @@
 #define RSA_KSSTS1_NUM7_OFFSET		24
 #define RSA_KSSTS1_NUM7_MASK		(0x1f << 24)
 
-#define AES_KEYSZ_SEL_128	(0x0 << AES_CTL_KEYSZ_OFFSET)
-#define AES_KEYSZ_SEL_192	(0x1 << AES_CTL_KEYSZ_OFFSET)
-#define AES_KEYSZ_SEL_256	(0x2 << AES_CTL_KEYSZ_OFFSET)
+#define AES_KEYSZ_SEL_128       (0x0 << AES_CTL_KEYSZ_OFFSET)
+#define AES_KEYSZ_SEL_192       (0x1 << AES_CTL_KEYSZ_OFFSET)
+#define AES_KEYSZ_SEL_256       (0x2 << AES_CTL_KEYSZ_OFFSET)
 
-#define AES_MODE_ECB		(0x00 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_CBC		(0x01 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_CFB		(0x02 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_OFB		(0x03 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_CTR		(0x04 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_CBC_CS1	(0x10 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_CBC_CS2	(0x11 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_CBC_CS3	(0x12 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_GCM		(0x20 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_GHASH		(0x21 << AES_CTL_OPMODE_OFFSET)
-#define AES_MODE_CCM		(0x22 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_ECB            (0x00 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_CBC            (0x01 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_CFB            (0x02 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_OFB            (0x03 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_CTR            (0x04 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_CBC_CS1        (0x10 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_CBC_CS2        (0x11 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_CBC_CS3        (0x12 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_GCM            (0x20 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_GHASH          (0x21 << AES_CTL_OPMODE_OFFSET)
+#define AES_MODE_CCM            (0x22 << AES_CTL_OPMODE_OFFSET)
 
 #define SHA_OPMODE_SHA1		(0x0 << HMAC_CTL_OPMODE_OFFSET)
 #define SHA_OPMODE_SHA224	(0x5 << HMAC_CTL_OPMODE_OFFSET)
@@ -316,7 +316,7 @@
 #define MODOP_SUB		(0x3 << ECC_CTL_MODOP_OFFSET)
 
 #define AES_BUFF_SIZE		(PAGE_SIZE)
-#define SHA_BUFF_SIZE		(PAGE_SIZE)
+#define SHA_BUFF_SIZE		(PAGE_SIZE * 4)
 #define SHA_FDBCK_SIZE		(HMAC_FDBCK_WCNT * 4)
 #define HMAC_KEY_BUFF_SIZE	(1024)
 #define AES_KS_KEYLEN		17
@@ -332,16 +332,17 @@ struct nu_aes_dev;
 typedef int (*nu_aes_fn_t)(struct nu_aes_dev *, int);
 
 struct nu_aes_base_ctx {
-	struct nu_aes_dev	*dd;
-	nu_aes_fn_t		start;
-	__u32			mode;
-	int			keylen;
-	__u32			keysz_sel;
-	u32			aes_key[8];
-	u8			tag[16];
-	int			authsize;
-	int			assoclen;
-	int			text_len;
+	struct nu_aes_dev *dd;
+	nu_aes_fn_t  start;
+	u32	   mode;
+	int	   keylen;
+	u32	   keysz_sel;
+	u32	   aes_key[8];
+
+	u8	   tag[16];
+	int	   authsize;
+	int	   assoclen;
+	int	   text_len;
 };
 
 struct nu_aes_ctx {
@@ -355,7 +356,7 @@ struct nu_aes_dev {
 	void __iomem		*reg_base;
 	u32			flags;
 
-	struct crypto_async_request *areq;
+	struct crypto_async_request	*areq;
 	struct nu_aes_base_ctx	*ctx;
 
 	nu_aes_fn_t		resume;
@@ -367,9 +368,9 @@ struct nu_aes_dev {
 	struct tasklet_struct	queue_task;
 
 	u8			inbuf[AES_BUFF_SIZE] __aligned(32);
-	dma_addr_t		dma_inbuf;
+	dma_addr_t		dma_inbuf;  /* AES input buffer DMA address  */
 	u8			outbuf[AES_BUFF_SIZE] __aligned(32);
-	dma_addr_t		dma_outbuf;
+	dma_addr_t		dma_outbuf; /* AES output buffer DMA address */
 
 	/*
 	 *  for request handling
@@ -398,29 +399,33 @@ struct nu_aes_dev {
 struct nu_sha_dev;
 
 struct nu_sha_ctx {
-	struct nu_sha_dev	*dd;
-	u32			hash_mode;
-	int			hmac_key_len;
-	int			keybufcnt;
-	u8			keybuf[HMAC_KEY_BUFF_SIZE] __aligned(32);
-	int			bufcnt;
-	u8			buffer[SHA_BUFF_SIZE] __aligned(32);
-	dma_addr_t		dma_buff;
-	u8			fdbck[SHA_FDBCK_SIZE] __aligned(32);
-	dma_addr_t		dma_fdbck;
+	struct nu_sha_dev  *dd;
+	u32         hash_mode;
+	int         hmac_key_len;          /* HMAC key length in bytes       */
+	int         keybufcnt;
+	u8          keybuf[HMAC_KEY_BUFF_SIZE] __aligned(32);
 };
 
 struct nu_sha_reqctx {
-	struct nu_sha_dev	*dd;
-	u32			flags;
-	u32			op;
-	u32			reg_ctl;
-	int			digest_len;
-	int			block_size;
-	int			dma_max_size;
-	struct scatterlist	*sg;
-	u32			sg_off;
-	u32			req_len;
+	struct nu_sha_dev  *dd;
+	u32         tsi_sid;               /* TSI SHA session ID             */
+	u32         flags;
+	u32         op;
+	u32         reg_ctl;               /* SHA control register setting   */
+
+	int         digest_len;            /* digest length in bytes	     */
+	int         block_size;            /* SHA block size		     */
+	int         dma_max_size;          /* Maximum DMA buffer size used   */
+
+	struct scatterlist  *sg;
+	u32         sg_off;                /* offset in sg		     */
+	u32         req_len;               /* remaining data count of request*/
+
+	int         bufcnt;                /* byte count in buffer           */
+	u8          *buffer;               /* dma data buffer      */
+	dma_addr_t  dma_buff;              /* DMA mapping address of buffer[]*/
+	u8	    fdbck[SHA_FDBCK_SIZE] __aligned(32); /* feedback buffer  */
+	dma_addr_t  dma_fdbck;             /* DMA mapping address of fdbck[] */
 };
 
 struct nu_sha_dev {
@@ -429,9 +434,12 @@ struct nu_sha_dev {
 	struct nu_crypto_dev	*nu_cdev;
 	void __iomem		*reg_base;
 	u32			flags;
+
 	spinlock_t		lock;
+
 	struct crypto_queue	queue;
 	struct ahash_request	*req;
+
 	struct tasklet_struct	done_task;
 	struct tasklet_struct	queue_task;
 
@@ -442,8 +450,8 @@ struct nu_sha_dev {
 	u32			session_id;  /* optee session */
 	struct tee_shm		*shm_pool;
 	u32			*va_shm;
-	u32			crypto_session_id;  /* crypto session */
 };
+
 
 /*-------------------------------------------------------------------------*/
 /*   ECC                                                                   */
@@ -484,29 +492,29 @@ enum {
 };
 
 struct ecc_curve {
-	int			curve_id;
-	int			Echar;
-	u8			Ea[NU_ECC_MAX_LEN];
-	u8			Eb[NU_ECC_MAX_LEN];
-	u8			Px[NU_ECC_MAX_LEN];
-	u8			Py[NU_ECC_MAX_LEN];
-	int			Epl;
-	u8			Pp[NU_ECC_MAX_LEN];
-	int			Eol;
-	u8			Eorder[72];
-	int			key_len;
-	int			irreducible_k1;
-	int			irreducible_k2;
-	int			irreducible_k3;
-	int			GF;
+	int        curve_id;
+	int        Echar;
+	u8         Ea[NU_ECC_MAX_LEN];
+	u8         Eb[NU_ECC_MAX_LEN];
+	u8         Px[NU_ECC_MAX_LEN];
+	u8         Py[NU_ECC_MAX_LEN];
+	int        Epl;
+	u8         Pp[NU_ECC_MAX_LEN];
+	int        Eol;
+	u8         Eorder[72];
+	int        key_len;
+	int        irreducible_k1;
+	int        irreducible_k2;
+	int        irreducible_k3;
+	int        GF;
 };
 
 struct nu_ecc_ctx {
-	struct nu_ecc_dev	*dd;
-	int			curve_id;
+	struct nu_ecc_dev  *dd;
+	int	   curve_id;
 	const struct ecc_curve	*curve;
-	int			keylen;
-	u8			private_key[NU_ECC_MAX_LEN];
+	int	   keylen;
+	u8	   private_key[NU_ECC_MAX_LEN];
 };
 
 struct nu_ecc_dev {
@@ -524,6 +532,7 @@ struct nu_ecc_dev {
 	struct tee_shm		*shm_pool;
 	u32			*va_shm;
 };
+
 
 /*-------------------------------------------------------------------------*/
 /*   RSA                                                                   */
@@ -552,15 +561,16 @@ struct nu_ecc_dev {
 #define ANS_OFF			(RSA_REG_RAM_SIZE*12)
 
 struct nu_rsa_ctx {
-	struct nu_rsa_dev	*dd;
-	void __iomem		*reg_base;
-	int			rsa_bit_len;
-	u8			buffer[RSA_BUFF_SIZE] __aligned(32);
-	u8			public_key[RSA_REG_RAM_SIZE];
-	int			public_key_size;
-	u8			private_key[RSA_REG_RAM_SIZE];
-	int			private_key_size;
-	dma_addr_t		dma_buff;
+	struct nu_rsa_dev  *dd;
+	void __iomem  *reg_base;
+	int	   rsa_bit_len;
+
+	u8         buffer[RSA_BUFF_SIZE] __aligned(32);
+	u8	   public_key[RSA_REG_RAM_SIZE];
+	int	   public_key_size;
+	u8	   private_key[RSA_REG_RAM_SIZE];
+	int	   private_key_size;
+	dma_addr_t dma_buff;
 };
 
 struct nu_rsa_dev {
@@ -579,30 +589,30 @@ struct nu_rsa_dev {
 };
 
 struct nu_crypto_dev {
-	struct device		*dev;
+	struct device           *dev;
 	bool                    use_optee;
 	struct tee_client_device *tee_cdev;
-	void __iomem		*reg_base;
-	unsigned long		prng;
-	struct nu_aes_dev	aes_dd;
-	struct nu_sha_dev	sha_dd;
-	struct nu_ecc_dev	ecc_dd;
-	struct nu_rsa_dev	rsa_dd;
-	bool			ecc_ioctl;
-	bool			rsa_ioctl;
+	void __iomem            *reg_base;
+	unsigned long           prng;
+	struct nu_aes_dev       aes_dd;
+	struct nu_sha_dev       sha_dd;
+	struct nu_ecc_dev       ecc_dd;
+	struct nu_rsa_dev       rsa_dd;
+	bool                    ecc_ioctl;
+	bool                    rsa_ioctl;
 };
 
 /*-------------------------------------------------------------------------*/
 /*   ECC and RSA IOCTL commands                                            */
 /*-------------------------------------------------------------------------*/
-#define CRYPTO_IOC_MAGIC	'C'
-#define RSA_IOC_SET_BITLEN	_IOW(CRYPTO_IOC_MAGIC, 20, unsigned long)
-#define RSA_IOC_SET_N		_IOW(CRYPTO_IOC_MAGIC, 21, u8 *)
-#define RSA_IOC_SET_E		_IOW(CRYPTO_IOC_MAGIC, 22, u8 *)
-#define RSA_IOC_SET_M		_IOW(CRYPTO_IOC_MAGIC, 23, u8 *)
-#define RSA_IOC_SET_P		_IOW(CRYPTO_IOC_MAGIC, 24, u8 *)
-#define RSA_IOC_SET_Q		_IOW(CRYPTO_IOC_MAGIC, 25, u8 *)
-#define RSA_IOC_RUN		_IOW(CRYPTO_IOC_MAGIC, 29, u8 *)
+#define CRYPTO_IOC_MAGIC    'C'
+#define RSA_IOC_SET_BITLEN        _IOW(CRYPTO_IOC_MAGIC, 20, unsigned long)
+#define RSA_IOC_SET_N             _IOW(CRYPTO_IOC_MAGIC, 21, u8 *)
+#define RSA_IOC_SET_E             _IOW(CRYPTO_IOC_MAGIC, 22, u8 *)
+#define RSA_IOC_SET_M             _IOW(CRYPTO_IOC_MAGIC, 23, u8 *)
+#define RSA_IOC_SET_P             _IOW(CRYPTO_IOC_MAGIC, 24, u8 *)
+#define RSA_IOC_SET_Q             _IOW(CRYPTO_IOC_MAGIC, 25, u8 *)
+#define RSA_IOC_RUN               _IOW(CRYPTO_IOC_MAGIC, 29, u8 *)
 
 #define ECC_IOC_KEY_GEN           _IOW(CRYPTO_IOC_MAGIC, 53, u8 *)
 #define ECC_IOC_POINT_MUL         _IOW(CRYPTO_IOC_MAGIC, 55, u8 *)
@@ -852,20 +862,29 @@ static inline int optee_ctx_match(struct tee_ioctl_version_data *ver,
 
 extern int ma35h0_crypto_optee_init(struct nu_crypto_dev *nu_cryp_dev);
 
-extern int ma35h0_prng_probe(struct device *dev, void __iomem *reg_base, unsigned long *data);
+extern int ma35h0_prng_probe(struct device *dev, void __iomem *reg_base,
+				unsigned long *data);
 extern int ma35h0_prng_remove(struct device *dev, unsigned long data);
 
-extern int ma35h0_aes_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev);
-extern int ma35h0_aes_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev);
+extern int ma35h0_aes_probe(struct device *dev,
+				struct nu_crypto_dev *nu_cryp_dev);
+extern int ma35h0_aes_remove(struct device *dev,
+				struct nu_crypto_dev *nu_cryp_dev);
 
-extern int ma35h0_sha_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev);
-extern int ma35h0_sha_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev);
+extern int ma35h0_sha_probe(struct device *dev,
+				struct nu_crypto_dev *nu_cryp_dev);
+extern int ma35h0_sha_remove(struct device *dev,
+				struct nu_crypto_dev *nu_cryp_dev);
 
-extern int ma35h0_ecc_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev);
-extern int ma35h0_ecc_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev);
+extern int ma35h0_ecc_probe(struct device *dev,
+				struct nu_crypto_dev *nu_cryp_dev);
+extern int ma35h0_ecc_remove(struct device *dev,
+				struct nu_crypto_dev *nu_cryp_dev);
 
-extern int ma35h0_rsa_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev);
-extern int ma35h0_rsa_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev);
+extern int ma35h0_rsa_probe(struct device *dev,
+				struct nu_crypto_dev *nu_cryp_dev);
+extern int ma35h0_rsa_remove(struct device *dev,
+				struct nu_crypto_dev *nu_cryp_dev);
 
 /* functions in crypto/ecc.c */
 extern int ecc_gen_privkey(unsigned int curve_id, unsigned int ndigits, u64 *privkey);

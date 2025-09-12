@@ -686,10 +686,6 @@ static struct ecc_curve _Curve[] = {
 },
 };
 
-#ifdef CONFIG_OPTEE
-static int  optee_ecc_open(struct nu_ecc_dev *dd);
-#endif
-
 struct ecc_curve *get_curve(int ecc_curve)
 {
 	int   i;
@@ -1015,10 +1011,8 @@ static int ma35d0_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf,
 
 	ctx->dd = dd;
 #ifdef CONFIG_OPTEE
-	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
-		if (optee_ecc_open(dd) != 0)
-			return -ENODEV;
-	}
+	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL))
+		return -ENODEV;
 #endif
 	if (crypto_ecdh_decode_key(buf, len, &params) < 0) {
 		pr_err("crypto_ecdh_decode_key failed!\n");
@@ -1063,10 +1057,8 @@ static int ma35d0_ecdh_compute_value(struct kpp_request *req)
 	int ret;
 
 #ifdef CONFIG_OPTEE
-	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL)) {
-		if (optee_ecc_open(dd) != 0)
-			return -ENODEV;
-	}
+	if ((dd->nu_cdev->use_optee) && (dd->octx == NULL))
+		return -ENODEV;
 #endif
 	ctx->dd = dd;
 	ret = ma35d0_ecc_init_curve(ctx->curve_id, ctx);
@@ -1424,10 +1416,8 @@ static int nvt_ecc_open(struct inode *inode, struct file *file)
 	file->private_data = ecc_ctx;
 
 #ifdef CONFIG_OPTEE
-	if ((__ecc_dd->nu_cdev->use_optee) && (__ecc_dd->octx == NULL)) {
-		if (optee_ecc_open(__ecc_dd) != 0)
-			return -ENODEV;
-	}
+	if ((__ecc_dd->nu_cdev->use_optee) && (__ecc_dd->octx == NULL))
+		return -ENODEV;
 #endif
 	return 0;
 }
@@ -1465,6 +1455,13 @@ int ma35d0_ecc_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 	ecc_dd->dev = dev;
 	ecc_dd->nu_cdev = nu_cryp_dev;
 	ecc_dd->reg_base = nu_cryp_dev->reg_base;
+
+#ifdef CONFIG_OPTEE
+	if (ecc_dd->nu_cdev->use_optee) {
+		if (optee_ecc_open(ecc_dd) != 0)
+			return -ENODEV;
+	}
+#endif
 
 	INIT_LIST_HEAD(&ecc_dd->list);
 	spin_lock_init(&ecc_dd->lock);
