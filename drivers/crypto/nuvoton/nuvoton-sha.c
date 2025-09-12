@@ -51,9 +51,6 @@ struct nu_sha_drv {
 	spinlock_t lock;
 };
 
-static int  optee_sha_open(struct nu_sha_dev *dd);
-static void optee_sha_close(struct nu_sha_dev *dd);
-
 static struct nu_sha_drv nu_sha = {
 	.dev_list = LIST_HEAD_INIT(nu_sha.dev_list),
 	.lock = __SPIN_LOCK_UNLOCKED(nu_sha.lock),
@@ -171,8 +168,8 @@ static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 		ctx->reg_ctl |= HMAC_CTL_DMACSCAD;
 	}
 
-	pr_debug("Write HMAC_CTL = 0x%x, dma_cnt = %d, key_len = %d/%d\n",
-		ctx->reg_ctl, dma_cnt, tctx->hmac_key_len, ctx->block_size);
+	pr_debug("Write HMAC_CTL = 0x%x, dma_cnt = %d, key_len = %d/%d\n", ctx->reg_ctl,
+		 dma_cnt, tctx->hmac_key_len, ctx->block_size);
 
 	nu_write_reg(dd, 0, HMAC_KSCTL);
 
@@ -697,41 +694,17 @@ static int nuvoton_sha_cra_init_alg(struct crypto_tfm *tfm,
 	if (!dd)
 		return -ENODEV;
 
-	crypto_ahash_set_reqsize(__crypto_ahash_cast(tfm),
-			sizeof(struct nu_sha_reqctx));
+	crypto_ahash_set_reqsize(__crypto_ahash_cast(tfm), sizeof(struct nu_sha_reqctx));
 	return 0;
 }
 
 static int nuvoton_sha_cra_init(struct crypto_tfm *tfm)
 {
-#ifdef CONFIG_OPTEE
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
-	struct nu_sha_dev *dd = nuvoton_sha_find_dev(tctx);
-
-	dd = nuvoton_sha_find_dev(tctx);
-	if (!dd)
-		return -ENODEV;
-
-	if (dd->nu_cdev->use_optee) {
-		if (optee_sha_open(dd) != 0)
-			return -ENODEV;
-	}
-#endif
 	return nuvoton_sha_cra_init_alg(tfm, NULL);
 }
 
 static void nuvoton_sha_cra_exit(struct crypto_tfm *tfm)
 {
-#ifdef CONFIG_OPTEE
-	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
-	struct nu_sha_dev *dd = nuvoton_sha_find_dev(tctx);
-
-	dd = nuvoton_sha_find_dev(tctx);
-	if (dd) {
-		if (dd->nu_cdev->use_optee)
-			optee_sha_close(dd);
-	}
-#endif
 }
 
 static struct ahash_alg  nuvoton_sha_algs[] = {
@@ -1165,77 +1138,6 @@ static void nuvoton_sha_done_task(unsigned long data)
 	nuvoton_sha_dma_complete(ctx);
 }
 
-#ifdef CONFIG_OPTEE
-static int  optee_sha_open(struct nu_sha_dev *dd)
-{
-	struct tee_ioctl_open_session_arg sess_arg;
-	int   err;
-
-	err = nuvoton_crypto_optee_init(dd->nu_cdev);
-	if (err)
-		return err;
-	/*
-	 * Open SHA context with TEE driver
-	 */
-	dd->octx = tee_client_open_context(NULL, optee_ctx_match,
-					       NULL, NULL);
-	if (IS_ERR(dd->octx)) {
-		pr_err("%s open context failed, err: %x\n", __func__,
-			sess_arg.ret);
-		return err;
-	}
-
-	/*
-	 * Open SHA session with Crypto Trusted App
-	 */
-	memset(&sess_arg, 0, sizeof(sess_arg));
-	memcpy(sess_arg.uuid, dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
-	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
-	sess_arg.num_params = 0;
-
-	err = tee_client_open_session(dd->octx, &sess_arg, NULL);
-	if ((err < 0) || (sess_arg.ret != 0)) {
-		pr_err("%s open session failed, err: %x\n", __func__,
-			sess_arg.ret);
-		err = -EINVAL;
-		goto out_ctx;
-	}
-	dd->session_id = sess_arg.session;
-
-	/*
-	 * Allocate handshake buffer from OP-TEE share memory
-	 */
-	dd->shm_pool = tee_shm_alloc(dd->octx, CRYPTO_SHM_SIZE,
-				TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
-	if (IS_ERR(dd->shm_pool)) {
-		pr_err("%s tee_shm_alloc failed\n", __func__);
-		goto out_sess;
-	}
-
-	dd->va_shm = tee_shm_get_va(dd->shm_pool, 0);
-	if (IS_ERR(dd->va_shm)) {
-		tee_shm_free(dd->shm_pool);
-		pr_err("%s tee_shm_get_va failed\n", __func__);
-		goto out_sess;
-	}
-	return 0;
-
-out_sess:
-	tee_client_close_session(dd->octx, dd->session_id);
-out_ctx:
-	tee_client_close_context(dd->octx);
-	return err;
-}
-
-static void optee_sha_close(struct nu_sha_dev *dd)
-{
-	tee_shm_free(dd->shm_pool);
-	tee_client_close_session(dd->octx, dd->session_id);
-	tee_client_close_context(dd->octx);
-	dd->octx = NULL;
-}
-#endif
-
 int nuvoton_sha_probe(struct device *dev,
 		      struct nu_crypto_dev *nu_cryp_dev)
 {
@@ -1246,6 +1148,56 @@ int nuvoton_sha_probe(struct device *dev,
 	sha_dd->nu_cdev = nu_cryp_dev;
 	sha_dd->reg_base = nu_cryp_dev->reg_base;
 	sha_dd->octx = NULL;
+
+#ifdef CONFIG_OPTEE
+	if (nu_cryp_dev->use_optee == true) {
+		struct tee_ioctl_open_session_arg sess_arg;
+
+		err = nuvoton_crypto_optee_init(nu_cryp_dev);
+		if (err)
+			return err;
+
+		/* Open SHA context with TEE driver */
+		sha_dd->octx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
+		if (IS_ERR(sha_dd->octx)) {
+			pr_err("%s open context failed, err: %x\n", __func__, sess_arg.ret);
+			return err;
+		}
+
+		/*
+		 * Open SHA session with Crypto Trusted App
+		 */
+		memset(&sess_arg, 0, sizeof(sess_arg));
+		memcpy(sess_arg.uuid, sha_dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
+		sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
+		sess_arg.num_params = 0;
+
+		err = tee_client_open_session(sha_dd->octx, &sess_arg, NULL);
+		if ((err < 0) || (sess_arg.ret != 0)) {
+			pr_err("%s open session failed, err: %x\n", __func__, sess_arg.ret);
+			err = -EINVAL;
+			goto out_ctx;
+		}
+		sha_dd->session_id = sess_arg.session;
+
+		/*
+		 * Allocate handshake buffer from OP-TEE share memory
+		 */
+		sha_dd->shm_pool = tee_shm_alloc(sha_dd->octx, CRYPTO_SHM_SIZE,
+						 TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+		if (IS_ERR(sha_dd->shm_pool)) {
+			pr_err("%s tee_shm_alloc failed\n", __func__);
+			goto out_sess;
+		}
+
+		sha_dd->va_shm = tee_shm_get_va(sha_dd->shm_pool, 0);
+		if (IS_ERR(sha_dd->va_shm)) {
+			tee_shm_free(sha_dd->shm_pool);
+			pr_err("%s tee_shm_get_va failed\n", __func__);
+			goto out_sess;
+		}
+	}
+#endif
 
 	INIT_LIST_HEAD(&sha_dd->list);
 	spin_lock_init(&sha_dd->lock);
@@ -1292,11 +1244,18 @@ err_register:
 
 	dev_err(dev, "SHA initialization failed. %d\n", err);
 
+#ifdef CONFIG_OPTEE
+out_sess:
+	if (nu_cryp_dev->use_optee == true)
+		tee_client_close_session(sha_dd->octx, sha_dd->session_id);
+out_ctx:
+	if (nu_cryp_dev->use_optee == true)
+		tee_client_close_context(sha_dd->octx);
+#endif
 	return err;
 }
 
-int nuvoton_sha_remove(struct device *dev,
-		       struct nu_crypto_dev *nu_cryp_dev)
+int nuvoton_sha_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_sha_dev  *sha_dd = &nu_cryp_dev->sha_dd;
 	int	i;
@@ -1318,8 +1277,12 @@ int nuvoton_sha_remove(struct device *dev,
 	tasklet_kill(&sha_dd->queue_task);
 
 #ifdef CONFIG_OPTEE
-	if (nu_cryp_dev->use_optee)
-		optee_sha_close(sha_dd);
+	if (nu_cryp_dev->use_optee == true) {
+		tee_shm_free(sha_dd->shm_pool);
+		tee_client_close_session(sha_dd->octx, sha_dd->session_id);
+		tee_client_close_context(sha_dd->octx);
+
+	}
 #endif
 	return 0;
 }
