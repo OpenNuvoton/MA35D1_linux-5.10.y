@@ -91,12 +91,18 @@ static const struct flash_info winbond_parts[] = {
 	{ "w25q256", INFO(0xef4019, 0, 64 * 1024, 512,
 			  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)
 	  .fixups = &w25q256_fixups },
+	{ "w25q512jv", INFO(0xef4020, 0, 64 * 1024, 1024,
+			  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ "w25q256jvm", INFO(0xef7019, 0, 64 * 1024, 512,
 			     SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ "w25q256jw", INFO(0xef6019, 0, 64 * 1024, 512,
 			     SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ "w25m512jv", INFO(0xef7119, 0, 64 * 1024, 1024,
 			    SECT_4K | SPI_NOR_QUAD_READ | SPI_NOR_DUAL_READ) },
+	{ "w25q01jv", INFO(0xef4021, 0, 64 * 1024, 2048,
+			SECT_4K | SPI_NOR_QUAD_READ | SPI_NOR_DUAL_READ) },
+	{ "w25q01nw", INFO(0xef6021, 0, 64 * 1024, 2048,
+			SECT_4K | SPI_NOR_QUAD_READ | SPI_NOR_DUAL_READ) },
 };
 
 /**
