@@ -29,6 +29,7 @@
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
 #include <linux/iio/triggered_event.h>
+#include <linux/pm_runtime.h>
 
 /* ADC Control  */
 #define REG_ADC_CTL             (0x000)
@@ -88,9 +89,10 @@
 struct ma35_iio_priv {
 	void __iomem		*base;
 	struct completion	conv_completion;
-	struct completion   menu_completion;
-
-	u32                 vref_mv;
+	struct completion	menu_completion;
+	struct clk		*adc_clk;
+	int		irq;
+	u32		vref_mv;
 	
 	/* data buffer needs space for channel data and timestamp */
 	struct {
@@ -232,7 +234,6 @@ static int ma35_adc_probe(struct platform_device *pdev)
 	struct ma35_iio_priv *priv;
 	struct iio_chan_spec *chan_array, *timestamp;
 	struct device_node *np = pdev->dev.of_node;
-	struct clk *clock;
 	u32 clock_rate, min_clock_freq, max_clock_freq, vref;
 	int irq, ret, bit, idx = 0;
 	unsigned long mask;
@@ -247,30 +248,31 @@ static int ma35_adc_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, indio_dev);
 
 	irq = platform_get_irq(pdev, 0);
-	if (!irq)
+	if (irq < 0)
 		return irq;
+	priv->irq = irq;
 	
 	priv->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
-	clock = devm_clk_get(&pdev->dev, "adc_gate");
-	if (IS_ERR(clock))
-		return PTR_ERR(clock);
+	priv->adc_clk = devm_clk_get(&pdev->dev, "adc_gate");
+	if (IS_ERR(priv->adc_clk))
+		return PTR_ERR(priv->adc_clk);
 
 	if (of_property_read_u32(np, "clock-rate", &clock_rate)) {
 		dev_warn(&pdev->dev, "Missing clock-rate in the DT, set to 1MHz\n");
 		clock_rate = ADC_DEFAULT_CLK_RATE;
 	}
 
-	ret = clk_prepare_enable(clock);
+	ret = clk_prepare_enable(priv->adc_clk);
 	if (ret < 0) {
 		dev_err(&pdev->dev,
 			"Could not prepare or enable the clock.\n");
 		return ret;
 	}
 
-	clk_set_rate(clock, clock_rate);
+	clk_set_rate(priv->adc_clk, clock_rate);
 
 	if (of_property_read_u32(np, "nuvoton,min-clock-frequency", &min_clock_freq)) {
 		dev_warn(&pdev->dev, "Missing min-clock-frequency\n");
@@ -300,7 +302,7 @@ static int ma35_adc_probe(struct platform_device *pdev)
 	/* Power on ADC */
 	__raw_writel(ADC_CTL_ADEN, priv->base + REG_ADC_CTL);
 
-	ret = devm_request_irq(&pdev->dev, irq, ma35_iio_irq_handler,
+	ret = devm_request_irq(&pdev->dev, priv->irq, ma35_iio_irq_handler,
 				0, dev_name(&pdev->dev), indio_dev);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to request irq\n");
@@ -387,8 +389,53 @@ static int ma35_adc_remove(struct platform_device *pdev)
 	__raw_writel(__raw_readl(priv->base + REG_ADC_CTL) & ~ADC_CTL_ADEN,
 		priv->base + REG_ADC_CTL);
 
+	clk_disable_unprepare(priv->adc_clk);
+
 	return 0;
 }
+
+static int ma35_adc_suspend(struct device *dev)
+{
+	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+	struct ma35_iio_priv *priv = iio_priv(indio_dev);
+
+	dev_info(dev, "iio adc suspend called\n");
+
+	/* disable irq */
+	disable_irq(priv->irq);
+
+	/* Power down the ADC */
+	__raw_writel(__raw_readl(priv->base + REG_ADC_CTL) & ~ADC_CTL_ADEN,
+		priv->base + REG_ADC_CTL);
+
+	clk_disable_unprepare(priv->adc_clk);
+
+	return 0;
+}
+
+static int ma35_adc_resume(struct device *dev)
+{
+	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+	struct ma35_iio_priv *priv = iio_priv(indio_dev);
+
+	dev_info(dev, "iio adc resume called\n");
+
+	/* enable irq */
+	enable_irq(priv->irq);
+
+	/* Power up the ADC */
+	__raw_writel(__raw_readl(priv->base + REG_ADC_CTL) | ADC_CTL_ADEN,
+		priv->base + REG_ADC_CTL);
+
+	clk_prepare_enable(priv->adc_clk);
+
+	return 0;
+}
+
+static const struct dev_pm_ops ma35_adc_pm_ops = {
+    SET_SYSTEM_SLEEP_PM_OPS(ma35_adc_suspend,
+                            ma35_adc_resume)
+};
 
 static const struct of_device_id ma35_adc_match[] = {
 	{ .compatible = "nuvoton,ma35-adc" },
@@ -400,6 +447,7 @@ static struct platform_driver ma35_adc_driver = {
 	.driver	= {
 		.name		= "ma35-adc",
 		.of_match_table	= ma35_adc_match,
+		.pm	= &ma35_adc_pm_ops,
 	},
 	.probe	= ma35_adc_probe,
 	.remove	= ma35_adc_remove,
