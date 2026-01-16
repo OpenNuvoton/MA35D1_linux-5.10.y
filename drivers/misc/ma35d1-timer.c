@@ -351,21 +351,21 @@ static int timer_release(struct inode *inode, struct file *filp)
 static int timer_open(struct inode *inode, struct file *filp)
 {
 	int i, ret;
-	u8 ch;
+	int ch = -1;
 	unsigned long flag;
 	struct clk *clkmux;
 	int minor = iminor(inode);
 
-#if 1
 	for (i = 0; i < TIMER_CH; i++) {
-		if(tmr[i]->minor == minor) {
+		if (!tmr[i])
+			continue;
+		if (tmr[i]->minor == minor) {
 			ch = i;
 			break;
 		}
 	}
-#else
-	ch = 2;
-#endif
+	if (ch < 0)
+		return -ENODEV;
 
 	spin_lock_irqsave(&tmr[ch]->lock, flag);
 	if (tmr[ch]->occupied) {
