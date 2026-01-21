@@ -347,7 +347,7 @@ static void nuvoton_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
 	dd->flags &= ~DD_FLAGS_BUSY;
 
 	/* Handle new request */
-	tasklet_schedule(&ctx->dd->queue_task);
+	tasklet_schedule(&dd->queue_task);
 }
 
 static int nuvoton_sha_init(struct ahash_request *req)
