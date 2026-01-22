@@ -28,12 +28,10 @@
 
 #include "ohci.h"
 
-
 #define DRIVER_DESC "Nuvoton MA35D1 OHCI driver"
 
 static const char hcd_name[] = "ohci-ma35d1";
 static struct hc_driver __read_mostly ohci_ma35d1_hc_driver;
-
 
 /* interface and function clocks */
 #define hcd_to_ma35d1_ohci_priv(h) \
@@ -43,6 +41,10 @@ struct ma35d1_ohci_priv {
 	int	id;
 	struct regmap *sysregmap;
 	struct clk *clk;
+};
+
+static const struct ohci_driver_overrides ohci_ma35d1_drv_overrides __initconst = {
+	.extra_priv_size = sizeof(struct ma35d1_ohci_priv),
 };
 
 static int ohci_hcd_ma35d1_probe(struct platform_device *pdev)
@@ -152,7 +154,7 @@ static int __init ohci_ma35d1_init(void)
 
 	pr_info("%s: " DRIVER_DESC "\n", hcd_name);
 
-	ohci_init_driver(&ohci_ma35d1_hc_driver, NULL);
+	ohci_init_driver(&ohci_ma35d1_hc_driver, &ohci_ma35d1_drv_overrides);
 	return platform_driver_register(&ohci_hcd_ma35d1_driver);
 }
 module_init(ohci_ma35d1_init);
