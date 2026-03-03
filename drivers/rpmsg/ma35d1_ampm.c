@@ -81,6 +81,7 @@ struct ma35_rpmsg_priv {
 	spinlock_t lock;
 	struct task_struct *bdthread;
 	wait_queue_head_t bd_event;
+	spinlock_t bd_lock;
 	struct delayed_work dwork;
 	u32 resumeflow;
 
@@ -565,7 +566,7 @@ static struct bdtask *ma35_enqueue_bdtask(struct rpmsg_endpoint *ept) {
 static int ma35_binding_thread(void *data) {
 	struct bdtask *task, *tmp;
 	struct ma35_rpmsg_priv *rpmsg_priv = data;
-	(void)data;
+	unsigned long flags;
 
 	while (!kthread_should_stop()) {
 		if (list_empty(&bdtask_queue)) {
@@ -574,12 +575,14 @@ static int ma35_binding_thread(void *data) {
 				break;
 		}
 		else {
+			spin_lock_irqsave(&rpmsg_priv->bd_lock, flags);
 			list_for_each_entry_safe(task, tmp, &bdtask_queue, list) {
 				if (ma35_rpmsg_bind_process(task->ept)) {
 					list_del(&task->list);
 					kfree(task);
 				}
 			}
+			spin_unlock_irqrestore(&rpmsg_priv->bd_lock, flags);
 			yield();
 		}
 	}
@@ -728,6 +731,7 @@ static void ma35_rpmsg_destroy_ept(struct rpmsg_endpoint *ept)
 	struct rsc_table_desc *desc;
 	struct ma35_rpmsg_endpoint *ma35_rpept = to_ma35_rpmsg_endpoint(ept);
 	struct ma35_rpmsg_priv *rpmsg_priv = ma35_rpept->rpmsg_priv;
+	unsigned long flags;
 
 	// tell remote ept close
 	if(ept_priv->ept_type == EPT_TYPE_TX) {
@@ -760,8 +764,11 @@ static void ma35_rpmsg_destroy_ept(struct rpmsg_endpoint *ept)
 
 	// kill binding task
 	if(ept_priv->task) {
+		spin_lock_irqsave(&rpmsg_priv->bd_lock, flags);
 		list_del(&ept_priv->task->list);
+		spin_unlock_irqrestore(&rpmsg_priv->bd_lock, flags);
 		kfree(ept_priv->task);
+		ept_priv->task = NULL;
 	}
 
 	kref_put(&ept->refcount, ma35_rpmsg_ept_release);
@@ -1052,6 +1059,7 @@ static int ma35_rsc_table_parser(struct ma35_rpmsg_priv *priv, struct device_nod
 	}
 
 	spin_lock_init(&priv->lock);
+	spin_lock_init(&priv->bd_lock);
 	priv->ready = 1;
 resu:
 	ma35_rsc_table_update(priv);
