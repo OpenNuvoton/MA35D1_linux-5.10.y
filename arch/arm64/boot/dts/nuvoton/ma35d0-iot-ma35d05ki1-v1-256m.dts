@@ -1,0 +1,164 @@
+/*
+ * Device Tree Source for MA35D0 IoT Board
+ *
+ * Copyright (C) 2021 Nuvoton Technology Corp.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+
+#include "ma35d1.dtsi"
+
+/ {
+	model = "Nuvoton MA35D0-IoT";
+
+	chosen {
+		bootargs = "root=/dev/mmcblk0p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=256M";
+	};
+
+	gpio_keys_test {
+		compatible = "gpio-keys";
+		status = "okay";
+		autorepeat;
+		botton0 {
+			label = "Key Down";
+			linux,code = <KEY_DOWN>;
+			gpios = <&gpiol 15 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+	};
+
+	gpio_leds_test {
+		compatible = "gpio-leds";
+		status = "okay";
+		led0 {
+			label = "LED0";
+			gpios = <&gpiob 8 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	volt0_sdhci1: regulator-volt0_sdhci1 {
+		compatible = "nuvoton,ma35d1-volt";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-name = "volt0_sdhci1";
+		regulator-always-on;
+	};
+};
+
+&mem {
+	device_type = "memory";
+	reg = <0x00000000 0x80000000 0 0x10000000>; /* DRAM space - 1, size : 256MB DRAM */
+};
+
+&gmac0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gmac0>;
+};
+
+&ehci0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hsusbh>;
+};
+
+&usb {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb>;
+};
+
+
+&sdhci1 {
+	status = "okay";
+	pinctrl-names = "sdhci_3V3","sdhci_1V8";
+	pinctrl-0 = <&pinctrl_sdhci1_3_3V>;
+	pinctrl-1 = <&pinctrl_sdhci1_1_8V>;
+	vqmmc-supply = <&volt0_sdhci1>;
+	wp-gpios = <&gpioj 4 GPIO_ACTIVE_HIGH>;
+	bus-width = <4>;
+};
+
+&qspi0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_qspi0>;
+};
+
+&pinctrl {
+	gmac0 {
+		pinctrl_gmac0: gmac0grp{
+			nuvoton,pins =
+				<SYS_GPE_MFPL_PE0MFP_RGMII0_MDC		&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE1MFP_RGMII0_MDIO	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE2MFP_RGMII0_TXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE3MFP_RGMII0_TXD0	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE4MFP_RGMII0_TXD1	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE5MFP_RGMII0_RXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE6MFP_RGMII0_RXCTL	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPL_PE7MFP_RGMII0_RXD0	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE8MFP_RGMII0_RXD1	&pcfg_emac_1_8V>,
+				<SYS_GPE_MFPH_PE9MFP_RGMII0_RXD2	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF0MFP_RGMII0_RXD3	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF1MFP_RGMII0_TXCLK	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF2MFP_RGMII0_TXD2	&pcfg_emac_1_8V>,
+				<SYS_GPF_MFPL_PF3MFP_RGMII0_TXD3	&pcfg_emac_1_8V>;
+		};
+	};
+
+	hsusbh {
+		pinctrl_hsusbh: hsusbhgrp{
+			nuvoton,pins =
+				<SYS_GPL_MFPH_PL12MFP_HSUSBH_PWREN	&pcfg_default>,
+				<SYS_GPL_MFPH_PL13MFP_HSUSBH_OVC	&pcfg_default>;
+		};
+	};
+
+	qspi0 {
+		pinctrl_qspi0: qspi0grp{
+			nuvoton,pins =
+				<SYS_GPD_MFPL_PD0MFP_QSPI0_SS0		&pcfg_default>,
+				<SYS_GPD_MFPL_PD1MFP_QSPI0_CLK		&pcfg_default>,
+				<SYS_GPD_MFPL_PD2MFP_QSPI0_MOSI0	&pcfg_default>,
+				<SYS_GPD_MFPL_PD3MFP_QSPI0_MISO0	&pcfg_default>,
+				<SYS_GPD_MFPL_PD4MFP_QSPI0_MOSI1	&pcfg_default>,
+				<SYS_GPD_MFPL_PD5MFP_QSPI0_MISO1	&pcfg_default>;
+		};
+	};
+
+	usb {
+		pinctrl_usb: usbgrp{
+			nuvoton,pins =
+				<SYS_GPF_MFPH_PF15MFP_HSUSB0_VBUSVLD	&pcfg_default>;
+		};
+	};
+
+	sdhci1 {
+		pinctrl_sdhci1_3_3V: sdhci1_3_3Vgrp{
+			nuvoton,pins =
+				<SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ6MFP_SD1_CMD	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPL_PJ7MFP_SD1_CLK	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPH_PJ8MFP_SD1_DAT0	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_sdhci_drive2_3_3V>;
+		};
+
+		pinctrl_sdhci1_1_8V: sdhci1_1_8Vgrp{
+			nuvoton,pins =
+				<SYS_GPJ_MFPL_PJ5MFP_SD1_nCD	&pcfg_default>,
+				<SYS_GPJ_MFPL_PJ6MFP_SD1_CMD	&pcfg_sdhci_drive4_1_8V>,
+				<SYS_GPJ_MFPL_PJ7MFP_SD1_CLK	&pcfg_sdhci_drive7_1_8V>,
+				<SYS_GPJ_MFPH_PJ8MFP_SD1_DAT0	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPH_PJ9MFP_SD1_DAT1	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPH_PJ10MFP_SD1_DAT2	&pcfg_sdhci_drive1_1_8V>,
+				<SYS_GPJ_MFPH_PJ11MFP_SD1_DAT3	&pcfg_sdhci_drive1_1_8V>;
+		};
+	};
+};
