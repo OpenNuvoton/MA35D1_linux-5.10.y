@@ -92,7 +92,7 @@
 		assigned-clocks = <&clk CAPLL>,
 				<&clk DDRPLL>, <&clk APLL>,
 				<&clk EPLL>, <&clk VPLL>;
-		assigned-clock-rates =<1000000000>,
+		assigned-clock-rates =<650000000>,
 				<266000000>, <200000000>,
 				<500000000>, <102000000>;
 		clock-pll-mode = <0>, <1>, <0>, <0>, <0>;
