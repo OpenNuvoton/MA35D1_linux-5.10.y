@@ -377,7 +377,7 @@ void tls_sw_release_resources_rx(struct sock *sk);
 void tls_sw_free_ctx_rx(struct tls_context *tls_ctx);
 int tls_sw_recvmsg(struct sock *sk, struct msghdr *msg, size_t len,
 		   int nonblock, int flags, int *addr_len);
-bool tls_sw_stream_read(const struct sock *sk);
+bool tls_sw_sock_is_readable(struct sock *sk);
 ssize_t tls_sw_splice_read(struct socket *sock, loff_t *ppos,
 			   struct pipe_inode_info *pipe,
 			   size_t len, unsigned int flags);
@@ -672,6 +672,12 @@ tls_offload_rx_resync_async_request_end(struct sock *sk, __be32 seq)
 
 	atomic64_set(&rx_ctx->resync_async->req,
 		     ((u64)ntohl(seq) << 32) | RESYNC_REQ);
+}
+
+static inline void
+tls_offload_rx_resync_async_request_cancel(struct tls_offload_resync_async *resync_async)
+{
+	atomic64_set(&resync_async->req, 0);
 }
 
 static inline void

@@ -70,6 +70,7 @@ int dyn_event_release(int argc, char **argv, struct dyn_event_operations *type)
 		if (ret)
 			break;
 	}
+	tracing_reset_all_online_cpus();
 	mutex_unlock(&event_mutex);
 
 	return ret;
@@ -165,6 +166,7 @@ int dyn_events_release_all(struct dyn_event_operations *type)
 			break;
 	}
 out:
+	tracing_reset_all_online_cpus();
 	mutex_unlock(&event_mutex);
 
 	return ret;
@@ -173,6 +175,10 @@ out:
 static int dyn_event_open(struct inode *inode, struct file *file)
 {
 	int ret;
+
+	ret = security_locked_down(LOCKDOWN_TRACEFS);
+	if (ret)
+		return ret;
 
 	ret = tracing_check_open_get_tr(NULL);
 	if (ret)
