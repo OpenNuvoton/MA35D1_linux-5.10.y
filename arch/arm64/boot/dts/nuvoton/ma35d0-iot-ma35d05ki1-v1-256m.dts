@@ -13,10 +13,10 @@
 
 /dts-v1/;
 
-#include "ma35d1.dtsi"
+#include "ma35d05k.dtsi"
 
 / {
-	model = "Nuvoton MA35D0-IoT";
+	model = "Nuvoton MA35D05K-IoT";
 
 	chosen {
 		bootargs = "root=/dev/mmcblk0p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=256M";
