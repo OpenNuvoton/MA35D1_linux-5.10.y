@@ -1,0 +1,54 @@
+diff --git a/Makefile b/Makefile
+index 42116a09d73d3b..2dc1e360a98b55 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: GPL-2.0
+ VERSION = 5
+ PATCHLEVEL = 10
+-SUBLEVEL = 254
++SUBLEVEL = 255
+ EXTRAVERSION =
+ NAME = Dare mighty things
+ 
+diff --git a/net/ipv4/esp4.c b/net/ipv4/esp4.c
+index 0d5fc4f8c6adb1..00bb4c6c86a03e 100644
+--- a/net/ipv4/esp4.c
++++ b/net/ipv4/esp4.c
+@@ -921,7 +921,8 @@ static int esp_input(struct xfrm_state *x, struct sk_buff *skb)
+ 			nfrags = 1;
+ 
+ 			goto skip_cow;
+-		} else if (!skb_has_frag_list(skb)) {
++		} else if (!skb_has_frag_list(skb) &&
++			   !skb_has_shared_frag(skb)) {
+ 			nfrags = skb_shinfo(skb)->nr_frags;
+ 			nfrags++;
+ 
+diff --git a/net/ipv4/ip_output.c b/net/ipv4/ip_output.c
+index 70c316c0537f28..bb94c032a3734e 100644
+--- a/net/ipv4/ip_output.c
++++ b/net/ipv4/ip_output.c
+@@ -1447,6 +1447,8 @@ ssize_t	ip_append_page(struct sock *sk, struct flowi4 *fl4, struct page *page,
+ 			goto error;
+ 		}
+ 
++		skb_shinfo(skb)->tx_flags |= SKBTX_SHARED_FRAG;
++
+ 		if (skb->ip_summed == CHECKSUM_NONE) {
+ 			__wsum csum;
+ 			csum = csum_page(page, offset, len);
+diff --git a/net/ipv6/esp6.c b/net/ipv6/esp6.c
+index a1d20dd4be3c7d..748f8771d8bfc0 100644
+--- a/net/ipv6/esp6.c
++++ b/net/ipv6/esp6.c
+@@ -966,7 +966,8 @@ static int esp6_input(struct xfrm_state *x, struct sk_buff *skb)
+ 			nfrags = 1;
+ 
+ 			goto skip_cow;
+-		} else if (!skb_has_frag_list(skb)) {
++		} else if (!skb_has_frag_list(skb) &&
++			   !skb_has_shared_frag(skb)) {
+ 			nfrags = skb_shinfo(skb)->nr_frags;
+ 			nfrags++;
+ 
