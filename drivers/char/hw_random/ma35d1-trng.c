@@ -17,10 +17,12 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/hw_random.h>
+#include <linux/ma35d1-trng.h>
 #include <linux/platform_device.h>
 #include <linux/completion.h>
 #include <linux/of_platform.h>
 #include <linux/tee_drv.h>
+#include <linux/uaccess.h>
 
 //#define USE_GEN_NONCE
 
@@ -169,6 +171,21 @@ struct ma35d1_trng {
  */
 #define PTA_CMD_TRNG_READ		0x2
 
+/*
+ * PTA_CMD_TRNG_WRITE_KS - Write TRNG key store data
+ *
+ * param[0] (inout value) - value.a: key store owner on input
+ *                           value.a: key number on output
+ * param[1] unused
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_BAD_PARAMETERS - Incorrect input param
+ */
+#define PTA_CMD_TRNG_WRITE_KS		0x3
+
 #define RND_DATA_SHM_SZ		(4 * 1024)
 
 /**
@@ -277,12 +294,75 @@ static void optee_rng_cleanup(struct hwrng *rng)
 	tee_shm_free(pvt_data->rdata_shm_pool);
 }
 
+static int ma35d1_optee_trng_write_ks(struct optee_rng_private *pvt_data,
+				      int owner, int *key_num)
+{
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
+	int ret = 0;
+
+	memset(&inv_arg, 0, sizeof(inv_arg));
+	memset(&param, 0, sizeof(param));
+
+	inv_arg.func = PTA_CMD_TRNG_WRITE_KS;
+	inv_arg.session = pvt_data->session_id;
+	inv_arg.num_params = 4;
+
+	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INOUT;
+	param[0].u.value.a = owner;
+
+	ret = tee_client_invoke_func(pvt_data->ctx, &inv_arg, param);
+	if ((ret < 0) || (inv_arg.ret != 0)) {
+		dev_err(pvt_data->dev, "PTA_CMD_TRNG_WRITE_KS invoke err: %x\n",
+			inv_arg.ret);
+		return -EINVAL;
+	}
+
+	*key_num = param[0].u.value.a;
+
+	return 0;
+}
+
+static long optee_rng_ioctl(struct hwrng *rng, unsigned int cmd, unsigned long arg)
+{
+	struct optee_rng_private *pvt_data = to_optee_rng_private(rng);
+	void __user *argp = (void __user *)arg;
+	int owner;
+	int key_num;
+	int ret;
+
+	switch (cmd) {
+	case MA35D1_TRNG_IOC_WRITE_KS:
+		if (copy_from_user(&owner, argp, sizeof(owner)))
+			return -EFAULT;
+
+		if (owner != MA35D1_TRNG_KS_OWNER_AES &&
+		    owner != MA35D1_TRNG_KS_OWNER_HMAC &&
+		    owner != MA35D1_TRNG_KS_OWNER_ECC &&
+		    owner != MA35D1_TRNG_KS_OWNER_CPU)
+			return -EINVAL;
+
+		ret = ma35d1_optee_trng_write_ks(pvt_data, owner, &key_num);
+		if (ret)
+			return ret;
+
+		if (copy_to_user(argp, &key_num, sizeof(key_num)))
+			return -EFAULT;
+
+		return 0;
+
+	default:
+		return -ENOIOCTLCMD;
+	}
+}
+
 static struct optee_rng_private pvt_data = {
 	.optee_rng = {
 		.name		= "optee-nvt-trng",
 		.init		= optee_rng_init,
 		.cleanup	= optee_rng_cleanup,
 		.read		= optee_rng_read,
+		.ioctl		= optee_rng_ioctl,
 	}
 };
 
@@ -351,6 +431,7 @@ static int optee_rng_probe(struct device *dev)
 		goto out_ctx;
 	}
 	pvt_data.session_id = sess_arg.session;
+	pvt_data.dev = dev;
 
 	err = ma35d1_optee_trng_init(dev);
 	if (err)
@@ -361,8 +442,6 @@ static int optee_rng_probe(struct device *dev)
 		dev_err(dev, "optee hwrng registration failed (%d)\n", err);
 		goto out_sess;
 	}
-
-	pvt_data.dev = dev;
 
 	return 0;
 
@@ -587,6 +666,17 @@ static int ma35d1_trng_read(struct hwrng *rng, void *buf,
 	return retval;
 }
 
+static long ma35d1_trng_ioctl(struct hwrng *rng, unsigned int cmd,
+			      unsigned long arg)
+{
+	switch (cmd) {
+	case MA35D1_TRNG_IOC_WRITE_KS:
+		return -EOPNOTSUPP;
+	default:
+		return -ENOIOCTLCMD;
+	}
+}
+
 static int ma35d1_trng_probe(struct platform_device *pdev)
 {
 	struct device		*dev = &pdev->dev;
@@ -628,6 +718,7 @@ static int ma35d1_trng_probe(struct platform_device *pdev)
 	tdev->rng.name = pdev->name;
 	tdev->rng.init = ma35d1_trng_init;
 	tdev->rng.read = ma35d1_trng_read;
+	tdev->rng.ioctl = ma35d1_trng_ioctl;
 	tdev->rng.priv = (unsigned long)tdev;
 
 	err = devm_hwrng_register(dev, &tdev->rng);
