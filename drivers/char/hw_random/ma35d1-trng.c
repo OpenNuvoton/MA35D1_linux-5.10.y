@@ -261,11 +261,20 @@ static int optee_rng_read(struct hwrng *rng, void *buf, size_t max, bool wait)
 	if (max % 4)
 		return -EINVAL;
 
-	while (read == 0) {
+	while (read < max) {
 		rng_size = get_optee_rng_data(pvt_data, data, (max - read));
+
+		if (rng_size == 0) {
+			if (read == 0)
+				return -EIO;
+			break;
+		}
 
 		data += rng_size;
 		read += rng_size;
+
+		if (!wait)
+			break;
 	}
 	return read;
 }
