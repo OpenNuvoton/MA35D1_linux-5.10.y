@@ -15,6 +15,7 @@ config SND_SOC_MA35D1EVB
 	tristate "MA35D1 I2S support for demo board"
 	depends on SND_SOC_MA35D1
 	select SND_SOC_NAU8822
+	select SND_SOC_MP34DT01M
 	select SND_SOC_GENERIC_DMAENGINE_PCM
 	help
 	  Select this option to enable audio (I2S) on the

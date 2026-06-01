@@ -10,6 +10,7 @@
 
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/platform_data/dma-imx.h>
 #include <sound/dmaengine_pcm.h>
 #include <sound/pcm_params.h>
@@ -39,10 +40,36 @@ static const struct snd_pcm_hardware ma35d1_pcm_hardware = {
 	.periods_max        = 1024,
 };
 
+static const struct snd_pcm_hardware ma35d1_pdm_raw_pcm_hardware = {
+	.info           = SNDRV_PCM_INFO_INTERLEAVED |
+	SNDRV_PCM_INFO_BLOCK_TRANSFER |
+	SNDRV_PCM_INFO_MMAP |
+	SNDRV_PCM_INFO_MMAP_VALID |
+	SNDRV_PCM_INFO_PAUSE |
+	SNDRV_PCM_INFO_RESUME,
+	.formats        = SNDRV_PCM_FMTBIT_S16_LE,
+	.rates          = SNDRV_PCM_RATE_8000_192000,
+	.rate_min       = 8000,
+	.rate_max       = 192000,
+	.channels_min       = 1,
+	.channels_max       = 1,
+	.buffer_bytes_max   = 256*1024,
+	.period_bytes_min   = 4*1024,
+	.period_bytes_max   = 32*1024,
+	.periods_min        = 2,
+	.periods_max        = 1024,
+};
+
 static const struct snd_dmaengine_pcm_config ma35d1_dmaengine_pcm_config = {
 	.pcm_hardware = &ma35d1_pcm_hardware,
 	.prepare_slave_config = snd_dmaengine_pcm_prepare_slave_config,
 	.prealloc_buffer_size = 32 * 1024,
+};
+
+static const struct snd_dmaengine_pcm_config ma35d1_pdm_raw_dmaengine_pcm_config = {
+	.pcm_hardware = &ma35d1_pdm_raw_pcm_hardware,
+	.prepare_slave_config = snd_dmaengine_pcm_prepare_slave_config,
+	.prealloc_buffer_size = 128 * 1024,
 };
 
 int ma35d1_dma_pcm_register(struct device *dev)
@@ -61,7 +88,13 @@ EXPORT_SYMBOL_GPL(ma35d1_dma_pcm_unregister);
 
 static int ma35d1_soc_platform_probe(struct platform_device *pdev)
 {
-	return devm_snd_dmaengine_pcm_register(&pdev->dev, &ma35d1_dmaengine_pcm_config,
+	const struct snd_dmaengine_pcm_config *config = &ma35d1_dmaengine_pcm_config;
+
+	if (of_device_is_compatible(pdev->dev.of_node,
+				    "nuvoton,ma35d1-pdm-raw-pcm"))
+		config = &ma35d1_pdm_raw_dmaengine_pcm_config;
+
+	return devm_snd_dmaengine_pcm_register(&pdev->dev, config,
 						SND_DMAENGINE_PCM_FLAG_COMPAT);
 }
 
@@ -73,6 +106,7 @@ static int ma35d1_soc_platform_remove(struct platform_device *pdev)
 
 static const struct of_device_id ma35d1_audio_pcm_of_match[] = {
 	{   .compatible = "nuvoton,ma35d1-audio-pcm"    },
+	{   .compatible = "nuvoton,ma35d1-pdm-raw-pcm" },
 	{   },
 };
 MODULE_DEVICE_TABLE(of, ma35d1_audio_pcm_of_match);
