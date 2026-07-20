@@ -152,11 +152,12 @@ struct ma35d1_audio {
 	struct ma35d1_peripheral pcfg_rx;
 	unsigned int phyaddr;
 	unsigned int mclk_out;
+	unsigned int pdm_decimation;
+	unsigned int raw_pdm_mono;
 	struct gpio_desc *pwdn_gpio;
 
 };
 
-extern struct ma35d1_audio *ma35d1_i2s_data;
 
 int ma35d1_dma_create(struct ma35d1_audio *ma35d1_audio);
 int ma35d1_dma_destroy(struct ma35d1_audio *ma35d1_audio);

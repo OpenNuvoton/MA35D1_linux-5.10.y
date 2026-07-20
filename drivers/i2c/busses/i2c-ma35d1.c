@@ -691,6 +691,7 @@ static int ma35d1_i2c_probe(struct platform_device *pdev)
 	struct i2c_adapter *adap;
 	int ret, err;
 	int busfreq = 0;
+	u32 nfcnt;
 	struct device *dev = &pdev->dev;
 
 	if (!pdev->dev.of_node) {
@@ -757,6 +758,12 @@ static int ma35d1_i2c_probe(struct platform_device *pdev)
 	ret = clk_get_rate(i2c->clk)/(busfreq * 4) - 1;
 
 	writel(ret & 0xffff, i2c->regs + CLKDIV);
+
+	if (!of_property_read_u32(pdev->dev.of_node, "nuvoton,nfcnt", &nfcnt)) {
+		nfcnt &= 0xF;
+		writel(readl(i2c->regs + CLKDIV) | (nfcnt << 12),
+		       i2c->regs + CLKDIV);
+	}
 
 	__raw_writel((__raw_readl(i2c->regs+CTL0)|(0x1 << 6)),
 				i2c->regs + CTL0);

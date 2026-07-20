@@ -1,5 +1,5 @@
 /*
- * Device Tree Source for MA35H0
+ * Device Tree Source for MA35D1
  *
  * Copyright (C) 2021 Nuvoton Technology Corp.
  *
@@ -15,19 +15,21 @@
 
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/clock/nuvoton,ma35h0-clk.h>
-#include <dt-bindings/reset/nuvoton,ma35h0-reset.h>
-#include <dt-bindings/pinctrl/ma35h0-pinfunc.h>
+#include <dt-bindings/clock/nuvoton,ma35d1-clk.h>
+#include <dt-bindings/reset/nuvoton,ma35d1-reset.h>
+#include <dt-bindings/pinctrl/ma35d1-pinfunc.h>
 
 / {
-	compatible = "nuvoton,ma35h0";
+	compatible = "nuvoton,ma35d1";
 	interrupt-parent = <&gic>;
 	#address-cells = <2>;
 	#size-cells = <2>;
 
 
 	aliases {
-		ethernet0 = &emac0;
+		ethernet0 = &gmac0;
+		ethernet1 = &gmac1;
+		i2c0 = &i2c2;
 	};
 
 	cpus {
@@ -61,12 +63,11 @@
 	a35_opp_table: opp-table {
 		compatible = "operating-points-v2";
 		opp-shared;
-		opp-650000000 {
-			opp-hz = /bits/ 64 <650000000>;
-			opp-microvolt = <1200000>;
+		opp-800000000 {
+			opp-hz = /bits/ 64 <800000000>;
+			opp-microvolt = <1250000>;
 		};
 	};
-
 #if 0
 	pmu {
 		interrupt-affinity = <&cpu0>, <&cpu1>;
@@ -86,21 +87,21 @@
 #endif
 
 	clk: clock-controller@40460200 {
-		compatible = "nuvoton,ma35h0-clk", "syscon", "simple-mfd";
+		compatible = "nuvoton,ma35d1-clk", "syscon", "simple-mfd";
 		reg = <0x00000000 0x40460200 0x0 0x100>;
 		#clock-cells = <1>;
 		assigned-clocks = <&clk CAPLL>,
 				<&clk DDRPLL>, <&clk APLL>,
 				<&clk EPLL>, <&clk VPLL>;
-		assigned-clock-rates =<650000000>,
+		assigned-clock-rates =<800000000>,
 				<266000000>, <200000000>,
 				<500000000>, <102000000>;
-		clock-pll-mode = <0>, <1>, <0>, <0>, <0>;
+		clock-pll-mode = <0>, <1>, <0>, <2>, <0>;
 		nuvoton,sys = <&sys>;
 	};
 
 	sys: system-management@40460000 {
-		compatible = "nuvoton,ma35h0-sys", "syscon", "simple-mfd";
+		compatible = "nuvoton,ma35d1-sys", "syscon", "simple-mfd";
 		reg = <0x0  0x40460000  0x0  0x200>;
 	};
 
@@ -113,6 +114,14 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
+		rproc_buf: rproc_buf@0 {
+			reg = <0x0 0x80020000 0x0 0x60000>; /* 384KB */
+			no-map;
+		};
+		rpmsg_buf: rpmsg_buf@0 {
+			reg = <0x0 0x84000000 0x0 0x8000>;
+			no-map;
+		};
 	};
 
 	timer {
@@ -145,9 +154,9 @@
 	};
 
 	uart0:serial@40700000 {
-		compatible = "nuvoton,ma35h0-uart";
+		compatible = "nuvoton,ma35d1-uart";
 		reg = <0x0 0x40700000 0x0 0x10000>;
-		ma35h0-console;
+		ma35d1-console;
 		interrupts = <GIC_SPI 59 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk UART0_GATE>;
 		port-number = <0>;
@@ -155,9 +164,67 @@
 		status = "okay";
 	};
 
-	uart4: serial@40740000 {
-		compatible = "nuvoton,ma35h0-uart";
-		reg = <0x0 0x40740000 0x0 0x100>;
+	uart1:serial@40710000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40710000 0x0 0x10000>;
+		interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART1_GATE>;
+		port-number = <1>;
+		/* PDMA Setting*/
+		dmas = <&pdma2 2>,<&pdma3 3>;
+		dma-names = "tx", "rx";
+		/*pdma-enable = <1>;*/ /* enable PDMA */
+		pdma-enable = <0>; /* Disable PDMA */
+
+		/* wakeup-enable = <cts-wakeup fifo-threshold-wakeup fifo-timeout-wakeup> */
+		/* wakeup-enable = <1 1 0>; */
+		/* set: 1, 4, 8, 14 or 30 bytes */
+		/* only for fifo threshold wakeup */
+		/* fifo-threshold = <14>; */
+
+		status = "disabled";
+	};
+
+	puart1:serial@80710000 {
+		compatible = "nuvoton,ma35d1-puart";
+		reg = <0x0 0x40710000 0x0 0x10000>;
+		port-number = <1>;
+		/* PDMA Setting*/
+		pdma-port = <0>;
+		pdma-tx-ch = <0>;
+		pdma-rx-ch = <1>;
+		interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>, /* uart interrupt */
+					 <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>; /* pdma interrupt */
+		interrupt-names = "puart_uart", "puart_dma";
+		clocks = <&clk UART1_GATE>, /* enable uart clock */
+				 <&clk PDMA0_GATE>; /* enable pdma clock */
+		clock-names = "puart_clk", "pdma_clk";
+		status = "disabled";
+	};
+
+	uart2:serial@40720000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40720000 0x0 0x10000>;
+		interrupts = <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART2_GATE>;
+		port-number = <2>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart3:serial@40730000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40730000 0x0 0x10000>;
+		interrupts = <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART3_GATE>;
+		port-number = <3>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart4:serial@40740000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40740000 0x0 0x10000>;
 		interrupts = <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk UART4_GATE>;
 		port-number = <4>;
@@ -166,7 +233,7 @@
 	};
 
 	uart5:serial@40750000 {
-		compatible = "nuvoton,ma35h0-uart";
+		compatible = "nuvoton,ma35d1-uart";
 		reg = <0x0 0x40750000 0x0 0x10000>;
 		interrupts = <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk UART5_GATE>;
@@ -176,7 +243,7 @@
 	};
 
 	uart6:serial@40760000 {
-		compatible = "nuvoton,ma35h0-uart";
+		compatible = "nuvoton,ma35d1-uart";
 		reg = <0x0 0x40760000 0x0 0x10000>;
 		interrupts = <GIC_SPI 91 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk UART6_GATE>;
@@ -185,8 +252,28 @@
 		status = "disabled";
 	};
 
+	uart7:serial@40770000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40770000 0x0 0x10000>;
+		interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART7_GATE>;
+		port-number = <7>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart8:serial@40780000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x40780000 0x0 0x10000>;
+		interrupts = <GIC_SPI 93 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART8_GATE>;
+		port-number = <8>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
 	uart9:serial@40790000 {
-		compatible = "nuvoton,ma35h0-uart";
+		compatible = "nuvoton,ma35d1-uart";
 		reg = <0x0 0x40790000 0x0 0x10000>;
 		interrupts = <GIC_SPI 94 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk UART9_GATE>;
@@ -195,21 +282,73 @@
 		status = "disabled";
 	};
 
+	uart10:serial@407A0000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x407A0000 0x0 0x10000>;
+		interrupts = <GIC_SPI 95 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART10_GATE>;
+		port-number = <10>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart11:serial@407B0000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x407B0000 0x0 0x10000>;
+		interrupts = <GIC_SPI 96 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART11_GATE>;
+		port-number = <11>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart12:serial@407C0000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x407C0000 0x0 0x10000>;
+		interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART12_GATE>;
+		port-number = <12>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart13:serial@407D0000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x407D0000 0x0 0x10000>;
+		interrupts = <GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART13_GATE>;
+		port-number = <13>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart14:serial@407E0000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x407E0000 0x0 0x10000>;
+		interrupts = <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART14_GATE>;
+		port-number = <14>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
+	uart15:serial@407F0000 {
+		compatible = "nuvoton,ma35d1-uart";
+		reg = <0x0 0x407F0000 0x0 0x10000>;
+		interrupts = <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk UART15_GATE>;
+		port-number = <15>;
+		pdma-enable = <0>;
+		status = "disabled";
+	};
+
 	uart16:serial@40880000 {
-		compatible = "nuvoton,ma35h0-uart";
+		compatible = "nuvoton,ma35d1-uart";
 		reg = <0x0 0x40880000 0x0 0x10000>;
 		interrupts = <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk UART16_GATE>;
 		port-number = <16>;
 		pdma-enable = <0>;
-
-		/* wakeup-enable = <cts-wakeup fifo-threshold-wakeup fifo-timeout-wakeup> */
-		/* wakeup-enable = <1 1 0>; */
-		
-		/* set: 1, 4, 8, 14 or 30 bytes */
-		/* only for fifo threshold wakeup */
-		/* fifo-threshold = <14>; */ 
-
 		status = "disabled";
 	};
 
@@ -253,8 +392,48 @@
 		status = "disable";
 	};
 
+	can2: can@403E0000 {
+		compatible = "bosch,m_can";
+		reg = <0x0 0x403E0000 0x0 0x200>, <0x0 0x403E0200 0x0 0x2000>;
+		reg-names = "m_can", "message_ram";
+		interrupts = <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>,
+					 <GIC_SPI 133 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "int0", "int1";
+		clocks = <&clk HCLK3>,
+				 <&clk CAN2_GATE>;
+		clock-names = "hclk", "cclk";
+
+		assigned-clocks = <&clk CAN2_DIV>;
+		assigned-clocks-parents = <&clk APLL>;
+		assigned-clock-rates =<50000000>;
+
+		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
+
+		status = "disable";
+	};
+
+	can3: can@403F0000 {
+		compatible = "bosch,m_can";
+		reg = <0x0 0x403F0000 0x0 0x200>, <0x0 0x403F0200 0x0 0x4000>;
+		reg-names = "m_can", "message_ram";
+		interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>,
+					 <GIC_SPI 134 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "int0", "int1";
+		clocks = <&clk HCLK3>,
+				 <&clk CAN3_GATE>;
+		clock-names = "hclk", "cclk";
+
+		assigned-clocks = <&clk CAN3_DIV>;
+		assigned-clocks-parents = <&clk APLL>;
+		assigned-clock-rates =<50000000>;
+
+		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
+
+		status = "disable";
+	};
+
 	ehci0: ehci@40140000 {
-		compatible = "nuvoton,ma35h0-ehci";
+		compatible = "nuvoton,ma35d1-ehci";
 		reg = <0x0 0x40140000 0x0 0x1000>;
 		clocks = <&clk HUSBH0_GATE>;
 		clock-names = "hsusbh0_gate";
@@ -266,7 +445,7 @@
 	};
 
 	ehci1:ehci@401C0000 {
-		compatible = "nuvoton,ma35h0-ehci";
+		compatible = "nuvoton,ma35d1-ehci";
 		reg = <0x0 0x401C0000 0x0 0x1000>;
 		clocks = <&clk HUSBH1_GATE>;
 		clock-names = "hsusbh1_gate";
@@ -278,7 +457,7 @@
 	};
 
 	ohci0:ohci@40150000 {
-		compatible = "nuvoton,ma35h0-ohci";
+		compatible = "nuvoton,ma35d1-ohci";
 		reg = <0x0 0x40150000 0x0 0x1000>;
 		clocks = <&clk HUSBH0_GATE>;
 		nuvoton,sys = <&sys>;
@@ -287,7 +466,7 @@
 	};
 
 	ohci1:ohci@401D0000 {
-		compatible = "nuvoton,ma35h0-ohci";
+		compatible = "nuvoton,ma35d1-ohci";
 		reg = <0x0 0x401D0000 0x0 0x1000>;
 		clocks = <&clk HUSBH1_GATE>;
 		nuvoton,sys = <&sys>;
@@ -297,7 +476,7 @@
 
 	/* VC8000 engine */
 	vc8k:vc8k@40290000 {
-		compatible = "nuvoton,ma35h0-vc8k";
+		compatible = "nuvoton,ma35d1-vc8k";
 		reg = <0x0 0x40290000 0x0 0x1000>;
 		clocks = <&clk VC8K_GATE>;
 		nuvoton,sys = <&sys>;
@@ -313,42 +492,47 @@
 
 	/* Crypto engine */
 	crypto:crpt@40300000 {
-		compatible = "nuvoton,ma35h0-crypto";
+		compatible = "nuvoton,ma35d1-crypto";
 		reg = <0x0 0x40300000 0x0 0x1000>;
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
-		rsa_ioctl = "no";           /* yes: RSA via ioctl, no: RSA via akcipher   */
-		ecc_ioctl = "no";           /* yes: ECC via ioctl, no: ECDH via akcipher */
-		status = "disabled";
+		optee_nuvoton = "yes";
+		rsa_ioctl = "yes";           /* yes: RSA via ioctl, no: RSA via akcipher   */
+		ecc_ioctl = "yes";           /* yes: ECC via ioctl, no: ECDH via akcipher */
+		status = "okay";
 	};
 
 	/* Key Store */
 	key_store:ks@40340800 {
-		compatible = "nuvoton,ma35h0-ks";
+		compatible = "nuvoton,ma35d1-ks";
 		reg = <0x0 0x40340800 0x0 0x800>;
 		interrupts = <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>;
+		optee_nuvoton = "yes";
 		status = "okay";
 	};
 
 	/* TRNG */
 	trng: trng@40B90000 {
-		compatible = "nuvoton,ma35h0-trng";
+		compatible = "nuvoton,ma35d1-trng";
 		reg = <0x0 0x40B90000 0x0 0x400>;
 		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>;
-		status = "disabled";
+		optee_nuvoton = "yes";
+		status = "okay";
 	};
 
 	rtc: rtc@40410000 {
-		compatible = "nuvoton,ma35h0-rtc";
+		compatible = "nuvoton,ma35d1-rtc";
 		reg = <0x0 0x40410000 0x0 0x10000>;
 		interrupts = <GIC_SPI 5 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk RTC_GATE>;
 		lxt-detect-enable = <0>;
+		wakeup-source;
+		enable-wakeup;
 		status = "disabled";
 	};
 
 
 	keypad: keypad@404A0000 {
-		compatible = "nuvoton,ma35h0-kpi";
+		compatible = "nuvoton,ma35d1-kpi";
 
 		reg = <0x0 0x404A0000 0x0 0x10000>;
 		interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
@@ -379,20 +563,21 @@
 
 
 		/*
-		debounce setting:
-		0 = disable debounce
-		3 = debounce preiod is 8 clocks.
-		4 = debounce preiod is 16 clocks.
-		5 = debounce preiod is 32 clocks.
-		6 = debounce preiod is 64 clocks.
-		7 = debounce preiod is 128 clocks.
-		8 = debounce preiod is 256 clocks.
-		9 = debounce preiod is 512 clocks.
-		10 = debounce preiod is 1024 clocks.
-		11 = debounce preiod is 2048 clocks.
-		12 = debounce preiod is 4096 clocks.
-		13 = debounce preiod is 8192 clocks.
-		*/
+		 * debounce setting:
+		 * 0 = disable debounce
+		 * 3 = debounce period is 8 clocks.
+		 * 4 = debounce period is 16 clocks.
+		 * 5 = debounce period is 32 clocks.
+		 * 6 = debounce period is 64 clocks.
+		 * 7 = debounce period is 128 clocks.
+		 * 8 = debounce period is 256 clocks.
+		 * 9 = debounce period is 512 clocks.
+		 * 10 = debounce period is 1024 clocks.
+		 * 11 = debounce period is 2048 clocks.
+		 * 12 = debounce period is 4096 clocks.
+		 * 13 = debounce period is 8192 clocks.
+		 */
+
 		debounce-period = <1>;
 
 		/* pre-scale is from 1 ~ 256 */
@@ -405,101 +590,176 @@
 
 	};
 
-	i2c0: i2c@40800000 {
-		compatible = "nuvoton,ma35h0-i2c";
-		reg = <0x0 0x40800000 0x0 0x10000>;
-		interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>;
-		clocks = <&clk I2C0_GATE>;
+	i2c1: i2c@40810000 {
+		compatible = "nuvoton,ma35d1-i2c";
+		reg = <0x0 0x40810000 0x0 0x10000>;
+		interrupts = <GIC_SPI 69 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk I2C1_GATE>;
 		clock-frequency = <100000>;
-		resets = <&reset MA35H0_RESET_I2C0>;
+		resets = <&reset MA35D1_RESET_I2C1>;
+		status = "disable";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		status = "disable";
+	};
+
+	i2c2: i2c@40820000 {
+		compatible = "nuvoton,ma35d1-i2c";
+		reg = <0x0 0x40820000 0x0 0x10000>;
+		interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk I2C2_GATE>;
+		clock-frequency = <100000>;
+		resets = <&reset MA35D1_RESET_I2C2>;
+		status = "disabled";
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	i2c3: i2c@40830000 {
+		compatible = "nuvoton,ma35d1-i2c";
+		reg = <0x0 0x40830000 0x0 0x10000>;
+		interrupts = <GIC_SPI 98 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk I2C3_GATE>;
+		clock-frequency = <100000>;
+		resets = <&reset MA35D1_RESET_I2C3>;
+		status = "disabled";
+		#address-cells = <1>;
+		#size-cells = <0>;
 	};
 
 	i2c4: i2c@40840000 {
-		compatible = "nuvoton,ma35h0-i2c";
+		compatible = "nuvoton,ma35d1-i2c";
 		reg = <0x0 0x40840000 0x0 0x10000>;
 		interrupts = <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk I2C4_GATE>;
 		clock-frequency = <100000>;
-		resets = <&reset MA35H0_RESET_I2C4>;
+		resets = <&reset MA35D1_RESET_I2C4>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "disable";
 	};
 
 	i2c5: i2c@40850000 {
-		compatible = "nuvoton,ma35h0-i2c";
+		compatible = "nuvoton,ma35d1-i2c";
 		reg = <0x0 0x40850000 0x0 0x10000>;
 		interrupts = <GIC_SPI 124 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk I2C5_GATE>;
 		clock-frequency = <100000>;
-		resets = <&reset MA35H0_RESET_I2C5>;
+		resets = <&reset MA35D1_RESET_I2C5>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "disable";
 	};
 
 	i2s0: i2s@40480000 {
-		compatible = "nuvoton,ma35h0-audio-i2s";
+		compatible = "nuvoton,ma35d1-audio-i2s";
 		reg = <0x0 0x40480000 0x0 0x10000>;
 		interrupts = <GIC_SPI 70 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk I2S0_GATE>;
-		resets = <&reset MA35H0_RESET_I2S0>;
+		resets = <&reset MA35D1_RESET_I2S0>;
 		pdma_reqsel_tx = <86>;
 		pdma_reqsel_rx = <87>;
 		mclk_out = <12000000>;
 		status = "disable";
 	};
 
+	i2s1: i2s@40490000 {
+		compatible = "nuvoton,ma35d1-audio-i2s";
+		reg = <0x0 0x40490000 0x0 0x10000>;
+		interrupts = <GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk I2S1_GATE>;
+		resets = <&reset MA35D1_RESET_I2S1>;
+		pdma_reqsel_tx = <88>;
+		pdma_reqsel_rx = <89>;
+		mclk_out = <12000000>;
+		status = "disable";
+	};
+
 	i2s_pcm: i2s_pcm {
-		compatible = "nuvoton,ma35h0-audio-pcm";
+		compatible = "nuvoton,ma35d1-audio-pcm";
 		status = "disable";
 	};
 
 	sound: sound {
-		compatible = "nuvoton,ma35h0-audio";
+		compatible = "nuvoton,ma35d1-audio";
 		i2s-controller = <&i2s0>;
 		i2s-platform = <&i2s_pcm>;
 		status = "disable";
 	};
 
 	hwsem: hwspinlock@40380000 {
-		compatible = "nuvoton,ma35h0-hwsem";
+		compatible = "nuvoton,ma35d1-hwsem";
 		reg = <0x0 0x40380000 0x0 0x1000>;
 		clocks = <&clk HWS_GATE>;
 		clock-names = "hws_gate";
+		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
 		nuvoton,sys = <&sys>;
+		#hwsem-cells = <1>;
 		status = "okay";
 	};
 
 	wormhole: mailbox@403A0000 {
-		compatible = "nuvoton,ma35h0-wormhole";
+		compatible = "nuvoton,ma35d1-wormhole";
 		reg = <0x0 0x403A0000 0x0 0x1000>;
 		clocks = <&clk WH0_GATE>;
 		clock-names = "wh0_gate";
 		interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
 		wakeup-source;
+		enable-wakeup;
 		#mbox-cells = <1>;
 		status = "okay";
 	};
 
 	misctrl {
-		compatible = "nuvoton,ma35h0-misctrl";
+		compatible = "nuvoton,ma35d1-misctrl";
 		status = "okay";
 	};
 
-	emac0: ethernet@40120000 {
-		compatible = "nuvoton,ma35h0-emac";
+	rproc {
+		compatible = "nuvoton,ma35d1-rproc";
+		mboxes = <&wormhole 1>;
+		resets = <&reset MA35D1_RESET_CM4>;
+		memory-region = <&rproc_buf>;
+		status = "okay";
+	};
+
+	rpmsg {
+		compatible = "nuvoton,ma35d1-rpmsg";
+		share-mem-addr = <0x2401ff00>;
+		mboxes = <&wormhole 2>;
+		tx-smem-size = <128>;
+		rx-smem-size = <128>;
+		/* rpmsg-v2-arch; */
+		/* rpmsg-ddr-buf; */
+		/* memory-region = <&rpmsg_buf>; */
+		status = "okay";
+	};
+
+	ampm: ampm {
+		compatible = "nuvoton,ma35d1-ampm";
+		memory-region = <&rpmsg_buf>;
+		rxipi = <&hwsem 6>;
+		txipi = <&hwsem 7>;
+		status = "disabled";
+	};
+
+	amp: amp {
+		compatible = "nuvoton,ma35-amp";
+		memory-region = <&rpmsg_buf>;
+		rxipi = <&timer8>;
+		txipi = <&timer9>;
+		status = "disabled";
+	};
+
+	gmac0: ethernet@40120000 {
+		compatible = "nuvoton,ma35d1-gmac";
 		reg = <0x0 0x40120000 0x0 0x10000>;
 		interrupts = <GIC_SPI 23 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "macirq";
-		phy-mode = "rmii";
-		nuvoton,ma35h0-sys = <&sys>;
+		phy-mode = "rgmii-id";
+		nuvoton,ma35d1-sys = <&sys>;
 		clocks = <&clk EMAC0_GATE>, <&clk EPLL_DIV8>;
 		clock-names = "stmmaceth", "ptp_ref";
-		resets = <&reset MA35H0_RESET_EMAC0>;
+		resets = <&reset MA35D1_RESET_GMAC0>;
 		reset-names = "stmmaceth";
 		mac-id = <0>;
 		clk_csr = <4>;
@@ -517,8 +777,35 @@
 
 	};
 
+	gmac1: ethernet@40130000 {
+		compatible = "nuvoton,ma35d1-gmac";
+		reg = <0x0 0x40130000 0x0 0x10000>;
+		interrupts = <GIC_SPI 24 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "macirq";
+		phy-mode = "rgmii-id";
+		nuvoton,ma35d1-sys = <&sys>;
+		clocks = <&clk EMAC1_GATE>, <&clk EPLL_DIV8>;
+		clock-names = "stmmaceth", "ptp_ref";
+		resets = <&reset MA35D1_RESET_GMAC1>;
+		reset-names = "stmmaceth";
+		mac-id = <1>;
+		clk_csr = <4>;
+		status = "disable";
+		phy-handle = <&eth_phy1>;
+		mdio1 {
+			compatible = "snps,dwmac-mdio";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			eth_phy1: ethernet-phy@1 {
+				reg = <1>;
+			};
+		};
+
+	};
+
 	pinctrl: pinctrl {
-		compatible = "nuvoton,ma35h0-pinctrl";
+		compatible = "nuvoton,ma35d1-pinctrl";
 		nuvoton,sys = <&sys>;
 		#address-cells = <2>;
 		#size-cells = <2>;
@@ -828,11 +1115,11 @@
 	};
 
 	sdhci0: sdhci@40180000 {
-		compatible = "nuvoton,ma35h0-sdhci";
+		compatible = "nuvoton,ma35d1-sdhci";
 		reg = <0x0 0x40180000 0x0 0x2000>;
 		interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk SDH0_GATE>;
-		resets = <&reset MA35H0_RESET_SDH0>;
+		resets = <&reset MA35D1_RESET_SDH0>;
 		clock-names = "core";
 		bus-width = <4>;
 		max-frequency = <100000000>;
@@ -845,11 +1132,11 @@
 	};
 
 	sdhci1:sdhci@40190000 {
-		compatible = "nuvoton,ma35h0-sdhci";
-		nuvoton,ma35h0-sys = <&sys>;
+		compatible = "nuvoton,ma35d1-sdhci";
+		nuvoton,ma35d1-sys = <&sys>;
 		reg = <0x0 0x40190000 0x0 0x2000>;
 		interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
-		resets = <&reset MA35H0_RESET_SDH1>;
+		resets = <&reset MA35D1_RESET_SDH1>;
 		clocks = <&clk SDH1_GATE>;
 		clock-names = "core";
 		bus-width = <8>;
@@ -862,7 +1149,7 @@
 	};
 
 	nand:nand@401A0000 {
-		compatible = "nuvoton,ma35h0-nand";
+		compatible = "nuvoton,ma35d1-nand";
 		reg = <0x0 0x401A0000 0x0 0x1000>;
 		interrupts = <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>;	/* 70-32 */
 		nuvoton,sys = <&sys>;
@@ -921,7 +1208,7 @@
 	};
 
 	usb_phy: usb-phy {
-		compatible = "nuvoton,ma35h0-usb-phy";
+		compatible = "nuvoton,ma35d1-usb-phy";
 		clocks = <&clk USBD_GATE>;
 		clock-names = "usbd_gate";
 		clock-enable = "usbd_gate";
@@ -930,7 +1217,7 @@
 	};
 
 	pdma0: pdma@40080000 {
-		compatible = "nuvoton,ma35h0-dma";
+		compatible = "nuvoton,ma35d1-dma";
 		reg = <0x0 0x40080000 0x0 0x2000>;
 		interrupts = <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk PDMA0_GATE>;
@@ -940,7 +1227,7 @@
 	};
 
 	pdma1: pdma@40090000 {
-		compatible = "nuvoton,ma35h0-dma";
+		compatible = "nuvoton,ma35d1-dma";
 		reg = <0x0 0x40090000 0x0 0x2000>;
 		interrupts = <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk PDMA1_GATE>;
@@ -950,7 +1237,7 @@
 	};
 
 	pdma2: pdma@400A0000 {
-		compatible = "nuvoton,ma35h0-dma";
+		compatible = "nuvoton,ma35d1-dma";
 		reg = <0x0 0x400A0000 0x0 0x2000>;
 		interrupts = <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk PDMA2_GATE>;
@@ -960,7 +1247,7 @@
 	};
 
 	pdma3: pdma@400B0000 {
-		compatible = "nuvoton,ma35h0-dma";
+		compatible = "nuvoton,ma35d1-dma";
 		reg = <0x0 0x400B0000 0x0 0x2000>;
 		interrupts = <GIC_SPI 46 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk PDMA3_GATE>;
@@ -969,10 +1256,48 @@
 		status = "disabled";
 	};
 
+	ccap0: ccap@40240000{
+		compatible = "nuvoton,ma35d1-ccap";
+		reg = <0x0 0x40240000 0x0 0x2000>;
+		interrupts = <GIC_SPI 21 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	i2c_gpio0: i2c-gpio-0 {
+		reg = <0 0 0 0>;
+		compatible = "i2c-gpio";
+		gpios = <&gpiom 14 0 /* sda */
+			 &gpiom 15 0 /* scl */
+			>;
+		i2c-gpio,delay-us = <20>;        /* ~100 kHz */
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	ccap1: ccap@40250000{
+		compatible = "nuvoton,ma35d1-ccap";
+		reg = <0x0 0x40250000 0x0 0x2000>;
+		interrupts = <GIC_SPI 22 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	i2c_gpio1: i2c-gpio-1{
+		reg = <0 0 0 1>;
+		compatible = "i2c-gpio";
+		gpios = <&gpiol 4 0 /* sda */
+			 &gpiol 5 0 /* scl */
+			>;
+		i2c-gpio,delay-us = <20>;        /* ~100 kHz */
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
 	tsen: tsen {
-		compatible = "nuvoton,ma35h0-tsen";
+		compatible = "nuvoton,ma35d1-tsen";
 		#thermal-sensor-cells = <0>;
-		nuvoton,ma35h0-sys = <&sys>;
+		nuvoton,ma35d1-sys = <&sys>;
 		status = "okay";
 	};
 
@@ -991,7 +1316,7 @@
 	};
 
 	timer0: timer0@40500000 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40500000 0x0 0x100>;
 		interrupts = <GIC_SPI 47 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <0>;
@@ -1003,7 +1328,7 @@
 	};
 
 	timer1: timer1@40500100 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40500100 0x0 0x100>;
 		interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <1>;
@@ -1015,7 +1340,7 @@
 	};
 
 	timer2: timer2@40510000 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40510000 0x0 0x100>;
 		interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <2>;
@@ -1027,7 +1352,7 @@
 	};
 
 	timer3: timer3@40510100 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40510100 0x0 0x100>;
 		interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <3>;
@@ -1039,7 +1364,7 @@
 	};
 
 	timer4: timer4@40520000 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40520000 0x0 0x100>;
 		interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <4>;
@@ -1051,7 +1376,7 @@
 	};
 
 	timer5: timer5@40520100 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40520100 0x0 0x100>;
 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <5>;
@@ -1063,7 +1388,7 @@
 	};
 
 	timer6: timer6@40530000 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40530000 0x0 0x100>;
 		interrupts = <GIC_SPI 106 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <6>;
@@ -1075,7 +1400,7 @@
 	};
 
 	timer7: timer7@40530100 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40530100 0x0 0x100>;
 		interrupts = <GIC_SPI 107 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <7>;
@@ -1087,7 +1412,7 @@
 	};
 
 	timer8: timer8@40540000 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40540000 0x0 0x100>;
 		interrupts = <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <8>;
@@ -1099,7 +1424,7 @@
 	};
 
 	timer9: timer9@40540100 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40540100 0x0 0x100>;
 		interrupts = <GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <9>;
@@ -1111,7 +1436,7 @@
 	};
 
 	timer10: timer10@40550000 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40550000 0x0 0x100>;
 		interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <10>;
@@ -1123,7 +1448,7 @@
 	};
 
 	timer11: timer11@40550100 {
-		compatible = "nuvoton,ma35h0-timer";
+		compatible = "nuvoton,ma35d1-timer";
 		reg = <0x0 0x40550100 0x0 0x100>;
 		interrupts = <GIC_SPI 128 IRQ_TYPE_LEVEL_HIGH>;
 		port-number = <11>;
@@ -1135,7 +1460,7 @@
 	};
 
 	ebi0: ebi@40100000 {
-		compatible = "nuvoton,ma35h0-ebi";
+		compatible = "nuvoton,ma35d1-ebi";
 		reg = <0x0 0x40100000 0x0 0x10>;
 		bank = <0>;
 		clock-enable = "ebi_gate";
@@ -1153,7 +1478,7 @@
 	};
 
 	ebi1: ebi@40100010 {
-		compatible = "nuvoton,ma35h0-ebi";
+		compatible = "nuvoton,ma35d1-ebi";
 		reg = <0x0 0x40100010 0x0 0x10>;
 		bank = <1>;
 		clock-enable = "ebi_gate";
@@ -1171,7 +1496,7 @@
 	};
 
 	ebi2: ebi@40100020 {
-		compatible = "nuvoton,ma35h0-ebi";
+		compatible = "nuvoton,ma35d1-ebi";
 		reg = <0x0 0x40100020 0x0 0x0fe0>;
 		bank = <2>;
 		clock-enable = "ebi_gate";
@@ -1189,7 +1514,7 @@
 	};
 
 	qspi0: spi@40680000 {
-		compatible = "nuvoton,ma35h0-qspi";
+		compatible = "nuvoton,ma35d1-qspi";
 		reg = <0x0 0x40680000 0x0 0x10000>;
 		interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk QSPI0_GATE>;
@@ -1247,8 +1572,52 @@
 		};
 	};
 
+	qspi1: spi@40690000 {
+		compatible = "nuvoton,ma35d1-qspi";
+		reg = <0x0 0x40690000 0x0 0x10000>;
+		interrupts = <GIC_SPI 58 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk QSPI1_GATE>;
+		dmas = <&pdma1 2>,<&pdma1 3>;
+		dma-names = "tx","rx";
+		pdma_reqsel_tx = <56>;
+		pdma_reqsel_rx = <57>;
+		use_pdma = <0>;
+		num_cs = <2>;
+		lsb = <0>;
+		sleep = <0>;
+		txbitlen = <8>;
+		quad = <0>;
+		bus_num = <1>;
+		spimode = <0>;
+		mrxphase = <0>;
+		status = "disabled";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+		flash@0 {
+			compatible = "winbond,w25q128";
+			spi-max-frequency = <60000000>;
+			reg = <0 0x0 0x2000000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "U-Boot";
+				reg = <0x0 0x100000>;
+			};
+			partition@100000 {
+				label = "Linux";
+				reg = <0x100000 0xa00000>;
+			};
+			partition@b00000 {
+				label = "Rootfs";
+				reg = <0xb00000 0x500000>;
+			};
+		};
+	};
+
 	spi0: spi@40600000 {
-		compatible = "nuvoton,ma35h0-spi";
+		compatible = "nuvoton,ma35d1-spi";
 		reg = <0x0 0x40600000 0x0 0x10000>;
 		interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk SPI0_GATE>;
@@ -1269,7 +1638,7 @@
 	};
 
 	spi1: spi@40610000 {
-		compatible = "nuvoton,ma35h0-spi";
+		compatible = "nuvoton,ma35d1-spi";
 		reg = <0x0 0x40610000 0x0 0x10000>;
 		interrupts = <GIC_SPI 90 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk SPI1_GATE>;
@@ -1289,43 +1658,90 @@
 		status = "disabled";
 	};
 
+	spi2: spi@40620000 {
+		compatible = "nuvoton,ma35d1-spi";
+		reg = <0x0 0x40620000 0x0 0x10000>;
+		interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk SPI2_GATE>;
+		dmas = <&pdma1 8>,<&pdma1 9>;
+		dma-names = "tx","rx";
+		pdma_reqsel_tx = <64>;
+		pdma_reqsel_rx = <65>;
+		use_pdma = <0>;
+		num_cs = <2>;
+		lsb = <0>;
+		sleep = <0>;
+		txbitlen = <8>;
+		bus_num = <4>;
+		spimode = <0>;
+		mrxphase = <0>;
+		spi-max-frequency = <10000000>;
+		status = "disabled";
+	};
+
+	spi3: spi@40630000 {
+		compatible = "nuvoton,ma35d1-spi";
+		reg = <0x0 0x40630000 0x0 0x10000>;
+		interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk SPI3_GATE>;
+		dmas = <&pdma2 0>,<&pdma2 1>;
+		dma-names = "tx","rx";
+		pdma_reqsel_tx = <66>;
+		pdma_reqsel_rx = <67>;
+		use_pdma = <0>;
+		num_cs = <2>;
+		lsb = <0>;
+		sleep = <0>;
+		txbitlen = <8>;
+		bus_num = <5>;
+		spimode = <0>;
+		mrxphase = <0>;
+		spi-max-frequency = <10000000>;
+		status = "disabled";
+	};
+
 	epwm0: epwm0@40580000 {
-		compatible = "nuvoton,ma35h0-epwm";
+		compatible = "nuvoton,ma35d1-epwm";
 		reg = <0x0 0x40580000 0x0 0x10000>;
 		clocks = <&clk EPWM0_GATE>;
 		status = "disabled";
 	};
 
 	epwm1: epwm1@40590000 {
-		compatible = "nuvoton,ma35h0-epwm";
+		compatible = "nuvoton,ma35d1-epwm";
 		reg = <0x0 0x40590000 0x0 0x10000>;
 		clocks = <&clk EPWM1_GATE>;
 		status = "disabled";
 	};
 
 	epwm2: epwm2@405a0000 {
-		compatible = "nuvoton,ma35h0-epwm";
+		compatible = "nuvoton,ma35d1-epwm";
 		reg = <0x0 0x405a0000 0x0 0x10000>;
 		clocks = <&clk EPWM2_GATE>;
 		status = "disabled";
 	};
 
 	eadc0: eadc0@40430000 {
-		compatible = "nuvoton,ma35h0-eadc";
+		compatible = "nuvoton,ma35d1-eadc";
 		reg = <0x0 0x40430000 0x0 0x10000>;
 		interrupts = <GIC_SPI 65 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk EADC_GATE>;
 		clock-names = "eadc_gate";
 		eadc-frequency = <10000000>;
 		eadc-channels = <0 1 2 3 4 5 6 7>;
+		/*use_pdma = <1>;*/ /* enable PDMA */
+		use_pdma = <0>; /* Disable PDMA */
+		dmas = <&pdma2 4>;
+		dma-names = "rx";
+		pdma_reqsel_rx = <146>;
 		status = "disabled";
 	};
 
 	adc0: adc@40420000 {
 		// To use hybrid ADC driver (IIO+TS) for touch screen, change
-		// the compatible string to "nuvoton,ma35h0-adc",
+		// the compatible string to "nuvoton,ma35d1-adc",
 		// For IIO-only ADC driver, use "nuvoton,ma35-adc" instead.
-		compatible = "nuvoton,ma35h0-adc";
+		compatible = "nuvoton,ma35d1-adc";
 
 		reg = <0x0 0x40420000 0x0 0x500>;
 		interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
@@ -1333,7 +1749,7 @@
 		clock-names = "adc_gate";
 		clock-rate = <200000>;
 
-		// Properties for IIO-only driver
+		// Properties for IIO-only ADC driver
 		nuvoton,adc-vref = <3300>;
 		nuvoton,min-clock-frequency = <3200000>;
 		nuvoton,max-clock-frequency = <16000000>;
@@ -1352,18 +1768,20 @@
 		reg = <0x0 0x40280000 0x0 0x10000>;
 		interrupts = <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk GFX_GATE>;
-		resets = <&reset MA35H0_RESET_GFX>;
-		status = "okay";
+		nuvoton,sys = <&sys>;
+		resets = <&reset MA35D1_RESET_GFX>;
+		status = "disabled";
 	};
 
 	display: display@40260000 {
-		compatible = "nuvoton,ma35h0-fb";
+		compatible = "nuvoton,ma35d1-fb";
 		reg = <0x0 0x40260000 0x0 0x2000>;
 		interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+		nuvoton,sys = <&sys>;
 		nuvoton,clk = <&clk>;
 		clocks = <&clk DCU_GATE>, <&clk DCUP_DIV>;
 		clock-names = "dcu_gate", "dcup_div";
-		resets = <&reset MA35H0_RESET_DISP>;
+		resets = <&reset MA35D1_RESET_DISP>;
 		//pwr-gpios = <&gpiok 5 GPIO_ACTIVE_HIGH>; //LVDS pwr-enable pin
 		status = "disabled";
 
@@ -1375,7 +1793,7 @@
 		swizzle = <0>;//0:ARGB, 1:RGBA, 2:ABGR, 3:BGRA
 		dpi-config = <5>;//0:D16CFG1, 1:D16CFG2, 2:D16CFG3, 3:D18CFG1, 4:D18CFG2, 5:D24
 
-		buffer-num = <2>;
+		buffer-num = <3>;
 		colorkey-en = <1>;
 
 		//Enable overlay function
@@ -1416,11 +1834,109 @@
 				hsync-active = <1>;
 				vsync-active = <1>;
 			};
+
+			timing2: 1920x1080 {
+				clock-frequency = <125000000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <32>;
+				hfront-porch = <120>;
+				hback-porch = <128>;
+				vsync-len = <14>;
+				vfront-porch  = <21>;
+				vback-porch = <10>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+
+			timing3: 2lane_1920x1080 {
+				clock-frequency = <148000000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <160>;
+				hfront-porch = <32>;
+				hback-porch = <48>;
+				vsync-len = <31>;
+				vfront-porch  = <5>;
+				vback-porch = <3>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+
+			timing4: 4lane_1920x1080 {
+				clock-frequency = <150000000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <92>;
+				hfront-porch = <32>;
+				hback-porch = <48>;
+				vsync-len = <134>;
+				vfront-porch  = <5>;
+				vback-porch = <3>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+
+			timing5: hdmi_1920x1080 {
+				clock-frequency = <148500000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <44>;
+				hfront-porch = <88>;
+				hback-porch = <148>;
+				vsync-len = <5>;
+				vfront-porch  = <4>;
+				vback-porch = <36>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+
+			timing6: mipi_1920x1200 {
+				clock-frequency = <148000000>;
+				hactive = <1920>;
+				vactive = <1200>;
+				hsync-len = <16>;
+				hfront-porch = <32>;
+				hback-porch = <16>;
+				vsync-len = <2>;
+				vfront-porch  = <15>;
+				vback-porch = <18>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+
+			timing7: edp_1920x1080 {
+				clock-frequency = <148000000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hsync-len = <160>;
+				hfront-porch = <32>;
+				hback-porch = <48>;
+				vsync-len = <31>;
+				vfront-porch  = <5>;
+				vback-porch = <3>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+			};
+
+			timing8: lvds_1920x1200 {
+				clock-frequency = <148000000>;
+				hactive = <1920>;
+				vactive = <1200>;
+				hsync-len = <16>;
+				hfront-porch = <32>;
+				hback-porch = <16>;
+				vsync-len = <2>;
+				vfront-porch  = <15>;
+				vback-porch = <18>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+			};
 		};
 	};
 
 	wdt1: wdt@40440000 {
-		compatible = "nuvoton,ma35h0-wdt";
+		compatible = "nuvoton,ma35d1-wdt";
 		reg = <0x0 0x40440000 0x0 0x100>;
 		interrupts = <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>;	/* 75-32 */
 		nuvoton,clk = <&clk>;
@@ -1431,7 +1947,7 @@
 	};
 
 	wwdt1: wwdt@40440100 {
-		compatible = "nuvoton,ma35h0-wwdt";
+		compatible = "nuvoton,ma35d1-wwdt";
 		reg = <0x0 0x40440100 0x0 0x100>;
 		interrupts = <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>;	/* 76-32 */
 		nuvoton,clk = <&clk>;
@@ -1441,14 +1957,14 @@
 	};
 
 	reset: reset-controller {
-		compatible = "nuvoton,ma35h0-reset";
-		nuvoton,ma35h0-sys = <&sys>;
+		compatible = "nuvoton,ma35d1-reset";
+		nuvoton,ma35d1-sys = <&sys>;
 		#reset-cells = <1>;
 	};
 
 	sysctl: sys-controller {
-		compatible = "nuvoton,ma35h0-sysctrl";
-		nuvoton,ma35h0-sys = <&sys>;
+		compatible = "nuvoton,ma35d1-sysctrl";
+		nuvoton,ma35d1-sys = <&sys>;
 	};
 
 };

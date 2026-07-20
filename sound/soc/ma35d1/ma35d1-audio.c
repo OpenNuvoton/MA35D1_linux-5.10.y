@@ -34,13 +34,16 @@ static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct sn
 	unsigned int cpu_mclk;
 	int ret;
 
-	/* set codec DAI configuration */
-	ret = snd_soc_dai_set_fmt(codec_dai, fmt);
+	/* set cpu DAI configuration */
+	ret = snd_soc_dai_set_fmt(cpu_dai, fmt);
 	if (ret < 0)
 		return ret;
 
-	/* set cpu DAI configuration */
-	ret = snd_soc_dai_set_fmt(cpu_dai, fmt);
+	if (of_device_is_compatible(codec_dai->dev->of_node, "st,mp34dt01m"))
+		return 0;
+
+	/* set codec DAI configuration */
+	ret = snd_soc_dai_set_fmt(codec_dai, fmt);
 	if (ret < 0)
 		return ret;
 
@@ -59,43 +62,67 @@ static struct snd_soc_ops ma35d1_audio_ops = {
 	.hw_params = ma35d1_audio_hw_params,
 };
 
-SND_SOC_DAILINK_DEFS(hifi,
-			DAILINK_COMP_ARRAY(COMP_CPU("40480000.i2s")),
-			DAILINK_COMP_ARRAY(COMP_CODEC("nau8822.0-001a", "nau8822-hifi")),
-			DAILINK_COMP_ARRAY(COMP_PLATFORM("i2s_pcm")));
-
-static struct snd_soc_dai_link ma35d1evb_i2s_dai = {
-	.name               =   "IIS",
-	.stream_name        =   "IIS HiFi",
-	.ops                =   &ma35d1_audio_ops,
-	SND_SOC_DAILINK_REG(hifi),
-};
-
-static struct snd_soc_card ma35d1evb_audio_machine = {
-	.name       =   "ma35d1_IIS",
-	.owner      =   THIS_MODULE,
-	.dai_link   =   &ma35d1evb_i2s_dai,
-	.num_links  =   1,
+struct ma35d1_audio_card {
+	struct snd_soc_card card;
+	struct snd_soc_dai_link dai_link;
+	struct snd_soc_dai_link_component cpu;
+	struct snd_soc_dai_link_component codec;
+	struct snd_soc_dai_link_component platform;
 };
 
 static int ma35d1_audio_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
-	struct snd_soc_card *card = &ma35d1evb_audio_machine;
+	struct ma35d1_audio_card *priv;
+	const char *model;
 	int ret;
 
-	card->dev = &pdev->dev;
+	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
+	if (!priv)
+		return -ENOMEM;
 
-	if (np) {
-		ma35d1evb_i2s_dai.cpus->of_node = of_parse_phandle(np, "i2s-controller", 0);
-		if (!ma35d1evb_i2s_dai.cpus->of_node) {
-			dev_err(&pdev->dev, "Property 'i2s-controller' missing or invalid\n");
-			ret = -EINVAL;
-		}
+	priv->card.dev = &pdev->dev;
+	priv->card.owner = THIS_MODULE;
+	priv->card.dai_link = &priv->dai_link;
+	priv->card.num_links = 1;
 
+	if (!of_property_read_string(np, "model", &model))
+		priv->card.name = model;
+	else
+		priv->card.name = "ma35d1_IIS";
+
+	priv->dai_link.name = "IIS";
+	priv->dai_link.stream_name = "IIS HiFi";
+	priv->dai_link.ops = &ma35d1_audio_ops;
+	priv->dai_link.cpus = &priv->cpu;
+	priv->dai_link.num_cpus = 1;
+	priv->dai_link.codecs = &priv->codec;
+	priv->dai_link.num_codecs = 1;
+	priv->dai_link.platforms = &priv->platform;
+	priv->dai_link.num_platforms = 1;
+
+	priv->cpu.of_node = of_parse_phandle(np, "i2s-controller", 0);
+	if (!priv->cpu.of_node) {
+		dev_err(&pdev->dev, "Property 'i2s-controller' missing or invalid\n");
+		return -EINVAL;
 	}
 
-	ret = devm_snd_soc_register_card(&pdev->dev, card);
+	priv->platform.of_node = of_parse_phandle(np, "i2s-platform", 0);
+	if (!priv->platform.of_node)
+		priv->platform.name = "i2s_pcm";
+
+	priv->codec.of_node = of_parse_phandle(np, "audio-codec", 0);
+	if (priv->codec.of_node) {
+		if (of_device_is_compatible(priv->codec.of_node, "st,mp34dt01m"))
+			priv->codec.dai_name = "mp34dt01m-pdm";
+		else
+			priv->codec.dai_name = "nau8822-hifi";
+	} else {
+		priv->codec.name = "nau8822.0-001a";
+		priv->codec.dai_name = "nau8822-hifi";
+	}
+
+	ret = devm_snd_soc_register_card(&pdev->dev, &priv->card);
 	if (ret)
 		dev_err(&pdev->dev, "snd_soc_register_card() failed: %d\n", ret);
 

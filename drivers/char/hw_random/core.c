@@ -288,10 +288,43 @@ out_put:
 	goto out;
 }
 
+static long rng_dev_ioctl(struct file *filp, unsigned int cmd,
+			  unsigned long arg)
+{
+	struct hwrng *rng;
+	long ret;
+
+	rng = get_current_rng();
+	if (IS_ERR(rng))
+		return PTR_ERR(rng);
+	if (!rng)
+		return -ENODEV;
+
+	if (!rng->ioctl) {
+		ret = -ENOIOCTLCMD;
+		goto out_put;
+	}
+
+	if (mutex_lock_interruptible(&reading_mutex)) {
+		ret = -ERESTARTSYS;
+		goto out_put;
+	}
+
+	ret = rng->ioctl(rng, cmd, arg);
+
+	mutex_unlock(&reading_mutex);
+
+out_put:
+	put_rng(rng);
+	return ret;
+}
+
 static const struct file_operations rng_chrdev_ops = {
 	.owner		= THIS_MODULE,
 	.open		= rng_dev_open,
 	.read		= rng_dev_read,
+	.unlocked_ioctl	= rng_dev_ioctl,
+	.compat_ioctl	= compat_ptr_ioctl,
 	.llseek		= noop_llseek,
 };
 

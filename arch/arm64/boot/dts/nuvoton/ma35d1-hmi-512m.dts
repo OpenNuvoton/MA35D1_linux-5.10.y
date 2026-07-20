@@ -262,8 +262,35 @@
 	powerdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>; /* PD13 */
 };
 
+&i2s1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2s1_pdm_mic>;
+	nuvoton,raw-pdm-mono;
+};
+
 &i2s_pcm {
 	status = "okay";
+};
+
+/ {
+	mp34dt01m: mp34dt01m {
+		compatible = "st,mp34dt01m";
+	};
+
+	i2s1_pcm: i2s1_pcm {
+		compatible = "nuvoton,ma35d1-pdm-raw-pcm";
+		status = "okay";
+	};
+
+	sound_pdm_mic: sound-pdm-mic {
+		compatible = "nuvoton,ma35d1-audio";
+		model = "ma35d1-pdm-mic";
+		i2s-controller = <&i2s1>;
+		i2s-platform = <&i2s1_pcm>;
+		audio-codec = <&mp34dt01m>;
+		status = "okay";
+	};
 };
 
 &sound {
@@ -277,12 +304,10 @@
 };
 
 &spi3 {
-	status = "okay";
+	status = "disabled";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_spi3>;
 };
-
-
 
 &vc8k {
 	memory-region = <&vc8k_buf>;
@@ -462,6 +487,14 @@
 				<SYS_GPK_MFPH_PK13MFP_I2S0_BCLK	&pcfg_default>,
 				<SYS_GPK_MFPH_PK14MFP_I2S0_DI	&pcfg_default>,
 				<SYS_GPK_MFPH_PK15MFP_I2S0_DO	&pcfg_default>;
+		};
+	};
+
+	i2s1 {
+		pinctrl_i2s1_pdm_mic: i2s1pdmmicgrp {
+			nuvoton,pins =
+				<SYS_GPL_MFPH_PL9MFP_I2S1_BCLK	&pcfg_default>,
+				<SYS_GPD_MFPH_PD10MFP_I2S1_DI	&pcfg_default>;
 		};
 	};
 

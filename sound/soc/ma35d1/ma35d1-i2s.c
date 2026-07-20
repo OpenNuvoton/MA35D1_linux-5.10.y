@@ -29,8 +29,6 @@
 #include "ma35d1-audio.h"
 
 static DEFINE_MUTEX(i2s_mutex);
-struct ma35d1_audio *ma35d1_i2s_data;
-EXPORT_SYMBOL(ma35d1_i2s_data);
 
 static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params,
@@ -42,11 +40,47 @@ static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 	unsigned sample_rate = params_rate(params) ;
 	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
 
+
 	i2s_clk = clk_get_rate(ma35d1_audio->clk);
-	bitrate = sample_rate * 2U * 16U;
+	printk("i2s_clk: %u\n", i2s_clk);
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
+	    ma35d1_audio->pdm_decimation)
+		bitrate = sample_rate * ma35d1_audio->pdm_decimation;
+	else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
+		 ma35d1_audio->raw_pdm_mono && channels == 1)
+		bitrate = sample_rate * params_width(params);
+	else
+		bitrate = sample_rate * 2U * 16U;
+	printk("ma35d1_audio->pdm_decimation: %u\n", ma35d1_audio->pdm_decimation);
+	printk("sample_rate: %u bitrate: %u\n", sample_rate, bitrate);
 	bclkdiv = ((((i2s_clk * 10UL / bitrate) >> 1U) + 5UL) / 10UL) - 1U;
 	mclkdiv = (i2s_clk / ma35d1_audio->mclk_out) >> 1;
+	printk("bclkdiv: %u, mclkdiv: %u\n", bclkdiv, mclkdiv);
 	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CLKDIV, (bclkdiv << 8) | mclkdiv);
+
+
+{
+	unsigned int width = params_width(params);
+	unsigned int actual_bclk;
+	unsigned int actual_mclk;
+
+	actual_bclk = i2s_clk / (2 * (bclkdiv + 1));
+
+	if (mclkdiv == 0)
+		actual_mclk = i2s_clk;
+	else
+		actual_mclk = i2s_clk / (2 * mclkdiv);
+
+	printk("i2s_clk=%u\n", i2s_clk);
+	printk("sample_rate=%u channels=%u width=%u\n",
+	       sample_rate, channels, width);
+	printk("target_bclk=%u bclkdiv=%u actual_bclk=%u error_ppm=%lld\n",
+	       bitrate, bclkdiv, actual_bclk,
+	       ((long long)actual_bclk - bitrate) * 1000000LL / bitrate);
+	printk("target_mclk=%u mclkdiv=%u actual_mclk=%u\n",
+	       ma35d1_audio->mclk_out, mclkdiv, actual_mclk);
+	printk("I2S_CLKDIV=0x%08x\n", (bclkdiv << 8) | mclkdiv);
+}
 
 	switch (params_width(params)) {
 	case 8:
@@ -76,11 +110,15 @@ static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	/* set MONO if channel number is 1 */
-	if (channels == 1)
-		val |= MONO;
-	else
-		val &= ~MONO;
+	if (ma35d1_audio->raw_pdm_mono &&
+		substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
+		val = 0x1000000 | ORDER;
+	} else {
+		if (channels == 1)
+			val |= MONO;
+		else
+			val &= ~MONO;
+	}
 
 	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
 	return 0;
@@ -222,7 +260,7 @@ struct snd_soc_dai_driver ma35d1_i2s_dai = {
 		.channels_max   = 2,
 	},
 	.capture = {
-		.rates      = SNDRV_PCM_RATE_8000_48000,
+		.rates      = SNDRV_PCM_RATE_8000_192000,
 		.formats    = SNDRV_PCM_FMTBIT_S16_LE,
 		.channels_min   = 1,
 		.channels_max   = 2,
@@ -242,8 +280,6 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 
 	int ret;
 
-	if (ma35d1_i2s_data)
-		return -EBUSY;
 
 	ma35d1_audio = devm_kzalloc(&pdev->dev, sizeof(struct ma35d1_audio), GFP_KERNEL);
 	if (!ma35d1_audio)
@@ -304,7 +340,15 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 	else
 		ma35d1_audio->mclk_out = mclk_out;
 
-	ma35d1_i2s_data = ma35d1_audio;
+	of_property_read_u32(pdev->dev.of_node, "pdm-decimation",
+			     &ma35d1_audio->pdm_decimation);
+	if (ma35d1_audio->pdm_decimation &&
+	    ma35d1_audio->pdm_decimation != 64 &&
+	    ma35d1_audio->pdm_decimation != 128)
+		return -EINVAL;
+
+	ma35d1_audio->raw_pdm_mono = of_property_read_bool(pdev->dev.of_node,
+							   "nuvoton,raw-pdm-mono");
 
 	dev_set_drvdata(&pdev->dev, ma35d1_audio);
 
@@ -341,17 +385,18 @@ MODULE_DEVICE_TABLE(of, ma35d1_audio_i2s_of_match);
 
 static int ma35d1_i2s_drvremove(struct platform_device *pdev)
 {
+	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(&pdev->dev);
+
 #ifdef CONFIG_SND_SIMPLE_CARD
 	ma35d1_dma_pcm_unregister(&pdev->dev);
 #endif
 	snd_soc_unregister_component(&pdev->dev);
 
-	clk_put(ma35d1_i2s_data->clk);
-	iounmap(ma35d1_i2s_data->mmio);
-	release_mem_region(ma35d1_i2s_data->res->start, resource_size(ma35d1_i2s_data->res));
+	clk_put(ma35d1_audio->clk);
+	iounmap(ma35d1_audio->mmio);
+	release_mem_region(ma35d1_audio->res->start, resource_size(ma35d1_audio->res));
 
-	kfree(ma35d1_i2s_data);
-	ma35d1_i2s_data = NULL;
+	kfree(ma35d1_audio);
 
 	return 0;
 }

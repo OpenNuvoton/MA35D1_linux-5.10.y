@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2018-2019 Linaro Ltd.
- * Copyright (C) 2023, Nuvoton Technology Corporation
+ * Copyright (C) 2020, Nuvoton Technology Corporation
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -17,15 +17,17 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/hw_random.h>
+#include <linux/ma35h0-trng.h>
 #include <linux/platform_device.h>
 #include <linux/completion.h>
 #include <linux/of_platform.h>
 #include <linux/tee_drv.h>
+#include <linux/uaccess.h>
 
 //#define USE_GEN_NONCE
 
 /*--------------------------------------------------------------*/
-/*  MA35h0 TRNG registers                                      */
+/*  MA35H0 TRNG registers                                      */
 /*--------------------------------------------------------------*/
 #define CTRL			0x000
 #define CTRL_CMD_OFFSET			(0)
@@ -169,6 +171,21 @@ struct ma35h0_trng {
  */
 #define PTA_CMD_TRNG_READ		0x2
 
+/*
+ * PTA_CMD_TRNG_WRITE_KS - Write TRNG key store data
+ *
+ * param[0] (inout value) - value.a: key store owner on input
+ *                           value.a: key number on output
+ * param[1] unused
+ * param[2] unused
+ * param[3] unused
+ *
+ * Result:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_BAD_PARAMETERS - Incorrect input param
+ */
+#define PTA_CMD_TRNG_WRITE_KS		0x3
+
 #define RND_DATA_SHM_SZ		(4 * 1024)
 
 /**
@@ -277,12 +294,75 @@ static void optee_rng_cleanup(struct hwrng *rng)
 	tee_shm_free(pvt_data->rdata_shm_pool);
 }
 
+static int ma35h0_optee_trng_write_ks(struct optee_rng_private *pvt_data,
+				      int owner, int *key_num)
+{
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
+	int ret = 0;
+
+	memset(&inv_arg, 0, sizeof(inv_arg));
+	memset(&param, 0, sizeof(param));
+
+	inv_arg.func = PTA_CMD_TRNG_WRITE_KS;
+	inv_arg.session = pvt_data->session_id;
+	inv_arg.num_params = 4;
+
+	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INOUT;
+	param[0].u.value.a = owner;
+
+	ret = tee_client_invoke_func(pvt_data->ctx, &inv_arg, param);
+	if ((ret < 0) || (inv_arg.ret != 0)) {
+		dev_err(pvt_data->dev, "PTA_CMD_TRNG_WRITE_KS invoke err: %x\n",
+			inv_arg.ret);
+		return -EINVAL;
+	}
+
+	*key_num = param[0].u.value.a;
+
+	return 0;
+}
+
+static long optee_rng_ioctl(struct hwrng *rng, unsigned int cmd, unsigned long arg)
+{
+	struct optee_rng_private *pvt_data = to_optee_rng_private(rng);
+	void __user *argp = (void __user *)arg;
+	int owner;
+	int key_num;
+	int ret;
+
+	switch (cmd) {
+	case MA35H0_TRNG_IOC_WRITE_KS:
+		if (copy_from_user(&owner, argp, sizeof(owner)))
+			return -EFAULT;
+
+		if (owner != MA35H0_TRNG_KS_OWNER_AES &&
+		    owner != MA35H0_TRNG_KS_OWNER_HMAC &&
+		    owner != MA35H0_TRNG_KS_OWNER_ECC &&
+		    owner != MA35H0_TRNG_KS_OWNER_CPU)
+			return -EINVAL;
+
+		ret = ma35h0_optee_trng_write_ks(pvt_data, owner, &key_num);
+		if (ret)
+			return ret;
+
+		if (copy_to_user(argp, &key_num, sizeof(key_num)))
+			return -EFAULT;
+
+		return 0;
+
+	default:
+		return -ENOIOCTLCMD;
+	}
+}
+
 static struct optee_rng_private pvt_data = {
 	.optee_rng = {
 		.name		= "optee-nvt-trng",
 		.init		= optee_rng_init,
 		.cleanup	= optee_rng_cleanup,
 		.read		= optee_rng_read,
+		.ioctl		= optee_rng_ioctl,
 	}
 };
 
@@ -351,6 +431,7 @@ static int optee_rng_probe(struct device *dev)
 		goto out_ctx;
 	}
 	pvt_data.session_id = sess_arg.session;
+	pvt_data.dev = dev;
 
 	err = ma35h0_optee_trng_init(dev);
 	if (err)
@@ -361,8 +442,6 @@ static int optee_rng_probe(struct device *dev)
 		dev_err(dev, "optee hwrng registration failed (%d)\n", err);
 		goto out_sess;
 	}
-
-	pvt_data.dev = dev;
 
 	return 0;
 
@@ -495,6 +574,7 @@ static int ma35h0_trng_gen_noise(struct ma35h0_trng *tdev)
 }
 #endif
 
+
 static int ma35h0_trng_create_state(struct ma35h0_trng *tdev)
 {
 	int	err;
@@ -586,6 +666,17 @@ static int ma35h0_trng_read(struct hwrng *rng, void *buf,
 	return retval;
 }
 
+static long ma35h0_trng_ioctl(struct hwrng *rng, unsigned int cmd,
+			      unsigned long arg)
+{
+	switch (cmd) {
+	case MA35H0_TRNG_IOC_WRITE_KS:
+		return -EOPNOTSUPP;
+	default:
+		return -ENOIOCTLCMD;
+	}
+}
+
 static int ma35h0_trng_probe(struct platform_device *pdev)
 {
 	struct device		*dev = &pdev->dev;
@@ -597,11 +688,12 @@ static int ma35h0_trng_probe(struct platform_device *pdev)
 	const char  *optee_sel;
 	bool  optee_nuvoton = false;
 
-	if (!of_property_read_string(dev->of_node, "optee_nuvoton", &optee_sel)) {
+	if (!of_property_read_string(dev->of_node, "optee_nuvoton",
+	    &optee_sel)) {
 		if (!strcmp("yes", optee_sel))
 			optee_nuvoton = true;
 	}
-	if (optee_nuvoton == true) {
+	if (optee_nuvoton) {
 		pr_info("Register MA35H0 TRNG optee client driver.\n");
 		return driver_register(&optee_rng_driver.driver);
 	}
@@ -626,6 +718,7 @@ static int ma35h0_trng_probe(struct platform_device *pdev)
 	tdev->rng.name = pdev->name;
 	tdev->rng.init = ma35h0_trng_init;
 	tdev->rng.read = ma35h0_trng_read;
+	tdev->rng.ioctl = ma35h0_trng_ioctl;
 	tdev->rng.priv = (unsigned long)tdev;
 
 	err = devm_hwrng_register(dev, &tdev->rng);

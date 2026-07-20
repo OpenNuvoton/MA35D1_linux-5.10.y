@@ -183,123 +183,66 @@ unsigned long CLK_CalPLLFreq_Mode0(unsigned long PllSrcClk,
 	return u64PllClk;
 }
 
-/* VSI-PLL: FRACTIONAL_MODE */
-unsigned long CLK_CalPLLFreq_Mode1(unsigned long PllSrcClk,
-				unsigned long u64PllFreq, u32 *u32Reg)
+static unsigned long ma35d0_pll_frac_mode_find_closest(struct ma35d0_clk_pll *pll,
+			unsigned long rate, unsigned long parent_rate, u32 *reg_ctl,
+			unsigned long *freq)
 {
-	unsigned long u64X, u64N, u64M, u64P, u64tmp;
-	unsigned long u64PllClk, u64FCLKO;
-	u32 u32FRAC;
+	unsigned long min_diff = ULONG_MAX;
+	unsigned long fref, fclko_expect, fclko_best;
+	int p, m, n, p_best, m_best, n_best;
 
-	if (u64PllFreq > VSIPLL_FCLKO_MAX_FREQ) {
-		u32Reg[0] = ma35d0pll_freq[1].ctl0_reg;
-		u32Reg[1] = ma35d0pll_freq[1].ctl1_reg;
-		u64PllClk = ma35d0pll_freq[1].freq;
-		return u64PllClk;
-	}
+	fref = parent_rate / 1000;
+	fclko_expect = rate / 1000;
 
-	if (u64PllFreq > (VSIPLL_FCLKO_MIN_FREQ/(100-1)))
-		u64FCLKO = u64PllFreq * ((VSIPLL_FCLKO_MIN_FREQ / u64PllFreq) + ((
-				VSIPLL_FCLKO_MIN_FREQ % u64PllFreq) ? 1 : 0));
-	else {
-		pr_err("Failed to set rate %ld\n", u64PllFreq);
-		return 0;
-	}
+	for (m = 2; m <= INDIV_MAX; m++) {
+		for (n = 32; n <= FBDIV_MAX; n++) {
+			for (p = 1; p <= OUTDIV_MAX; p++) {
+				unsigned long fout, fclk, diff;
 
-	u64P = (u64FCLKO >= VSIPLL_FCLK_MIN_FREQ) ? 1 : ((VSIPLL_FCLK_MIN_FREQ /
-		u64FCLKO) + ((VSIPLL_FCLK_MIN_FREQ % u64FCLKO) ? 1 : 0));
-	if ((PllSrcClk > (VSIPLL_FREFDIVM_MAX_FREQ * (64-1))) ||
-	    (PllSrcClk < VSIPLL_FREFDIVM_MIN_FREQ1)) {
-		pr_err("Failed to set rate %ld\n", u64PllFreq);
-		return 0;
-	}
-	u64M = (PllSrcClk <= VSIPLL_FREFDIVM_MAX_FREQ) ? 1 : ((PllSrcClk /
-		VSIPLL_FREFDIVM_MAX_FREQ) + ((PllSrcClk % VSIPLL_FREFDIVM_MAX_FREQ) ? 1 : 0));
+				fclk = (fref * n) / m;
+				if ((fclk < (VSIPLL_FCLK_MIN_FREQ / 1000) ||
+				    (fclk > VSIPLL_FCLK_MAX_FREQ / 1000)))
+					continue; /* constrain */
 
-	u64tmp = (u64FCLKO * u64P * u64M * 1000) / PllSrcClk;
-	u64N = u64tmp / 1000;
-	u64X = u64tmp % 1000;
-	u32FRAC = ((u64X << 24) + 500) / 1000;
-	u64PllClk = (PllSrcClk * u64tmp) / u64P / u64M / 1000;
+				fout = fclk / p;
+				diff = abs(fclko_expect - fout);
 
-	u32Reg[0] = (u64M << 12) | (u64N);
-	u32Reg[1] = (u64P << 4) | (u32FRAC << 8);
-
-	return u64PllClk;
-}
-
-/* VSI-PLL: SS_MODE */
-unsigned long CLK_CalPLLFreq_Mode2(unsigned long PllSrcClk,
-		unsigned long u64PllFreq, u32 u32SR, u32 u32Fmod, u32 *u32Reg)
-{
-	unsigned long u64X, u64N, u64M, u64P, u64tmp, u64tmpP, u64tmpM;
-	unsigned long u64SSRATE, u64SLOPE, u64PllClk, u64FCLKO;
-	u32 u32FRAC, i;
-
-	if (u64PllFreq >= VSIPLL_FCLKO_MAX_FREQ) {
-		u32Reg[0] = ma35d0pll_freq[2].ctl0_reg;
-		u32Reg[1] = ma35d0pll_freq[2].ctl1_reg;
-		u32Reg[2] = ma35d0pll_freq[2].ctl2_reg;
-		u64PllClk = ma35d0pll_freq[2].freq;
-		return u64PllClk;
-	}
-
-	if (u64PllFreq < VSIPLL_FCLKO_MIN_FREQ) {
-		u64FCLKO = 0;
-		for (i = 2; i < 8; i++) {
-			u64tmp = (i * u64PllFreq);
-			if (u64tmp > VSIPLL_FCLKO_MIN_FREQ)
-				u64FCLKO = u64tmp;
-		}
-		if (u64FCLKO == 0) {
-			pr_err("Failed to set rate %ld\n", u64PllFreq);
-			return 0;
-		}
-
-	} else
-		u64FCLKO = u64PllFreq;
-
-	u64P = 0;
-	for (i = 1; i < 8; i++) {
-		u64tmpP = i * u64FCLKO;
-		if ((u64tmpP <= VSIPLL_FCLK_MAX_FREQ) && (u64tmpP >= VSIPLL_FCLK_MIN_FREQ)) {
-			u64P = i;
-			break;
+				if (diff < min_diff) {
+					min_diff = diff;
+					p_best = p;
+					m_best = m;
+					n_best = n;
+					fclko_best = fout;
+					if (min_diff == 0)
+						goto search_done;
+				}
+			}
 		}
 	}
+search_done:
+	pr_info("p_best = %d m_best = %d n_best = %d, fclko_best = %ld\n",
+		p_best, m_best, n_best, fclko_best);
 
-	if (u64P == 0)
-		return 0;
+	if (pll->mode == VSIPLL_SS_MODE) {
+		unsigned long ssrate, slope;
 
-	u64M = 0;
-	for (i = 1; i < 64; i++) {
-		u64tmpM = PllSrcClk / i;
-		if ((u64tmpM <= VSIPLL_FREFDIVM_MAX_FREQ)
-			&& (u64tmpM >= VSIPLL_FREFDIVM_MIN_FREQ1)) {
-			u64M = i;
-			break;
-		}
+		ssrate = (fref / m) / ((VSIPLL_MODULATION_FREQ / 1000) * 2) - 1;
+		slope = ((u64)n_best * VSIPLL_SPREAD_RANGE * (1ULL << 24) +
+			(ssrate * 10000) / 2) / (ssrate * 10000);
+		pr_info("ssrate = 0x%lx slope = 0x%lx\n", ssrate, slope);
+		reg_ctl[0] = FIELD_PREP(PLLXCTL0_SSRATE_MSK, ssrate) |
+			     FIELD_PREP(PLLXCTL0_MODE_MSK, VSIPLL_SS_MODE) |
+			     FIELD_PREP(PLLXCTL0_INDIV_MSK, m_best) | n_best;
+		reg_ctl[1] = FIELD_PREP(PLLXCTL1_OUTDIV_MSK, p_best);
+		reg_ctl[2] = FIELD_PREP(PLLXCTL2_SLOPE_MSK, slope);
+	} else {   /* VSIPLL_FRACTIONAL_MODE */
+		reg_ctl[0] = FIELD_PREP(PLLXCTL0_MODE_MSK, VSIPLL_FRACTIONAL_MODE) |
+			     FIELD_PREP(PLLXCTL0_INDIV_MSK, m_best) | n_best;
+		reg_ctl[1] = FIELD_PREP(PLLXCTL1_OUTDIV_MSK, p_best);
+		reg_ctl[2] = 0;
 	}
 
-	if (u64M == 0)
-		return 0;
-
-	u64tmp = (u64FCLKO * u64P * u64M * 1000) / PllSrcClk;
-	u64N = u64tmp / 1000;
-	u64X = u64tmp % 1000;
-	u32FRAC = ((u64X << 24) + 500) / 1000;
-
-	u64SSRATE = ((PllSrcClk >> 1) / (u32Fmod * 2)) - 1;
-	u64SLOPE = ((u64tmp * u32SR / u64SSRATE) << 24) / 100 / 1000;
-
-	u64PllClk = (PllSrcClk * u64tmp) / u64P / u64M / 1000;
-
-	u32Reg[0] = (u64SSRATE << VSIPLLCTL0_SSRATE_POS) | (u64M <<
-			VSIPLLCTL0_INDIV_POS) | (u64N);
-	u32Reg[1] = (u64P << VSIPLLCTL1_OUTDIV_POS) | (u32FRAC << VSIPLLCTL1_FRAC_POS);
-	u32Reg[2] = u64SLOPE;
-
-	return u64PllClk;
+	return fclko_best * 1000;
 }
 
 unsigned long CLK_SetPLLFreq(struct ma35d0_clk_pll *pll,
@@ -318,13 +261,11 @@ unsigned long CLK_SetPLLFreq(struct ma35d0_clk_pll *pll,
 		val_ctl0 = u32Reg[0] | (VSIPLL_INTEGER_MODE << VSIPLLCTL0_MODE_POS);
 		break;
 	case VSIPLL_FRACTIONAL_MODE:
-		u64PllClk = CLK_CalPLLFreq_Mode1(PllSrcClk, u64PllFreq, u32Reg);
-		val_ctl0 = u32Reg[0] | (VSIPLL_FRACTIONAL_MODE << VSIPLLCTL0_MODE_POS);
-		break;
 	case VSIPLL_SS_MODE:
-		u64PllClk = CLK_CalPLLFreq_Mode2(PllSrcClk, u64PllFreq, VSIPLL_MODULATION_FREQ,
-				VSIPLL_SPREAD_RANGE, u32Reg);
-		val_ctl0 = u32Reg[0] | (VSIPLL_SS_MODE << VSIPLLCTL0_MODE_POS);
+		u64PllClk = ma35d0_pll_frac_mode_find_closest(pll, u64PllFreq,
+							      PllSrcClk, u32Reg,
+							      &u64PllClk);
+		val_ctl0 = u32Reg[0];
 		break;
 	}
 

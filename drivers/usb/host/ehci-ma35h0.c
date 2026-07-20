@@ -28,6 +28,8 @@
 
 #include "ehci.h"
 
+// #define CONFIG_MA35_DPD_LOW_POWER
+
 #define DRIVER_DESC "Nuvoton MA35H0 EHCI driver"
 
 static const char hcd_name[] = "ehci-ma35h0";
@@ -218,10 +220,18 @@ static int __maybe_unused ehci_ma35h0_drv_suspend(struct device *dev)
 	struct usb_hcd *hcd = dev_get_drvdata(dev);
 	struct ma35h0_ehci_priv *ma35h0_ehci = hcd_to_ma35h0_ehci_priv(hcd);
 	int ret;
+#ifdef CONFIG_MA35_DPD_LOW_POWER
+	u32 reg;
+#endif
 
 	ret = ehci_suspend(hcd, false);
 	if (ret)
 		return ret;
+
+#ifdef CONFIG_MA35_DPD_LOW_POWER
+	regmap_read(ma35h0_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
+	regmap_write(ma35h0_ehci->sysregmap, REG_SYS_USBPMISCR, (reg & ~0x20002));
+#endif
 
 	clk_disable(ma35h0_ehci->clk);
 	return 0;
@@ -232,7 +242,33 @@ static int __maybe_unused ehci_ma35h0_drv_resume(struct device *dev)
 	struct usb_hcd *hcd = dev_get_drvdata(dev);
 	struct ma35h0_ehci_priv *ma35h0_ehci = hcd_to_ma35h0_ehci_priv(hcd);
 
+#ifdef CONFIG_MA35_DPD_LOW_POWER
+	u32 reg, timeout = (500 / 20);
+
 	clk_enable(ma35h0_ehci->clk);
+
+	//regmap_read(ma35h0_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
+	//regmap_write(ma35h0_ehci->sysregmap, REG_SYS_USBPMISCR, (reg & ~0x20002));
+
+	/* USBPMISCR; HSUSBH0 & HSUSBH1 PHY */
+	regmap_read(ma35h0_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
+	if ((reg & 0x20302) != 0x20302) {
+		reg = (reg & ~0x30003) | 0x30003;
+		regmap_write(ma35h0_ehci->sysregmap, REG_SYS_USBPMISCR, reg);
+		msleep(20);
+		reg = (reg & ~0x30003) | 0x20002;
+		regmap_write(ma35h0_ehci->sysregmap, REG_SYS_USBPMISCR, reg);
+		do {
+			msleep(20);
+			regmap_read(ma35h0_ehci->sysregmap, REG_SYS_USBPMISCR, &reg);
+		} while (((reg & 0x20302) != 0x20302) && (timeout-- > 0));
+	}
+	dev_dbg(dev, "REG_SYS_USBPMISCR = 0x%x, timeout = %d\n", reg, timeout);
+	printk("REG_SYS_USBPMISCR = 0x%x, timeout = %d\n", reg, timeout);
+#else
+	clk_enable(ma35h0_ehci->clk);
+#endif
+
 	ehci_resume(hcd, false);
 	return 0;
 }

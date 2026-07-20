@@ -8,10 +8,10 @@ dtb-$(CONFIG_ARCH_MA35D1)    += ma35d1-iot-128m.dtb \
 				ma35d1-som-1g.dtb \
 				ma35d1-som-2g.dtb \
 				ma35d1-hmi-512m.dtb \
-				ma35d1-iot-ma35d16fj0-v1-512m.dtb 
+				ma35d1-iot-ma35d16fj0-v1-512m.dtb \
+				ma35d0-iot-ma35d05ki1-v1-256m.dtb
 
 dtb-$(CONFIG_ARCH_MA35D0)    += ma35d0-iot-256m.dtb
-
 dtb-$(CONFIG_ARCH_MA35H0)    += ma35h0-hmi-128m.dtb
 
 always          := $(dtb-y)
