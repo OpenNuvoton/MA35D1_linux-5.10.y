@@ -86,7 +86,7 @@ static int ma35h0_tsen_get_temp(void *data, int *temp)
 	regmap_write(sensor->regmap, REG_SYS_TSENSRFCR, reg);
 
 	reg  = (reg & TSEN_DATA) >> TSEN_DATA_SHIFT;
-	*temp = (reg * 27435 / 4096 - 9333) / 100;
+	*temp = (int)((long)reg * 274350 / 4096 - 93330);
 	sensor->last_jiffies = jiffies;
 	sensor->last_temp = *temp;
 	return 0;

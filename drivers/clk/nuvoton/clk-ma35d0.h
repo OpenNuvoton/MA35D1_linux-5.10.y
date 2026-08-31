@@ -156,7 +156,7 @@ struct clk_hw *ma35d0_reg_adc_clkdiv(struct device *dev,
 				    const char *parent_name,
 				    unsigned long flags,
 				    void __iomem *reg, u8 shift,
-				    u8 width, u32 mask_bit);
+				    u8 width);
 
 extern spinlock_t ma35d0_lock;
 
