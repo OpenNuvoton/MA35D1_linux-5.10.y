@@ -27,10 +27,12 @@ static const struct snd_pcm_hardware ma35d1_pcm_hardware = {
 	SNDRV_PCM_INFO_PAUSE |
 	SNDRV_PCM_INFO_RESUME,
 	.formats        = SNDRV_PCM_FMTBIT_S16_LE |
-	SNDRV_PCM_FMTBIT_S24_LE,
-	.rates          = SNDRV_PCM_RATE_32000 |
-	SNDRV_PCM_RATE_44100 |
-	SNDRV_PCM_RATE_48000,
+	SNDRV_PCM_FMTBIT_S24_LE |
+	SNDRV_PCM_FMTBIT_S24_3LE |
+	SNDRV_PCM_FMTBIT_S32_LE,
+	.rates          = SNDRV_PCM_RATE_8000_192000,
+	.rate_min       = 8000,
+	.rate_max       = 192000,
 	.channels_min       = 1,
 	.channels_max       = 2,
 	.buffer_bytes_max   = 64*1024,

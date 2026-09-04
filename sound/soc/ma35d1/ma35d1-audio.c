@@ -24,6 +24,15 @@
 #include "ma35d1-audio.h"
 #include "../codecs/nau8822.h"
 
+/*
+ * TAC5X1X_CLK_MCLK matches TAC5X1X_CLK_MCLK from ../codecs/tac5x1x.h.
+ * Defined locally so this driver does not need to depend on / include
+ * the TAC5212 codec driver header, which may not be present in builds
+ * that only use NAU8822. If the TAC5212 codec driver is added later,
+ * this value must stay in sync with its definition.
+ */
+#define TAC5X1X_CLK_MCLK	0
+
 static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct snd_pcm_hw_params *params)
 {
 	unsigned int fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBS_CFS;
@@ -47,11 +56,21 @@ static int ma35d1_audio_hw_params(struct snd_pcm_substream *substream, struct sn
 	if (ret < 0)
 		return ret;
 
-	cpu_mclk = ma35d1_audio->mclk_out;
+	cpu_mclk = ma35d1_audio->actual_mclk_out;
+	if (!cpu_mclk) {
+		dev_err(cpu_dai->dev,
+			"hw_params: invalid actual_mclk_out=0 requested_mclk=%u\n",
+			ma35d1_audio->mclk_out);
+		return -EINVAL;
+	}
 
 	/* set the codec system clock */
-	ret = snd_soc_dai_set_sysclk(codec_dai, NAU8822_CLK_MCLK,
-				      cpu_mclk, SND_SOC_CLOCK_IN);
+	if (of_device_is_compatible(codec_dai->dev->of_node, "ti,tac5212"))
+		ret = snd_soc_dai_set_sysclk(codec_dai, TAC5X1X_CLK_MCLK,
+					     cpu_mclk, SND_SOC_CLOCK_IN);
+	else
+		ret = snd_soc_dai_set_sysclk(codec_dai, NAU8822_CLK_MCLK,
+					     cpu_mclk, SND_SOC_CLOCK_IN);
 	if (ret < 0 )
 		return ret;
 
@@ -115,6 +134,8 @@ static int ma35d1_audio_probe(struct platform_device *pdev)
 	if (priv->codec.of_node) {
 		if (of_device_is_compatible(priv->codec.of_node, "st,mp34dt01m"))
 			priv->codec.dai_name = "mp34dt01m-pdm";
+		else if (of_device_is_compatible(priv->codec.of_node, "ti,tac5212"))
+			priv->codec.dai_name = "tac5x1x-hifi";
 		else
 			priv->codec.dai_name = "nau8822-hifi";
 	} else {

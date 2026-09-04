@@ -96,7 +96,7 @@
 		assigned-clock-rates =<800000000>,
 				<266000000>, <200000000>,
 				<500000000>, <102000000>;
-		clock-pll-mode = <0>, <1>, <0>, <2>, <0>;
+		clock-pll-mode = <0>, <1>, <1>, <2>, <0>;
 		nuvoton,sys = <&sys>;
 	};
 
@@ -654,7 +654,8 @@
 		compatible = "nuvoton,ma35d1-audio-i2s";
 		reg = <0x0 0x40480000 0x0 0x10000>;
 		interrupts = <GIC_SPI 70 IRQ_TYPE_LEVEL_HIGH>;
-		clocks = <&clk I2S0_GATE>;
+		clocks = <&clk I2S0_GATE>, <&clk APLL>;
+		clock-names = "i2s", "apll";
 		resets = <&reset MA35D1_RESET_I2S0>;
 		pdma_reqsel_tx = <86>;
 		pdma_reqsel_rx = <87>;
@@ -666,7 +667,8 @@
 		compatible = "nuvoton,ma35d1-audio-i2s";
 		reg = <0x0 0x40490000 0x0 0x10000>;
 		interrupts = <GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH>;
-		clocks = <&clk I2S1_GATE>;
+		clocks = <&clk I2S1_GATE>, <&clk APLL>;
+		clock-names = "i2s", "apll";
 		resets = <&reset MA35D1_RESET_I2S1>;
 		pdma_reqsel_tx = <88>;
 		pdma_reqsel_rx = <89>;
@@ -1145,7 +1147,7 @@
 		status = "disabled";
 		wp-gpios = <&gpioj 4 GPIO_ACTIVE_LOW>;
 		assigned-clocks = <&clk SDH1_MUX>;
-		assigned-clock-parents = <&clk APLL>;
+		assigned-clock-parents = <&clk SYSPLL>;
 	};
 
 	nand:nand@401A0000 {
