@@ -36,56 +36,58 @@
 #include <linux/clk.h>
 
 /* ma35d1 eadc registers offset */
-#define DAT0 0x00
-#define DAT1 0x04
-#define DAT2 0x08
-#define DAT3 0x0C
-#define DAT4 0x10
-#define DAT5 0x14
-#define DAT6 0x18
-#define DAT7 0x1C
-#define DAT8 0x20
-#define CURDAT 0x4C
-#define CTL 0x50
-#define SWTRG 0x54
-#define SCTL0 0x80
-#define SCTL1 0x84
-#define SCTL2 0x88
-#define SCTL3 0x8C
-#define SCTL4 0x90
-#define SCTL5 0x94
-#define SCTL6 0x98
-#define SCTL7 0x9C
-#define INTSRC0 0xD0
-#define INTSRC1 0xD4
-#define INTSRC2 0xD8
-#define INTSRC3 0xDC
-#define STATUS0 0xF0
-#define STATUS2 0xF8
-#define STATUS3 0xFC
-#define PWRM 0x110
-#define PDMACTL 0x130
-#define SELSMP0 0x140
-#define SELSMP1 0x144
-#define REFADJCTL 0x150
+#define DAT0		0x00
+#define DAT1		0x04
+#define DAT2		0x08
+#define DAT3		0x0C
+#define DAT4		0x10
+#define DAT5		0x14
+#define DAT6		0x18
+#define DAT7		0x1C
+#define DAT8		0x20
+#define CURDAT		0x4C
+#define CTL		0x50
+#define SWTRG		0x54
+#define SCTL0		0x80
+#define SCTL1		0x84
+#define SCTL2		0x88
+#define SCTL3		0x8C
+#define SCTL4		0x90
+#define SCTL5		0x94
+#define SCTL6		0x98
+#define SCTL7		0x9C
+#define INTSRC0		0xD0
+#define INTSRC1		0xD4
+#define INTSRC2		0xD8
+#define INTSRC3		0xDC
+#define STATUS0		0xF0
+#define OVSTS		0x5C
+#define PENDSTS		0x58
+#define STATUS2		0xF8
+#define STATUS3		0xFC
+#define PWRM		0x110
+#define PDMACTL		0x130
+#define SELSMP0		0x140
+#define SELSMP1		0x144
+#define REFADJCTL	0x150
 
-#define ADCEN 1
-#define DIFFEN 0x100
-#define PWRUPRDY 1
-#define ADCIEN0 4
-#define CHSELMSK 0xF
-#define DATMSK 0xFFF
-#define TRGSELMSK 0x3F0000
-#define TRGDLYMSK 0xFF00
-#define ADINT0TRG 0x20000
-#define TRGSELPOS 16
+#define ADCEN		1
+#define DIFFEN		0x100
+#define PWRUPRDY	1
+#define ADCIEN0		4
+#define CHSELMSK	0xF
+#define DATMSK		0xFFF
+#define TRGSELMSK	0x3F0000
+#define TRGDLYMSK	0xFF00
+#define ADINT0TRG	0x20000
+#define TRGSELPOS	16
 
-#define EADC_CH_MAX 9 /* max number of channels */
-#define EADC_CH_SZ 10 /* max channel name size */
-#define EADC_MAX_SP 16
+#define EADC_CH_MAX	9 /* max number of channels */
+#define EADC_CH_SZ	10 /* max channel name size */
+#define EADC_MAX_SP	16
 
-#define MA35D1_ADC_TIMEOUT (msecs_to_jiffies(1000))
-#define MA35D1_DMA_BUFFER_SIZE PAGE_SIZE
+#define MA35D1_ADC_TIMEOUT	(msecs_to_jiffies(1000))
+#define MA35D1_DMA_BUFFER_SIZE	PAGE_SIZE
 
 #define ADC_CHANNEL(_index, _id)                                               \
 	{			\
@@ -207,6 +209,16 @@ static irqreturn_t ma35d1_trigger_handler(int irq, void *p)
 	/* re-enable eoc irq */
 	writel(readl(info->regs + CTL) | ADCIEN0, info->regs + CTL);
 
+	/*
+	 * Do NOT re-assert SWTRG here. SWTRG (EADC_SWTRG[8:0]) force-starts
+	 * Sample Module 0 only, but SCTL0..SCTL3 are all configured with
+	 * TRGSEL=ADINT0TRG, so module 0's own EOC already auto-retriggers
+	 * modules 0-3 every cycle. Manually re-triggering module 0 here
+	 * while that auto-chain has already (re)triggered it for the same
+	 * cycle causes a Start-of-Conversion overrun (TRM 6.45, SPOVF).
+	 * Non-DMA (IRQ) mode free-runs correctly on the auto-chain alone.
+	 */
+
 	return IRQ_HANDLED;
 }
 
@@ -217,7 +229,18 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 	int i;
 
 	if (readl(info->regs + STATUS2) & 1) {
-		writel(1, info->regs + STATUS2);
+		u32 ovsts = readl(info->regs + OVSTS);
+
+		/*
+		 * Clear ADIF0 (bit0) together with ADOVIF0 (bit8, "ADIF0 was
+		 * overwritten before being cleared") in the same write, and
+		 * separately clear any latched EADC_OVSTS SPOVF (start-of-
+		 * conversion overrun) bits. Both are W1C per TRM; leaving
+		 * them uncleared lets a transient overrun latch permanently.
+		 */
+		writel(0x101, info->regs + STATUS2); /* clear ADIF0 + ADOVIF0 */
+		if (ovsts)
+			writel(ovsts, info->regs + OVSTS); /* W1C */
 
 		if (iio_buffer_enabled(indio_dev)) {
 			if (!info->dma.chan_rx) {
@@ -633,6 +656,24 @@ static void __ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
 		dmaengine_terminate_sync(info->dma.chan_rx);
 	writel(readl(info->regs + CTL) & ~ADCIEN0, info->regs + CTL);
 	writel((readl(info->regs + SCTL0) & ~TRGSELMSK), info->regs + SCTL0);
+
+	/*
+	 * Immediately after this callback returns, the IIO core (in
+	 * iio_disable_buffers()) tears down the trigger's subirq and its
+	 * dedicated kernel thread via free_irq(). That free_irq() only
+	 * quiesces the *virtual* subirq -- it has no knowledge of our
+	 * physical EADC IRQ, so it cannot wait for an in-flight instance of
+	 * ma35d1_adc_isr() to finish. Clearing ADCIEN0 above stops *future*
+	 * interrupts but not one already latched/in-flight on another CPU;
+	 * if that ISR still calls iio_trigger_poll() while the subirq's
+	 * kernel thread is being torn down, the notification is lost for
+	 * good and the thread never comes back, permanently stalling
+	 * iio_buffer_refill(). synchronize_irq(info->irq) blocks until any
+	 * currently-executing ma35d1_adc_isr() has returned (and guarantees
+	 * no new one starts, since ADCIEN0 is already cleared), closing
+	 * this race before the core proceeds to free_irq().
+	 */
+	synchronize_irq(info->irq);
 }
 
 static int ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
