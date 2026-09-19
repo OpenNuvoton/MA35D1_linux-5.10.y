@@ -14,6 +14,7 @@
 #define __NUVOTON_CRYPTO_H__
 
 #include <linux/interrupt.h>
+#include <linux/workqueue.h>
 #include <linux/spinlock.h>
 #include <linux/scatterlist.h>
 #include <crypto/scatterwalk.h>
@@ -367,6 +368,13 @@ struct nu_aes_dev {
 	struct tasklet_struct	done_task;
 	struct tasklet_struct	queue_task;
 
+	/* OP-TEE calls must run in sleepable context. */
+	struct workqueue_struct *tee_wq;
+	struct work_struct tee_queue_work;
+	struct work_struct tee_done_work;
+	bool stopping;
+	bool registered;
+
 	u8			inbuf[AES_BUFF_SIZE] __aligned(32);
 	dma_addr_t		dma_inbuf;  /* AES input buffer DMA address  */
 	u8			outbuf[AES_BUFF_SIZE] __aligned(32);
@@ -390,6 +398,9 @@ struct nu_aes_dev {
 	struct tee_shm		*shm_pool;
 	u32			*va_shm;
 	u32			crypto_session_id;  /* crypto session */
+	bool tee_session_open;
+	bool tee_close_failed;
+	int tee_err;
 };
 
 /*-------------------------------------------------------------------------*/
@@ -443,6 +454,14 @@ struct nu_sha_dev {
 	struct tasklet_struct	done_task;
 	struct tasklet_struct	queue_task;
 
+	/* OP-TEE calls must run in sleepable context. */
+	struct workqueue_struct *tee_wq;
+	struct work_struct tee_queue_work;
+	struct work_struct tee_done_work;
+	bool stopping;
+	bool registered;
+	bool tee_dma_mapped;
+
 	/*
 	 * for optee client driver
 	 */
@@ -450,6 +469,7 @@ struct nu_sha_dev {
 	u32			session_id;  /* optee session */
 	struct tee_shm		*shm_pool;
 	u32			*va_shm;
+	struct list_head tee_sessions;
 };
 
 
@@ -861,6 +881,8 @@ static inline int optee_ctx_match(struct tee_ioctl_version_data *ver,
 }
 
 extern int nuvoton_crypto_optee_init(struct nu_crypto_dev *nu_cryp_dev);
+/* A failed TSI close requires a reboot, including across platform rebind. */
+extern bool nuvoton_crypto_optee_faulted;
 
 extern int nuvoton_prng_probe(struct device *dev, void __iomem *reg_base,
 				unsigned long *data);
