@@ -183,13 +183,13 @@ static irqreturn_t ma35d0_rtc_interrupt(int irq, void *_rtc)
 	return IRQ_HANDLED;
 }
 
-static int check_rtc_access_enable(struct ma35d0_rtc *rtc)
+static int check_rtc_access_enable(struct device *dev, struct ma35d0_rtc *rtc)
 {
 	if (!(rtc_reg_read(rtc, REG_RTC_INIT) & INIT_ACTIVE)) {
 		rtc_reg_write(rtc, REG_RTC_INIT, RTC_INIT_MAGIC);
 		mdelay(1);
 		if (!(rtc_reg_read(rtc, REG_RTC_INIT) & INIT_ACTIVE)) {
-			dev_err(rtc->rtc_dev->dev.parent, "RTC access is not enabled\n");
+			dev_err(dev, "RTC access is not enabled\n");
 			return -EIO;
 		}
 	}
@@ -292,7 +292,7 @@ static int ma35d0_rtc_set_time(struct device *dev, struct rtc_time *tm)
 
 	ma35d0_rtc_bin2bcd(dev, tm, &gettm);
 
-	ret = check_rtc_access_enable(rtc);
+	ret = check_rtc_access_enable(dev, rtc);
 	if (ret)
 		return ret;
 
@@ -333,7 +333,7 @@ static int ma35d0_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	u32 cal_val, time_val;
 	int ret;
 
-	ret = check_rtc_access_enable(rtc);
+	ret = check_rtc_access_enable(dev, rtc);
 	if (ret)
 		return ret;
 
@@ -361,7 +361,7 @@ static int ma35d0_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
 	unsigned int spare_data[16], i;
 	int ret;
 
-	ret = check_rtc_access_enable(rtc);
+	ret = check_rtc_access_enable(dev, rtc);
 	if (ret)
 		return ret;
 
@@ -432,6 +432,10 @@ static int ma35d0_rtc_probe(struct platform_device *pdev)
 		return -ENOENT;
 
 	platform_set_drvdata(pdev, rtc);
+
+	err = check_rtc_access_enable(&pdev->dev, rtc);
+	if (err)
+		return err;
 
 	rtc_reg_write(rtc, REG_RTC_CLKFMT,
 		      (rtc_reg_read(rtc, REG_RTC_CLKFMT) | CLKFMT_24HEN));

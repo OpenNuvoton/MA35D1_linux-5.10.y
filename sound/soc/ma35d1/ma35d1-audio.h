@@ -15,6 +15,7 @@
 #include <sound/dmaengine_pcm.h>
 #include <linux/platform_data/dma-ma35d1.h>
 #include <linux/io.h>
+#include <linux/mutex.h>
 
 #define IN	0
 #define OUT	1
@@ -38,6 +39,9 @@
 #define CHWIDTH_32		0x30000000
 #define PCMSYNC			0x8000000
 #define FORMAT			0x7000000
+#define FORMAT_I2S		0x0000000
+#define FORMAT_MSB		0x1000000
+#define FORMAT_LSB		0x2000000
 #define RXLCH			0x800000
 #define RXPDMAEN		0x200000
 #define TXPDMAEN		0x100000
@@ -60,6 +64,7 @@
 
 /* bit definition of I2S_CTL1 register */
 #define PB16ORD			0x2000000
+#define PBWIDTH			0x1000000
 #define PBWIDTH_16		0x1000000
 #define PBWIDTH_32		0x0000000
 #define RXTH			0x70000
@@ -139,6 +144,7 @@ struct ma35d1_audio {
 	struct snd_pcm_substream *substream[2];
 	struct resource *res;
 	struct clk *clk;
+	struct clk *apll_clk;
 	struct device *dev;
 	struct snd_dmaengine_dai_dma_data dma_params_rx;
 	struct snd_dmaengine_dai_dma_data dma_params_tx;
@@ -152,8 +158,14 @@ struct ma35d1_audio {
 	struct ma35d1_peripheral pcfg_rx;
 	unsigned int phyaddr;
 	unsigned int mclk_out;
+	unsigned int actual_mclk_out;
 	unsigned int pdm_decimation;
 	unsigned int raw_pdm_mono;
+	struct mutex apll_lock;
+	unsigned int active_streams;
+	unsigned int active_apll_family;
+	unsigned int stream_apll_family[2];
+	bool stream_active[2];
 	struct gpio_desc *pwdn_gpio;
 
 };

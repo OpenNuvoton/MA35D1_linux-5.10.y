@@ -41,6 +41,69 @@
 
 static u8  g_zeros[16] = { 0 };
 
+struct nu_aes_reqctx {
+	u32 mode;
+};
+
+static void nuvoton_aes_schedule_queue(struct nu_aes_dev *dd)
+{
+	if (dd->nu_cdev->use_optee)
+		queue_work(dd->tee_wq, &dd->tee_queue_work);
+	else
+		tasklet_schedule(&dd->queue_task);
+}
+
+static int nuvoton_aes_tee_session(struct nu_aes_dev *dd, bool open)
+{
+#ifdef CONFIG_OPTEE
+	struct tee_ioctl_invoke_arg arg = { };
+	struct tee_param param[4] = { };
+	int err;
+
+	if (!open && !dd->tee_session_open)
+		return 0;
+	if ((open && READ_ONCE(nuvoton_crypto_optee_faulted)) ||
+	    (!open && dd->tee_close_failed))
+		return -EIO;
+
+	arg.func = open ? PTA_CMD_CRYPTO_OPEN_SESSION :
+			  PTA_CMD_CRYPTO_CLOSE_SESSION;
+	arg.session = dd->session_id;
+	arg.num_params = ARRAY_SIZE(param);
+	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+	param[0].u.value.a = C_CODE_AES;
+	param[1].attr = open ? TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT :
+			      TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+	if (!open)
+		param[1].u.value.a = dd->crypto_session_id;
+
+	err = tee_client_invoke_func(dd->octx, &arg, param);
+	if (err < 0 || arg.ret) {
+		if (!open)
+			dd->tee_close_failed = true;
+		/* Transport failure may leave even an OPEN result unknown. */
+		if (!open || err < 0)
+			WRITE_ONCE(nuvoton_crypto_optee_faulted, true);
+		dev_err(dd->dev, "AES session %s failed: transport=%d PTA=%#x\n",
+			open ? "open" : "close", err, arg.ret);
+		if (READ_ONCE(nuvoton_crypto_optee_faulted))
+			dev_err(dd->dev, "OP-TEE AES/SHA disabled; reboot required\n");
+		return err < 0 ? err : -EIO;
+	}
+	if (open) {
+		dd->crypto_session_id = param[1].u.value.a;
+		dd->tee_session_open = true;
+	} else {
+		dd->tee_session_open = false;
+	}
+	dev_dbg(dd->dev, "AES %s req=%p sid=%u\n",
+		open ? "open" : "close", dd->areq, dd->crypto_session_id);
+	return 0;
+#else
+	return -EOPNOTSUPP;
+#endif
+}
+
 static int nuvoton_aes_dma_cascade(struct nu_aes_dev *dd, int err);
 
 struct nu_aes_drv {
@@ -192,56 +255,56 @@ static int nuvoton_aes_get_output(struct nu_aes_dev *dd)
 
 static int nuvoton_aes_complete(struct nu_aes_dev *dd, int err)
 {
-	struct skcipher_request *req = skcipher_request_cast(dd->areq);
-	u32	*ivec;
-#ifdef CONFIG_OPTEE
-	struct tee_ioctl_invoke_arg inv_arg;
-	struct tee_param param[4];
-#endif
-	int	i;
+	struct crypto_async_request *areq;
+	struct skcipher_request *req;
+	u32 mode;
+	unsigned long flags;
+	u32 *ivec;
+	int i, close_err;
 
-	err = nuvoton_aes_get_output(dd);
+	if (!dd->nu_cdev->use_optee) {
+		struct skcipher_request *req = skcipher_request_cast(dd->areq);
+		u32 *ivec;
+		int i;
 
-	if ((req->iv) && ((dd->ctx->mode & AES_CTL_OPMODE_MASK) != AES_MODE_ECB)) {
+		/* Preserve the original direct-hardware completion path. */
+		err = nuvoton_aes_get_output(dd);
+		if (req->iv &&
+		    (dd->ctx->mode & AES_CTL_OPMODE_MASK) != AES_MODE_ECB) {
+			ivec = (u32 *)req->iv;
+			for (i = 0; i < 4; i++)
+				ivec[i] = nu_read_reg(dd, AES_FDBCK(i));
+		}
+		dd->flags &= ~AES_FLAGS_BUSY;
+		dd->areq->complete(dd->areq, err);
+		tasklet_schedule(&dd->queue_task);
+		return 0;
+	}
+
+	areq = dd->areq;
+	req = skcipher_request_cast(areq);
+	mode = dd->ctx->mode & AES_CTL_OPMODE_MASK;
+
+	if (!err)
+		err = nuvoton_aes_get_output(dd);
+
+	if (!err && mode != AES_MODE_GCM && mode != AES_MODE_CCM &&
+	    req->iv && mode != AES_MODE_ECB) {
 		ivec = (u32 *)req->iv;
 		for (i = 0; i < 4; i++)
 			ivec[i] = nu_read_reg(dd, AES_FDBCK(i));
 	}
 
-#ifdef CONFIG_OPTEE
-	if (dd->nu_cdev->use_optee == true) {
-		/*
-		 * Close the crypto session
-		 */
-		memset(&inv_arg, 0, sizeof(inv_arg));
-		memset(&param, 0, sizeof(param));
+	close_err = nuvoton_aes_tee_session(dd, false);
+	if (!err)
+		err = close_err;
 
-		/* Invoke PTA_CMD_CRYPTO_CLOSE_SESSION function of PTA */
-		inv_arg.func = PTA_CMD_CRYPTO_CLOSE_SESSION;
-		inv_arg.session = dd->session_id;
-		inv_arg.num_params = 4;
-		/* Fill invoke cmd params */
-		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
-		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
-
-		param[0].u.value.a = C_CODE_AES;
-		param[1].u.value.a = dd->crypto_session_id;
-
-		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
-		if ((err < 0) || (inv_arg.ret != 0)) {
-			pr_err("PTA_CMD_CRYPTO_CLOSE_SESSION err: %x\n", inv_arg.ret);
-			dd->flags &= ~AES_FLAGS_BUSY;
-			dd->areq->complete(dd->areq, err);
-			/* Handle new request */
-			tasklet_schedule(&dd->queue_task);
-			return -EINVAL;
-		}
-	}
-#endif
+	spin_lock_irqsave(&dd->lock, flags);
+	dd->areq = NULL;
 	dd->flags &= ~AES_FLAGS_BUSY;
-	dd->areq->complete(dd->areq, err);
-	/* Handle new request */
-	tasklet_schedule(&dd->queue_task);
+	spin_unlock_irqrestore(&dd->lock, flags);
+	areq->complete(areq, err);
+	nuvoton_aes_schedule_queue(dd);
 	return 0;
 }
 
@@ -255,6 +318,9 @@ static int nuvoton_aes_dma_run(struct nu_aes_dev *dd, u32 cascade)
 	int	err;
 #endif
 
+	if (dd->nu_cdev->use_optee &&
+	    READ_ONCE(nuvoton_crypto_optee_faulted))
+		return -EIO;
 	dd->dma_len += nuvoton_aes_sg_to_buffer(dd, dd->inbuf + dd->dma_len,
 						AES_BUFF_SIZE - dd->dma_len);
 
@@ -317,13 +383,14 @@ static int nuvoton_aes_dma_run(struct nu_aes_dev *dd, u32 cascade)
 	param[1].u.memref.size = CRYPTO_SHM_SIZE;
 	param[1].u.memref.shm_offs = 0;
 
+	dev_dbg(dd->dev, "AES run req=%p sid=%u\n",
+		dd->areq, dd->crypto_session_id);
 	err = tee_client_invoke_func(dd->octx, &inv_arg, param);
-	if ((err < 0) || (inv_arg.ret != 0)) {
-		pr_err("PTA_CMD_CRYPTO_AES_RUN err: %x\n", inv_arg.ret);
-		tasklet_schedule(&dd->done_task);
-		return -EINVAL;
-	}
-	tasklet_schedule(&dd->done_task);
+	dd->tee_err = err < 0 ? err : (inv_arg.ret ? -EIO : 0);
+	if (dd->tee_err)
+		dev_err(dd->dev, "AES run sid=%u: transport=%d PTA=%#x\n",
+			dd->crypto_session_id, err, inv_arg.ret);
+	queue_work(dd->tee_wq, &dd->tee_done_work);
 #endif
 	return -EINPROGRESS;
 
@@ -331,6 +398,13 @@ static int nuvoton_aes_dma_run(struct nu_aes_dev *dd, u32 cascade)
 
 static int nuvoton_aes_dma_cascade(struct nu_aes_dev *dd, int err)
 {
+	int i;
+
+	/* The PTA reloads AES_IV on every invocation, including a cascade. */
+	if (dd->nu_cdev->use_optee) {
+		for (i = 0; i < 4; i++)
+			nu_write_reg(dd, nu_read_reg(dd, AES_FDBCK(i)), AES_IV(i));
+	}
 	/* write AES engine DMA output data to out_sg */
 	nuvoton_aes_get_output(dd);
 
@@ -403,8 +477,23 @@ static int nuvoton_aes_handle_queue(struct nu_aes_dev *dd,
 
 	spin_lock_irqsave(&dd->lock, flags);
 
-	if (new_areq)
+	if (new_areq) {
+		if (dd->nu_cdev->use_optee && dd->stopping) {
+			spin_unlock_irqrestore(&dd->lock, flags);
+			return -ESHUTDOWN;
+		}
+		if (dd->nu_cdev->use_optee &&
+		    READ_ONCE(nuvoton_crypto_optee_faulted)) {
+			spin_unlock_irqrestore(&dd->lock, flags);
+			return -EIO;
+		}
 		ret = crypto_enqueue_request(&dd->queue, new_areq);
+		if (dd->nu_cdev->use_optee) {
+			queue_work(dd->tee_wq, &dd->tee_queue_work);
+			spin_unlock_irqrestore(&dd->lock, flags);
+			return ret;
+		}
+	}
 	if (dd->flags & AES_FLAGS_BUSY) {
 		spin_unlock_irqrestore(&dd->lock, flags);
 		return ret;
@@ -426,51 +515,40 @@ static int nuvoton_aes_handle_queue(struct nu_aes_dev *dd,
 
 	dd->areq = areq;
 	dd->ctx = ctx;
+	if (dd->nu_cdev->use_optee) {
+		struct nu_aes_reqctx *rctx;
+
+		rctx = skcipher_request_ctx(skcipher_request_cast(areq));
+		ctx->mode = rctx->mode;
+		ret = nuvoton_aes_tee_session(dd, true);
+		if (!ret)
+			ret = ctx->start(dd, 0);
+		if (ret != -EINPROGRESS)
+			nuvoton_aes_complete(dd, ret);
+		return ret;
+	}
 	return ctx->start(dd, 0);
 }
 
 static int nuvoton_aes_crypt(struct skcipher_request *req, u32 mode)
 {
-	struct nu_aes_base_ctx	*ctx = crypto_skcipher_ctx(crypto_skcipher_reqtfm(req));
-	struct nu_aes_dev	*aes_dd;
-#ifdef CONFIG_OPTEE
-	struct tee_ioctl_invoke_arg inv_arg;
-	struct tee_param param[4];
-	int  err;
-#endif
+	struct nu_aes_base_ctx *ctx = crypto_skcipher_ctx(crypto_skcipher_reqtfm(req));
+	struct nu_aes_dev *aes_dd;
 
 	aes_dd = nuvoton_aes_find_dev(ctx);
 	if (!aes_dd)
 		return -ENODEV;
 
-#ifdef CONFIG_OPTEE
-	if (aes_dd->nu_cdev->use_optee == true) {
-		/*
-		 * Open a crypto session
-		 */
-		memset(&inv_arg, 0, sizeof(inv_arg));
-		memset(&param, 0, sizeof(param));
-
-		/* Invoke PTA_CMD_CRYPTO_OPEN_SESSION function of PTA */
-		inv_arg.func = PTA_CMD_CRYPTO_OPEN_SESSION;
-		inv_arg.session = aes_dd->session_id;
-		inv_arg.num_params = 4;
-
-		/* Fill invoke cmd params */
-		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
-		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT;
-		param[0].u.value.a = C_CODE_AES;
-
-		err = tee_client_invoke_func(aes_dd->octx, &inv_arg, param);
-		if ((err < 0) || (inv_arg.ret != 0)) {
-			pr_err("PTA_CMD_CRYPTO_OPEN_SESSION err: %x\n", inv_arg.ret);
+	if (aes_dd->nu_cdev->use_optee) {
+		if (!req->cryptlen)
+			return 0;
+		if (!req->src || !req->dst)
 			return -EINVAL;
-		}
-		aes_dd->crypto_session_id = param[1].u.value.a;
+		((struct nu_aes_reqctx *)skcipher_request_ctx(req))->mode =
+			mode;
+	} else {
+		ctx->mode = mode;
 	}
-#endif
-	ctx->mode = mode;
-
 	return nuvoton_aes_handle_queue(aes_dd, &req->base);
 }
 
@@ -611,6 +689,9 @@ static int nuvoton_aes_cra_init(struct crypto_tfm *tfm)
 	aes_dd = nuvoton_aes_find_dev(&ctx->base);
 	if (!aes_dd)
 		return -ENODEV;
+	if (aes_dd->nu_cdev->use_optee)
+		crypto_skcipher_set_reqsize(__crypto_skcipher_cast(tfm),
+					   sizeof(struct nu_aes_reqctx));
 
 	return 0;
 }
@@ -1370,7 +1451,36 @@ static void nuvoton_aes_done_task(unsigned long data)
 	dma_unmap_single(dd->dev, dd->dma_inbuf, AES_BUFF_SIZE, DMA_TO_DEVICE);
 	dma_unmap_single(dd->dev, dd->dma_outbuf, AES_BUFF_SIZE, DMA_FROM_DEVICE);
 
-	(void)dd->resume(dd, 0);
+	if (dd->nu_cdev->use_optee) {
+		int err = dd->tee_err;
+
+		if (err) {
+			nuvoton_aes_complete(dd, err);
+			return;
+		}
+		err = dd->resume(dd, 0);
+		/* A cascade may fail before another DMA is submitted. */
+		if (err && err != -EINPROGRESS)
+			nuvoton_aes_complete(dd, err);
+	} else {
+		(void)dd->resume(dd, 0);
+	}
+}
+
+static void nuvoton_aes_tee_queue_work(struct work_struct *work)
+{
+	struct nu_aes_dev *dd = container_of(work, struct nu_aes_dev,
+					   tee_queue_work);
+
+	nuvoton_aes_handle_queue(dd, NULL);
+}
+
+static void nuvoton_aes_tee_done_work(struct work_struct *work)
+{
+	struct nu_aes_dev *dd = container_of(work, struct nu_aes_dev,
+					   tee_done_work);
+
+	nuvoton_aes_done_task((unsigned long)dd);
 }
 
 static int nuvoton_register_gcm_ccm(struct device *dev)
@@ -1402,7 +1512,27 @@ static int nuvoton_register_gcm_ccm(struct device *dev)
 	return 0;
 }
 
-int nuvoton_aes_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
+static void nuvoton_aes_tee_stop(struct nu_aes_dev *dd)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&dd->lock, flags);
+	dd->stopping = true;
+	spin_unlock_irqrestore(&dd->lock, flags);
+	/* Drain admitted requests, including chained completion work. */
+	if (dd->tee_wq) {
+		destroy_workqueue(dd->tee_wq);
+		dd->tee_wq = NULL;
+	}
+	if (dd->tee_session_open)
+		dev_err(dd->dev, "Unreleased AES session %u; reboot required\n",
+			dd->crypto_session_id);
+	tasklet_kill(&dd->done_task);
+	tasklet_kill(&dd->queue_task);
+}
+
+static int nuvoton_aes_probe_direct(struct device *dev,
+				    struct nu_crypto_dev *nu_cryp_dev)
 {
 	struct nu_aes_dev *aes_dd = &nu_cryp_dev->aes_dd;
 	int i, err;
@@ -1412,74 +1542,18 @@ int nuvoton_aes_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 	aes_dd->reg_base = nu_cryp_dev->reg_base;
 	aes_dd->octx = NULL;
 
-#ifdef CONFIG_OPTEE
-	if (nu_cryp_dev->use_optee == true) {
-		struct tee_ioctl_open_session_arg sess_arg;
-
-		err = nuvoton_crypto_optee_init(nu_cryp_dev);
-		if (err)
-			return err;
-
-		/*
-	 	 * Open AES context with TEE driver
-	 	 */
-		aes_dd->octx = tee_client_open_context(NULL, optee_ctx_match,
-					       NULL, NULL);
-		if (IS_ERR(aes_dd->octx)) {
-			pr_err("%s open context failed!\n", __func__);
-			return -EINVAL;
-		}
-
-		/*
-	 	 * Allocate handshake buffer from OP-TEE share memory
-	 	 */
-		aes_dd->shm_pool = tee_shm_alloc(aes_dd->octx, CRYPTO_SHM_SIZE,
-						 TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
-		if (IS_ERR(aes_dd->shm_pool)) {
-			pr_err("%s tee_shm_alloc failed\n", __func__);
-			return -EINVAL;
-		}
-
-		aes_dd->va_shm = tee_shm_get_va(aes_dd->shm_pool, 0);
-		if (IS_ERR(aes_dd->va_shm)) {
-			tee_shm_free(aes_dd->shm_pool);
-			pr_err("%s tee_shm_get_va failed\n", __func__);
-			return -EINVAL;
-		}
-
-		/*
-	 	 * Open AES session with Crypto Trusted App
-	 	 */
-		memset(&sess_arg, 0, sizeof(sess_arg));
-		memcpy(sess_arg.uuid, aes_dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
-		sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
-		sess_arg.num_params = 0;
-
-		err = tee_client_open_session(aes_dd->octx, &sess_arg, NULL);
-		if ((err < 0) || (sess_arg.ret != 0)) {
-			pr_err("%s open session failed, err: %x\n", __func__, sess_arg.ret);
-			return -EINVAL;
-		}
-		aes_dd->session_id = sess_arg.session;
-	}
-#endif
-
 	INIT_LIST_HEAD(&aes_dd->list);
 	spin_lock_init(&aes_dd->lock);
-
-	tasklet_init(&aes_dd->done_task, nuvoton_aes_done_task, (unsigned long)aes_dd);
-	tasklet_init(&aes_dd->queue_task, nuvoton_aes_queue_task, (unsigned long)aes_dd);
-
+	tasklet_init(&aes_dd->done_task, nuvoton_aes_done_task,
+		     (unsigned long)aes_dd);
+	tasklet_init(&aes_dd->queue_task, nuvoton_aes_queue_task,
+		     (unsigned long)aes_dd);
 	crypto_init_queue(&aes_dd->queue, 32);
 
 	spin_lock(&nu_aes.lock);
 	list_add_tail(&aes_dd->list, &nu_aes.dev_list);
 	spin_unlock(&nu_aes.lock);
 
-
-	/*
-	 *  Register AES/SM4 algorithms
-	 */
 	for (i = 0; i < ARRAY_SIZE(nuvoton_aes_algs); i++) {
 		err = crypto_register_skcipher(&nuvoton_aes_algs[i]);
 		if (err) {
@@ -1489,11 +1563,9 @@ int nuvoton_aes_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
 		}
 	}
 
-	if (nu_cryp_dev->use_optee == false) {
-		err = nuvoton_register_gcm_ccm(dev);
-		if (err)
-			goto err_algs;
-	}
+	err = nuvoton_register_gcm_ccm(dev);
+	if (err)
+		goto err_algs;
 
 	pr_info("MA35D1 Crypto AES engine enabled.\n");
 	return 0;
@@ -1507,31 +1579,160 @@ err_algs:
 	return err;
 }
 
-int nuvoton_aes_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
+static int nuvoton_aes_remove_direct(struct device *dev,
+				     struct nu_crypto_dev *nu_cryp_dev)
 {
-	struct nu_aes_dev  *aes_dd = &nu_cryp_dev->aes_dd;
+	struct nu_aes_dev *aes_dd = &nu_cryp_dev->aes_dd;
 	int i;
-
-	if (aes_dd == NULL)
-		return -ENODEV;
 
 	for (i = 0; i < ARRAY_SIZE(nuvoton_aes_algs); i++)
 		crypto_unregister_skcipher(&nuvoton_aes_algs[i]);
+	crypto_unregister_aeads(nuvoton_aes_gcm_alg,
+				 ARRAY_SIZE(nuvoton_aes_gcm_alg));
+	crypto_unregister_aeads(nuvoton_aes_ccm_alg,
+				 ARRAY_SIZE(nuvoton_aes_ccm_alg));
+	spin_lock(&nu_aes.lock);
+	list_del(&aes_dd->list);
+	spin_unlock(&nu_aes.lock);
+	tasklet_kill(&aes_dd->done_task);
+	tasklet_kill(&aes_dd->queue_task);
+	return 0;
+}
 
-	crypto_unregister_aeads(nuvoton_aes_gcm_alg, ARRAY_SIZE(nuvoton_aes_gcm_alg));
-	crypto_unregister_aeads(nuvoton_aes_ccm_alg, ARRAY_SIZE(nuvoton_aes_ccm_alg));
+int nuvoton_aes_probe(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
+{
+	struct nu_aes_dev *aes_dd = &nu_cryp_dev->aes_dd;
+	int i, err;
+
+	if (!nu_cryp_dev->use_optee)
+		return nuvoton_aes_probe_direct(dev, nu_cryp_dev);
+
+	aes_dd->dev = dev;
+	aes_dd->nu_cdev = nu_cryp_dev;
+	aes_dd->reg_base = nu_cryp_dev->reg_base;
+	aes_dd->octx = NULL;
+
+#ifdef CONFIG_OPTEE
+	if (nu_cryp_dev->use_optee) {
+		struct tee_ioctl_open_session_arg sess_arg = { };
+
+		err = nuvoton_crypto_optee_init(nu_cryp_dev);
+		if (err)
+			return err;
+		if (!nu_cryp_dev->tee_cdev)
+			return -EPROBE_DEFER;
+
+		aes_dd->octx = tee_client_open_context(NULL, optee_ctx_match,
+						     NULL, NULL);
+		if (IS_ERR(aes_dd->octx))
+			return PTR_ERR(aes_dd->octx);
+
+		aes_dd->shm_pool = tee_shm_alloc(aes_dd->octx, CRYPTO_SHM_SIZE,
+					       TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+		if (IS_ERR(aes_dd->shm_pool)) {
+			err = PTR_ERR(aes_dd->shm_pool);
+			goto out_ctx;
+		}
+		aes_dd->va_shm = tee_shm_get_va(aes_dd->shm_pool, 0);
+		if (IS_ERR(aes_dd->va_shm)) {
+			err = PTR_ERR(aes_dd->va_shm);
+			goto out_shm;
+		}
+
+		memcpy(sess_arg.uuid, nu_cryp_dev->tee_cdev->id.uuid.b,
+		       TEE_IOCTL_UUID_LEN);
+		sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
+		err = tee_client_open_session(aes_dd->octx, &sess_arg, NULL);
+		if (err < 0 || sess_arg.ret) {
+			err = err < 0 ? err : -EIO;
+			goto out_shm;
+		}
+		aes_dd->session_id = sess_arg.session;
+	}
+#endif
+
+	INIT_LIST_HEAD(&aes_dd->list);
+	spin_lock_init(&aes_dd->lock);
+	tasklet_init(&aes_dd->done_task, nuvoton_aes_done_task,
+		     (unsigned long)aes_dd);
+	tasklet_init(&aes_dd->queue_task, nuvoton_aes_queue_task,
+		     (unsigned long)aes_dd);
+	INIT_WORK(&aes_dd->tee_queue_work, nuvoton_aes_tee_queue_work);
+	INIT_WORK(&aes_dd->tee_done_work, nuvoton_aes_tee_done_work);
+	crypto_init_queue(&aes_dd->queue, 32);
+
+	if (nu_cryp_dev->use_optee) {
+		aes_dd->tee_wq = alloc_ordered_workqueue("ma35-aes", WQ_MEM_RECLAIM);
+		if (!aes_dd->tee_wq) {
+			err = -ENOMEM;
+			goto err_tee;
+		}
+	}
+	spin_lock(&nu_aes.lock);
+	list_add_tail(&aes_dd->list, &nu_aes.dev_list);
+	spin_unlock(&nu_aes.lock);
+
+	for (i = 0; i < ARRAY_SIZE(nuvoton_aes_algs); i++) {
+		err = crypto_register_skcipher(&nuvoton_aes_algs[i]);
+		if (err)
+			goto err_algs;
+	}
+	if (!nu_cryp_dev->use_optee) {
+		err = nuvoton_register_gcm_ccm(dev);
+		if (err)
+			goto err_algs;
+	}
+	aes_dd->registered = true;
+	pr_info("MA35D1 Crypto AES engine enabled.\n");
+	return 0;
+
+err_algs:
+	while (i--)
+		crypto_unregister_skcipher(&nuvoton_aes_algs[i]);
+	nuvoton_aes_tee_stop(aes_dd);
+	spin_lock(&nu_aes.lock);
+	list_del(&aes_dd->list);
+	spin_unlock(&nu_aes.lock);
+err_tee:
+#ifdef CONFIG_OPTEE
+	if (nu_cryp_dev->use_optee)
+		tee_client_close_session(aes_dd->octx, aes_dd->session_id);
+out_shm:
+	if (nu_cryp_dev->use_optee)
+		tee_shm_free(aes_dd->shm_pool);
+out_ctx:
+	if (nu_cryp_dev->use_optee)
+		tee_client_close_context(aes_dd->octx);
+#endif
+	return err;
+}
+
+int nuvoton_aes_remove(struct device *dev, struct nu_crypto_dev *nu_cryp_dev)
+{
+	struct nu_aes_dev *aes_dd = &nu_cryp_dev->aes_dd;
+	int i;
+
+	if (!nu_cryp_dev->use_optee)
+		return nuvoton_aes_remove_direct(dev, nu_cryp_dev);
+
+	if (!aes_dd->registered)
+		return 0;
+
+	/* Stop submissions before waiting for work and releasing TEE memory. */
+	nuvoton_aes_tee_stop(aes_dd);
+	for (i = 0; i < ARRAY_SIZE(nuvoton_aes_algs); i++)
+		crypto_unregister_skcipher(&nuvoton_aes_algs[i]);
 
 	spin_lock(&nu_aes.lock);
 	list_del(&aes_dd->list);
 	spin_unlock(&nu_aes.lock);
-
-	tasklet_kill(&aes_dd->done_task);
-	tasklet_kill(&aes_dd->queue_task);
-
 #ifdef CONFIG_OPTEE
-	tee_client_close_session(aes_dd->octx, aes_dd->session_id);
-	tee_shm_free(aes_dd->shm_pool);
-	tee_client_close_context(aes_dd->octx);
+	if (nu_cryp_dev->use_optee) {
+		tee_client_close_session(aes_dd->octx, aes_dd->session_id);
+		tee_shm_free(aes_dd->shm_pool);
+		tee_client_close_context(aes_dd->octx);
+	}
 #endif
+	aes_dd->registered = false;
 	return 0;
 }

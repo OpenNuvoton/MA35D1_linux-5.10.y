@@ -18,6 +18,7 @@
 #include <linux/tee_drv.h>
 #include <linux/crypto.h>
 #include <linux/spinlock.h>
+#include <linux/mutex.h>
 #include <crypto/algapi.h>
 
 #include <linux/io.h>
@@ -25,24 +26,25 @@
 
 #include "nuvoton-crypto.h"
 
-static struct nu_crypto_dev *_nuvoton_crypto_device;
+bool nuvoton_crypto_optee_faulted;
 
 #ifdef CONFIG_OPTEE
+static DEFINE_MUTEX(optee_register_lock);
+static DEFINE_MUTEX(optee_ready_lock);
+static bool optee_driver_registered;
+static struct tee_client_device *optee_ready_device;
+
 static int optee_crypto_probe(struct device *dev)
 {
-	struct nu_crypto_dev *nu_cryp_dev;
 	struct tee_client_device *tee_cdev; // = to_tee_client_device(dev);
 	struct tee_context  *ctx;
 	u32	session_id;
 	struct tee_ioctl_invoke_arg inv_arg;
-	struct tee_ioctl_open_session_arg sess_arg;
+	struct tee_ioctl_open_session_arg sess_arg = { };
 	struct tee_param param[4];
 	int  ret;
 
-	nu_cryp_dev = _nuvoton_crypto_device;
-
 	tee_cdev = to_tee_client_device(dev);
-	nu_cryp_dev->tee_cdev = tee_cdev;
 
 	/*
 	 * Open context with TEE driver
@@ -84,11 +86,20 @@ static int optee_crypto_probe(struct device *dev)
 	}
 	tee_client_close_session(ctx, session_id);
 	tee_client_close_context(ctx);
+	if (!ret) {
+		mutex_lock(&optee_ready_lock);
+		optee_ready_device = tee_cdev;
+		mutex_unlock(&optee_ready_lock);
+	}
 	return ret;
 }
 
 static int optee_crypto_remove(struct device *dev)
 {
+	mutex_lock(&optee_ready_lock);
+	if (optee_ready_device == to_tee_client_device(dev))
+		optee_ready_device = NULL;
+	mutex_unlock(&optee_ready_lock);
 	return 0;
 }
 
@@ -110,19 +121,51 @@ static struct tee_client_driver optee_crypto_driver = {
 	},
 };
 
+static void optee_crypto_put_device(void *data)
+{
+	put_device(data);
+}
+
 int nuvoton_crypto_optee_init(struct nu_crypto_dev *nu_cryp_dev)
 {
-	int err;
+	struct tee_client_device *tee_cdev;
+	int err = 0;
 
+	if (READ_ONCE(nuvoton_crypto_optee_faulted))
+		return -EIO;
 	if (nu_cryp_dev->tee_cdev != NULL)
-		return 0; /* already inited */
+		return 0;
 
-	pr_info("Register MA35D1 Crypto optee client driver.\n");
-	err = driver_register(&optee_crypto_driver.driver);
-	if (err) {
-		pr_err("Failed to register crypto optee driver!\n");
-		return err;
+	/* Registration and PTA readiness are independent states. */
+	mutex_lock(&optee_register_lock);
+	if (!optee_driver_registered) {
+		err = driver_register(&optee_crypto_driver.driver);
+		if (!err)
+			optee_driver_registered = true;
 	}
+	mutex_unlock(&optee_register_lock);
+	if (err)
+		return err;
+
+	mutex_lock(&optee_ready_lock);
+	tee_cdev = optee_ready_device;
+	if (tee_cdev)
+		get_device(&tee_cdev->dev);
+	mutex_unlock(&optee_ready_lock);
+	if (!tee_cdev)
+		return -EPROBE_DEFER;
+
+	/* Supplier unbind must remove the crypto consumer first. */
+	if (!device_link_add(nu_cryp_dev->dev, &tee_cdev->dev,
+			     DL_FLAG_AUTOREMOVE_CONSUMER)) {
+		put_device(&tee_cdev->dev);
+		return -ENOMEM;
+	}
+	err = devm_add_action_or_reset(nu_cryp_dev->dev,
+				       optee_crypto_put_device, &tee_cdev->dev);
+	if (err)
+		return err;
+	nu_cryp_dev->tee_cdev = tee_cdev;
 	return 0;
 }
 
@@ -174,13 +217,18 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	dev_set_drvdata(dev, nu_cryp_dev);
-	_nuvoton_crypto_device = nu_cryp_dev;
 
 	nu_cryp_dev->use_optee = false;
 #ifdef CONFIG_OPTEE
 	if (!of_property_read_string(dev->of_node, "optee_nuvoton", &str)) {
 		if (!strcmp("yes", str))
 			nu_cryp_dev->use_optee = true;
+	}
+	if (nu_cryp_dev->use_optee) {
+		nu_cryp_dev->dev = dev;
+		err = nuvoton_crypto_optee_init(nu_cryp_dev);
+		if (err)
+			return err;
 	}
 #endif
 	if (!nu_cryp_dev->use_optee) {
@@ -226,10 +274,16 @@ static int nuvoton_crypto_probe(struct platform_device *pdev)
 #endif
 
 	err = nuvoton_aes_probe(dev, nu_cryp_dev);
+	if (err && nu_cryp_dev->use_optee)
+		return err;
 	if (err)
 		dev_err(dev, "failed to init AES!\n");
 
 	err = nuvoton_sha_probe(dev, nu_cryp_dev);
+	if (err && nu_cryp_dev->use_optee) {
+		nuvoton_aes_remove(dev, nu_cryp_dev);
+		return err;
+	}
 	if (err)
 		dev_err(dev, "failed to init SHA!\n");
 
@@ -306,7 +360,21 @@ static struct platform_driver nuvoton_crypto_driver = {
 	},
 };
 
-module_platform_driver(nuvoton_crypto_driver);
+static int __init nuvoton_crypto_driver_init(void)
+{
+	return platform_driver_register(&nuvoton_crypto_driver);
+}
+module_init(nuvoton_crypto_driver_init);
+
+static void __exit nuvoton_crypto_driver_exit(void)
+{
+	platform_driver_unregister(&nuvoton_crypto_driver);
+#ifdef CONFIG_OPTEE
+	if (optee_driver_registered)
+		driver_unregister(&optee_crypto_driver.driver);
+#endif
+}
+module_exit(nuvoton_crypto_driver_exit);
 
 MODULE_AUTHOR("Nuvoton Technology Corporation");
 MODULE_DESCRIPTION("Nuvoton Cryptographic Accerlerator");

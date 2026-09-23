@@ -30,97 +30,259 @@
 
 static DEFINE_MUTEX(i2s_mutex);
 
+#define MA35D1_APLL_RATE_44K1_FAMILY	180633600UL
+#define MA35D1_APLL_RATE_48K_FAMILY	196608000UL
+
+#define MA35D1_APLL_FAMILY_NONE	0U
+#define MA35D1_APLL_FAMILY_44K1	1U
+#define MA35D1_APLL_FAMILY_48K	2U
+
+static int ma35d1_i2s_rate_to_apll(unsigned int sample_rate,
+				    unsigned int *family,
+				    unsigned long *target_rate)
+{
+	switch (sample_rate) {
+	case 11025:
+	case 22050:
+	case 44100:
+	case 88200:
+	case 176400:
+		*family = MA35D1_APLL_FAMILY_44K1;
+		*target_rate = MA35D1_APLL_RATE_44K1_FAMILY;
+		return 0;
+	case 8000:
+	case 16000:
+	case 32000:
+	case 48000:
+	case 96000:
+	case 192000:
+		*family = MA35D1_APLL_FAMILY_48K;
+		*target_rate = MA35D1_APLL_RATE_48K_FAMILY;
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+/*
+ * The MA35D1 VSI-PLL clk driver's .set_rate() always leaves the PD
+ * (power-down) bit set after reprogramming M/N/P; only .prepare() clears
+ * it again. Since the clk framework does NOT call .prepare() during a
+ * plain clk_set_rate() on an already-enabled clock, we must explicitly
+ * unprepare (disable) the APLL and the I2S gate clock that depends on it
+ * before changing the rate, then re-prepare (enable) the APLL afterwards
+ * so its .prepare() callback clears the PD bit again, and finally
+ * re-enable the I2S gate clock.
+ */
+static int ma35d1_i2s_configure_apll(struct device *dev,
+				      struct ma35d1_audio *ma35d1_audio,
+				      unsigned int sample_rate,
+				      unsigned int *family_out,
+				      unsigned int *i2s_clk)
+{
+	unsigned long target_rate, old_rate;
+	unsigned int family;
+	int ret;
+
+	ret = ma35d1_i2s_rate_to_apll(sample_rate, &family, &target_rate);
+	if (ret) {
+		dev_err(dev, "hw_params: unsupported sample rate for APLL selection: %u\n",
+			sample_rate);
+		return ret;
+	}
+
+	mutex_lock(&ma35d1_audio->apll_lock);
+	if (ma35d1_audio->active_streams &&
+	    ma35d1_audio->active_apll_family != family) {
+		dev_err(dev,
+			"hw_params: cannot switch APLL family while %u stream(s) active on a different family\n",
+			ma35d1_audio->active_streams);
+		mutex_unlock(&ma35d1_audio->apll_lock);
+		return -EBUSY;
+	}
+
+	if (ma35d1_audio->active_streams) {
+		*family_out = family;
+		mutex_unlock(&ma35d1_audio->apll_lock);
+		*i2s_clk = clk_get_rate(ma35d1_audio->clk);
+		return 0;
+	}
+
+	old_rate = clk_get_rate(ma35d1_audio->apll_clk);
+	if (old_rate != target_rate) {
+		clk_disable_unprepare(ma35d1_audio->clk);
+		clk_disable_unprepare(ma35d1_audio->apll_clk);
+
+		ret = clk_set_rate(ma35d1_audio->apll_clk, target_rate);
+		if (ret) {
+			dev_err(dev, "failed to set APLL rate from %lu to %lu Hz: %d\n",
+				old_rate, target_rate, ret);
+			clk_prepare_enable(ma35d1_audio->apll_clk);
+			clk_prepare_enable(ma35d1_audio->clk);
+			mutex_unlock(&ma35d1_audio->apll_lock);
+			return ret;
+		}
+
+		ret = clk_prepare_enable(ma35d1_audio->apll_clk);
+		if (ret) {
+			dev_err(dev, "failed to re-enable APLL after rate change to %lu Hz: %d\n",
+				target_rate, ret);
+			clk_prepare_enable(ma35d1_audio->clk);
+			mutex_unlock(&ma35d1_audio->apll_lock);
+			return ret;
+		}
+
+		ret = clk_prepare_enable(ma35d1_audio->clk);
+		if (ret) {
+			dev_err(dev, "failed to re-enable I2S gate after APLL rate change: %d\n",
+				ret);
+			clk_disable_unprepare(ma35d1_audio->apll_clk);
+			mutex_unlock(&ma35d1_audio->apll_lock);
+			return ret;
+		}
+	}
+
+	*i2s_clk = clk_get_rate(ma35d1_audio->clk);
+	*family_out = family;
+	mutex_unlock(&ma35d1_audio->apll_lock);
+	return 0;
+}
+
+static unsigned int ma35d1_i2s_calc_actual_mclk(struct ma35d1_audio *ma35d1_audio)
+{
+	unsigned int i2s_clk, mclkdiv;
+
+	if (!ma35d1_audio->mclk_out)
+		return 0;
+
+	i2s_clk = clk_get_rate(ma35d1_audio->clk);
+	mclkdiv = DIV_ROUND_CLOSEST(i2s_clk, 2U * ma35d1_audio->mclk_out);
+	if (!mclkdiv || mclkdiv > 0x7f)
+		return 0;
+
+	return i2s_clk / (2 * mclkdiv);
+}
+
 static int ma35d1_i2s_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params,
 				struct snd_soc_dai *dai)
 {
 	unsigned int i2s_clk, bitrate, mclkdiv, bclkdiv;
+	unsigned int sample_width, slot_width, slots, dma_width, ctl1;
+	unsigned int apll_family;
 	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(dai->dev);
 	unsigned channels = params_channels(params);
-	unsigned sample_rate = params_rate(params) ;
+	unsigned sample_rate = params_rate(params);
 	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
+	int ret;
 
+	sample_width = params_width(params);
+	slot_width = params_physical_width(params);
+	if (sample_width == 24 || sample_width == 32)
+		slot_width = 32;
+	else if (slot_width < sample_width)
+		slot_width = sample_width;
 
-	i2s_clk = clk_get_rate(ma35d1_audio->clk);
-	printk("i2s_clk: %u\n", i2s_clk);
+	ret = ma35d1_i2s_configure_apll(dai->dev, ma35d1_audio, sample_rate,
+					 &apll_family, &i2s_clk);
+	if (ret)
+		return ret;
+
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
-	    ma35d1_audio->pdm_decimation)
+	    ma35d1_audio->pdm_decimation) {
 		bitrate = sample_rate * ma35d1_audio->pdm_decimation;
-	else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
-		 ma35d1_audio->raw_pdm_mono && channels == 1)
-		bitrate = sample_rate * params_width(params);
-	else
-		bitrate = sample_rate * 2U * 16U;
-	printk("ma35d1_audio->pdm_decimation: %u\n", ma35d1_audio->pdm_decimation);
-	printk("sample_rate: %u bitrate: %u\n", sample_rate, bitrate);
-	bclkdiv = ((((i2s_clk * 10UL / bitrate) >> 1U) + 5UL) / 10UL) - 1U;
-	mclkdiv = (i2s_clk / ma35d1_audio->mclk_out) >> 1;
-	printk("bclkdiv: %u, mclkdiv: %u\n", bclkdiv, mclkdiv);
+		slots = 1;
+	} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
+		   ma35d1_audio->raw_pdm_mono && channels == 1) {
+		bitrate = sample_rate * sample_width;
+		slots = 1;
+	} else {
+		/* Standard I2S keeps left/right slots even for mono ALSA streams. */
+		slots = 2;
+		bitrate = sample_rate * slots * slot_width;
+	}
+
+	bclkdiv = DIV_ROUND_CLOSEST(i2s_clk, 2U * bitrate);
+	if (!bclkdiv || bclkdiv > 0x400)
+		return -EINVAL;
+	bclkdiv -= 1;
+
+	mclkdiv = DIV_ROUND_CLOSEST(i2s_clk, 2U * ma35d1_audio->mclk_out);
+	if (!mclkdiv || mclkdiv > 0x7f)
+		return -EINVAL;
+
+	ma35d1_audio->actual_mclk_out = i2s_clk / (2 * mclkdiv);
 	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CLKDIV, (bclkdiv << 8) | mclkdiv);
 
-
-{
-	unsigned int width = params_width(params);
-	unsigned int actual_bclk;
-	unsigned int actual_mclk;
-
-	actual_bclk = i2s_clk / (2 * (bclkdiv + 1));
-
-	if (mclkdiv == 0)
-		actual_mclk = i2s_clk;
-	else
-		actual_mclk = i2s_clk / (2 * mclkdiv);
-
-	printk("i2s_clk=%u\n", i2s_clk);
-	printk("sample_rate=%u channels=%u width=%u\n",
-	       sample_rate, channels, width);
-	printk("target_bclk=%u bclkdiv=%u actual_bclk=%u error_ppm=%lld\n",
-	       bitrate, bclkdiv, actual_bclk,
-	       ((long long)actual_bclk - bitrate) * 1000000LL / bitrate);
-	printk("target_mclk=%u mclkdiv=%u actual_mclk=%u\n",
-	       ma35d1_audio->mclk_out, mclkdiv, actual_mclk);
-	printk("I2S_CLKDIV=0x%08x\n", (bclkdiv << 8) | mclkdiv);
-}
-
-	switch (params_width(params)) {
+	switch (sample_width) {
 	case 8:
 		val = (val & ~DATWIDTH) | DATWIDTH_8;
-		val = (val & ~CHWIDTH) | CHWIDTH_8;
+		dma_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 		break;
-
 	case 16:
 		val = (val & ~DATWIDTH) | DATWIDTH_16;
-		val = (val & ~CHWIDTH) | CHWIDTH_16;
-		//ctl1 = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL1);
-		//ctl1 = ctl1 | PBWIDTH_16;	//set Peripheral Bus Data Width to 16 bit
-		//AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL1, ctl1);
+		dma_width = DMA_SLAVE_BUSWIDTH_2_BYTES;
 		break;
-
 	case 24:
 		val = (val & ~DATWIDTH) | DATWIDTH_24;
-		val = (val & ~CHWIDTH) | CHWIDTH_24;
+		dma_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 		break;
-
 	case 32:
 		val = (val & ~DATWIDTH) | DATWIDTH_32;
-		val = (val & ~CHWIDTH) | CHWIDTH_32;
+		dma_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 		break;
-
 	default:
 		return -EINVAL;
 	}
 
+	switch (slot_width) {
+	case 8:
+		val = (val & ~CHWIDTH) | CHWIDTH_8;
+		break;
+	case 16:
+		val = (val & ~CHWIDTH) | CHWIDTH_16;
+		break;
+	case 24:
+		val = (val & ~CHWIDTH) | CHWIDTH_24;
+		break;
+	case 32:
+		val = (val & ~CHWIDTH) | CHWIDTH_32;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	ctl1 = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL1);
+	ctl1 &= ~(PBWIDTH | PB16ORD);
+	ctl1 |= (sample_width == 16) ? PBWIDTH_16 : PBWIDTH_32;
+	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL1, ctl1);
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		ma35d1_audio->dma_params_tx.addr_width = dma_width;
+	else
+		ma35d1_audio->dma_params_rx.addr_width = dma_width;
+
 	if (ma35d1_audio->raw_pdm_mono &&
 		substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
-		val = 0x1000000 | ORDER;
+		val = FORMAT_MSB | ORDER;
 	} else {
 		if (channels == 1)
 			val |= MONO;
 		else
 			val &= ~MONO;
+
+		if (sample_width == 24) {
+			/* S24_LE stores 24 valid bits in the low bits of a 32-bit little-endian container. */
+			val &= ~ORDER;
+		}
 	}
 
 	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
+
+	mutex_lock(&ma35d1_audio->apll_lock);
+	ma35d1_audio->stream_apll_family[substream->stream] = apll_family;
+	mutex_unlock(&ma35d1_audio->apll_lock);
+
 	return 0;
 }
 
@@ -129,12 +291,16 @@ static int ma35d1_i2s_set_fmt(struct snd_soc_dai *cpu_dai, unsigned int fmt)
 	struct ma35d1_audio *ma35d1_audio = dev_get_drvdata(cpu_dai->dev);
 	unsigned long val = AUDIO_READ(ma35d1_audio->mmio + I2S_CTL0);
 
+	val &= ~FORMAT;
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
-	case SND_SOC_DAIFMT_MSB:
-		val |= ORDER; //MSB
-		break;
 	case SND_SOC_DAIFMT_I2S:
-		val &= ~ORDER; //LSB
+		val |= FORMAT_I2S;
+		break;
+	case SND_SOC_DAIFMT_MSB:
+		val |= FORMAT_MSB;
+		break;
+	case SND_SOC_DAIFMT_LSB:
+		val |= FORMAT_LSB;
 		break;
 	default:
 		return -EINVAL;
@@ -150,6 +316,8 @@ static int ma35d1_i2s_set_fmt(struct snd_soc_dai *cpu_dai, unsigned int fmt)
 	default:
 		return -EINVAL;
 	}
+
+	ma35d1_audio->actual_mclk_out = ma35d1_i2s_calc_actual_mclk(ma35d1_audio);
 
 	AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
 
@@ -175,6 +343,15 @@ static int ma35d1_i2s_trigger(struct snd_pcm_substream *substream, int cmd, stru
 		else
 			val |= RX_EN | RXPDMAEN;
 
+		mutex_lock(&ma35d1_audio->apll_lock);
+		if (!ma35d1_audio->stream_active[substream->stream]) {
+			ma35d1_audio->stream_active[substream->stream] = true;
+			ma35d1_audio->active_streams++;
+			ma35d1_audio->active_apll_family =
+				ma35d1_audio->stream_apll_family[substream->stream];
+		}
+		mutex_unlock(&ma35d1_audio->apll_lock);
+
 		AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
 
 		break;
@@ -186,6 +363,17 @@ static int ma35d1_i2s_trigger(struct snd_pcm_substream *substream, int cmd, stru
 			val &= ~(TX_EN | TXPDMAEN);
 		else
 			val &= ~(RX_EN | RXPDMAEN);
+
+		mutex_lock(&ma35d1_audio->apll_lock);
+		if (ma35d1_audio->stream_active[substream->stream]) {
+			ma35d1_audio->stream_active[substream->stream] = false;
+			if (ma35d1_audio->active_streams)
+				ma35d1_audio->active_streams--;
+			if (!ma35d1_audio->active_streams)
+				ma35d1_audio->active_apll_family =
+					MA35D1_APLL_FAMILY_NONE;
+		}
+		mutex_unlock(&ma35d1_audio->apll_lock);
 
 		AUDIO_WRITE(ma35d1_audio->mmio + I2S_CTL0, val);
 
@@ -254,14 +442,18 @@ struct snd_soc_dai_driver ma35d1_i2s_dai = {
 	.probe          = ma35d1_i2s_probe,
 	.remove         = ma35d1_i2s_remove,
 	.playback = {
-		.rates      = SNDRV_PCM_RATE_8000_48000,
-		.formats    = SNDRV_PCM_FMTBIT_S16_LE,
+		.rates      = SNDRV_PCM_RATE_8000_192000,
+		.formats    = SNDRV_PCM_FMTBIT_S16_LE |
+			      SNDRV_PCM_FMTBIT_S24_LE |
+			      SNDRV_PCM_FMTBIT_S32_LE,
 		.channels_min   = 1,
 		.channels_max   = 2,
 	},
 	.capture = {
 		.rates      = SNDRV_PCM_RATE_8000_192000,
-		.formats    = SNDRV_PCM_FMTBIT_S16_LE,
+		.formats    = SNDRV_PCM_FMTBIT_S16_LE |
+			      SNDRV_PCM_FMTBIT_S24_LE |
+			      SNDRV_PCM_FMTBIT_S32_LE,
 		.channels_min   = 1,
 		.channels_max   = 2,
 	},
@@ -287,6 +479,7 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 
 	spin_lock_init(&ma35d1_audio->lock);
 	spin_lock_init(&ma35d1_audio->irqlock);
+	mutex_init(&ma35d1_audio->apll_lock);
 
 	if (of_property_read_u32_array(pdev->dev.of_node, "reg", val32, 4) != 0) {
 		dev_err(&pdev->dev, "can not get bank!\n");
@@ -326,6 +519,14 @@ static int ma35d1_i2s_drvprobe(struct platform_device *pdev)
 		ret = PTR_ERR(ma35d1_audio->clk);
 		goto out2;
 	}
+
+	ma35d1_audio->apll_clk = devm_clk_get(&pdev->dev, "apll");
+	if (IS_ERR(ma35d1_audio->apll_clk)) {
+		dev_err(&pdev->dev, "failed to get APLL clock\n");
+		ret = PTR_ERR(ma35d1_audio->apll_clk);
+		goto out2;
+	}
+
 	clk_prepare_enable(ma35d1_audio->clk);
 
 	ma35d1_audio->irq_num = platform_get_irq(pdev, 0);

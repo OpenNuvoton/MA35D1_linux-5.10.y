@@ -12,6 +12,8 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/bits.h>
+#include <linux/bitfield.h>
 #include <linux/module.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
@@ -111,6 +113,9 @@
 
 #define I2C_GCMODE_ENABLE   1
 #define I2C_GCMODE_DISABLE  0
+#define MA35D1_I2C_CLKDIV_MASK	GENMASK(11, 0)
+#define MA35D1_I2C_NFCNT_MASK	GENMASK(15, 12)
+#define MA35D1_I2C_NFCNT_MAX	0xF
 
 /* i2c controller private data */
 
@@ -692,6 +697,8 @@ static int ma35d1_i2c_probe(struct platform_device *pdev)
 	int ret, err;
 	int busfreq = 0;
 	u32 nfcnt;
+	u32 divider;
+	u32 clkdiv;
 	struct device *dev = &pdev->dev;
 
 	if (!pdev->dev.of_node) {
@@ -756,14 +763,27 @@ static int ma35d1_i2c_probe(struct platform_device *pdev)
 
 	// Set Clock divider
 	ret = clk_get_rate(i2c->clk)/(busfreq * 4) - 1;
+	divider = ret;
 
-	writel(ret & 0xffff, i2c->regs + CLKDIV);
-
-	if (!of_property_read_u32(pdev->dev.of_node, "nuvoton,nfcnt", &nfcnt)) {
-		nfcnt &= 0xF;
-		writel(readl(i2c->regs + CLKDIV) | (nfcnt << 12),
-		       i2c->regs + CLKDIV);
+	if (divider > MA35D1_I2C_CLKDIV_MASK) {
+		dev_err(&pdev->dev, "clock divider %u exceeds 12-bit field\n",
+			divider);
+		ret = -EINVAL;
+		goto err_clk;
 	}
+
+	nfcnt = 0;
+	if (!of_property_read_u32(pdev->dev.of_node, "nuvoton,nfcnt", &nfcnt) &&
+	    nfcnt > MA35D1_I2C_NFCNT_MAX) {
+		dev_err(&pdev->dev, "nuvoton,nfcnt %u is out of range (0..%u)\n",
+			nfcnt, MA35D1_I2C_NFCNT_MAX);
+		ret = -EINVAL;
+		goto err_clk;
+	}
+
+	clkdiv = FIELD_PREP(MA35D1_I2C_CLKDIV_MASK, divider) |
+		 FIELD_PREP(MA35D1_I2C_NFCNT_MASK, nfcnt);
+	writel(clkdiv, i2c->regs + CLKDIV);
 
 	__raw_writel((__raw_readl(i2c->regs+CTL0)|(0x1 << 6)),
 				i2c->regs + CTL0);
