@@ -46,6 +46,39 @@
 #define	SHA_FLAGS_FINAL		BIT(3)  /* is the final request */
 #define	SHA_FLAGS_FINAL_DMA	BIT(4)  /* is last DMA of the final request */
 #define SHA_FLAGS_TEE_SESSION	BIT(5)  /* owned by this initialized stream */
+#define SHA_FLAGS_EMPTY_SHA3	BIT(6)  /* SHA3 of empty message, answered by the driver */
+
+/* TSI rejects a zero-length SHA3 request, so answer the well-known digests here */
+static const u8 sha3_224_empty[SHA3_224_DIGEST_SIZE] = {
+	0x6b, 0x4e, 0x03, 0x42, 0x36, 0x67, 0xdb, 0xb7, 0x3b, 0x6e, 0x15, 0x45, 0x4f, 0x0e,
+	0xb1, 0xab, 0xd4, 0x59, 0x7f, 0x9a, 0x1b, 0x07, 0x8e, 0x3f, 0x5b, 0x5a, 0x6b, 0xc7
+};
+static const u8 sha3_256_empty[SHA3_256_DIGEST_SIZE] = {
+	0xa7, 0xff, 0xc6, 0xf8, 0xbf, 0x1e, 0xd7, 0x66, 0x51, 0xc1, 0x47, 0x56, 0xa0, 0x61, 0xd6, 0x62,
+	0xf5, 0x80, 0xff, 0x4d, 0xe4, 0x3b, 0x49, 0xfa, 0x82, 0xd8, 0x0a, 0x4b, 0x80, 0xf8, 0x43, 0x4a
+};
+static const u8 sha3_384_empty[SHA3_384_DIGEST_SIZE] = {
+	0x0c, 0x63, 0xa7, 0x5b, 0x84, 0x5e, 0x4f, 0x7d, 0x01, 0x10, 0x7d, 0x85, 0x2e, 0x4c, 0x24, 0x85,
+	0xc5, 0x1a, 0x50, 0xaa, 0xaa, 0x94, 0xfc, 0x61, 0x99, 0x5e, 0x71, 0xbb, 0xee, 0x98, 0x3a, 0x2a,
+	0xc3, 0x71, 0x38, 0x31, 0x26, 0x4a, 0xdb, 0x47, 0xfb, 0x6b, 0xd1, 0xe0, 0x58, 0xd5, 0xf0, 0x04
+};
+static const u8 sha3_512_empty[SHA3_512_DIGEST_SIZE] = {
+	0xa6, 0x9f, 0x73, 0xcc, 0xa2, 0x3a, 0x9a, 0xc5, 0xc8, 0xb5, 0x67, 0xdc, 0x18, 0x5a, 0x75, 0x6e,
+	0x97, 0xc9, 0x82, 0x16, 0x4f, 0xe2, 0x58, 0x59, 0xe0, 0xd1, 0xdc, 0xc1, 0x47, 0x5c, 0x80, 0xa6,
+	0x15, 0xb2, 0x12, 0x3a, 0xf1, 0xf5, 0xf9, 0x4c, 0x11, 0xe3, 0xe9, 0x40, 0x2c, 0x3a, 0xc5, 0x58,
+	0xf5, 0x00, 0x19, 0x9d, 0x95, 0xb6, 0xd3, 0xe3, 0x01, 0x75, 0x85, 0x86, 0x28, 0x1d, 0xcd, 0x26
+};
+
+static const u8 *nuvoton_sha3_empty_digest(unsigned int digest_len)
+{
+	switch (digest_len) {
+	case SHA3_224_DIGEST_SIZE: return sha3_224_empty;
+	case SHA3_256_DIGEST_SIZE: return sha3_256_empty;
+	case SHA3_384_DIGEST_SIZE: return sha3_384_empty;
+	case SHA3_512_DIGEST_SIZE: return sha3_512_empty;
+	}
+	return NULL;
+}
 
 struct nu_sha_drv {
 	struct list_head dev_list;
@@ -160,9 +193,12 @@ static int nuvoton_sha_tee_close(struct nu_sha_dev *dd, u32 sid)
 		if (session->sid == sid) {
 			if (err < 0 || arg.ret) {
 				session->close_failed = true;
-				WRITE_ONCE(nuvoton_crypto_optee_faulted, true);
-				dev_err(dd->dev,
-					"OP-TEE AES/SHA disabled; reboot required\n");
+				/* only a broken transport is fatal; a PTA error leaves other requests usable */
+				if (err < 0) {
+					WRITE_ONCE(nuvoton_crypto_optee_faulted, true);
+					dev_err(dd->dev,
+						"OP-TEE AES/SHA disabled; reboot required\n");
+				}
 				break;
 			}
 			list_del(&session->list);
@@ -465,6 +501,11 @@ static void  nuvoton_sha_get_result(struct ahash_request *req)
 	int i;
 
 	if (ctx->dd->nu_cdev->use_optee) {
+		if (ctx->flags & SHA_FLAGS_EMPTY_SHA3) {
+			memcpy(req->result, nuvoton_sha3_empty_digest(ctx->digest_len),
+			       ctx->digest_len);
+			return;
+		}
 		for (i = 0; i < ctx->digest_len / sizeof(u32); i++)
 			put_unaligned(nu_read_reg(ctx->dd, HMAC_DGST(i)),
 				      (u32 *)(req->result + i * sizeof(u32)));
@@ -708,6 +749,18 @@ static int nuvoton_sha_update_start(struct nu_sha_dev *dd)
 	}
 	if ((ctx->req_len > 0) &&  (ctx->bufcnt < ctx->dma_max_size))
 		nuvoton_sha_sg_to_dma_buffer(dd->req, ctx);
+
+	if (dd->nu_cdev->use_optee &&
+	    (ctx->op & HMAC_CTL_SHA3EN) && !(ctx->op & HMAC_CTL_HMACEN) &&
+	    (ctx->flags & SHA_FLAGS_FIRST) &&
+	    (ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
+	    ctx->bufcnt == 0 && ctx->req_len == 0 &&
+	    nuvoton_sha3_empty_digest(ctx->digest_len)) {
+		/* TSI fails on zero-length SHA3, and the failure disables all of TSI */
+		ctx->flags |= SHA_FLAGS_EMPTY_SHA3 | SHA_FLAGS_FINAL_DMA;
+		nuvoton_sha_finish_req(ctx, 0);
+		return 0;
+	}
 
 	if (ctx->flags & SHA_FLAGS_KEY_BLK) {
 		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
