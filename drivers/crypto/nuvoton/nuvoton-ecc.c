@@ -17,6 +17,7 @@
 #include <linux/tee_drv.h>
 #include <linux/crypto.h>
 #include <linux/spinlock.h>
+#include <linux/mutex.h>
 #include <linux/scatterlist.h>
 #include <crypto/scatterwalk.h>
 #include <crypto/internal/kpp.h>
@@ -1028,7 +1029,7 @@ static int nuvoton_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf,
 	return 0;
 }
 
-static int nuvoton_ecdh_compute_value(struct kpp_request *req)
+static int __nuvoton_ecdh_compute_value(struct kpp_request *req)
 {
 	struct crypto_kpp *tfm = crypto_kpp_reqtfm(req);
 	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
@@ -1085,6 +1086,21 @@ static int nuvoton_ecdh_compute_value(struct kpp_request *req)
 	if (copied != nbytes)
 		ret = -EINVAL;
 
+	return ret;
+}
+
+static int nuvoton_ecdh_compute_value(struct kpp_request *req)
+{
+	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(crypto_kpp_reqtfm(req));
+	struct nu_ecc_dev *dd = ctx->dd;
+	int ret;
+
+	if (!dd)
+		return -ENODEV;
+
+	mutex_lock(&dd->io_lock);
+	ret = __nuvoton_ecdh_compute_value(req);
+	mutex_unlock(&dd->io_lock);
 	return ret;
 }
 
@@ -1198,8 +1214,8 @@ void cstr_to_hex(u8 *cstr, u8 *hex_buff, int klen)
 	}
 }
 
-static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
-			  unsigned long arg)
+static long __nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
+			    unsigned long arg)
 {
 	struct nu_ecc_dev  *dd;
 	struct nu_ecc_ctx  *ecc_ctx = filp->private_data;
@@ -1497,6 +1513,26 @@ static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
 	return 0;
 }
 
+/*
+ * All requests share one TEE session and one shared-memory buffer (va_shm),
+ * so they must not run concurrently; otherwise requests overwrite each
+ * other's parameters/results and corrupt the TSI state.
+ */
+static long nvt_ecc_ioctl(struct file *filp, unsigned int cmd,
+			  unsigned long arg)
+{
+	struct nu_ecc_ctx *ecc_ctx = filp->private_data;
+	long ret;
+
+	if (!ecc_ctx)
+		return -EINVAL;
+
+	mutex_lock(&ecc_ctx->dd->io_lock);
+	ret = __nvt_ecc_ioctl(filp, cmd, arg);
+	mutex_unlock(&ecc_ctx->dd->io_lock);
+	return ret;
+}
+
 static int nvt_ecc_open(struct inode *inode, struct file *file)
 {
 	struct nu_ecc_ctx  *ecc_ctx;
@@ -1556,6 +1592,7 @@ int nuvoton_ecc_probe(struct device *dev,
 
 	INIT_LIST_HEAD(&ecc_dd->list);
 	spin_lock_init(&ecc_dd->lock);
+	mutex_init(&ecc_dd->io_lock);
 
 	spin_lock(&nu_ecc.lock);
 	list_add_tail(&ecc_dd->list, &nu_ecc.dev_list);
