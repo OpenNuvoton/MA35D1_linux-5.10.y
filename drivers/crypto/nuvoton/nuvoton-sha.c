@@ -47,6 +47,7 @@
 #define	SHA_FLAGS_FINAL_DMA	BIT(4)  /* is last DMA of the final request */
 #define SHA_FLAGS_TEE_SESSION	BIT(5)  /* owned by this initialized stream */
 #define SHA_FLAGS_EMPTY_SHA3	BIT(6)  /* SHA3 of empty message, answered by the driver */
+#define SHA_FLAGS_EMPTY_HMAC	BIT(7)  /* HMAC of empty message, result already in req->result */
 
 /* TSI rejects a zero-length SHA3 request, so answer the well-known digests here */
 static const u8 sha3_224_empty[SHA3_224_DIGEST_SIZE] = {
@@ -261,6 +262,27 @@ static void nuvoton_sha_tee_unmap(struct nu_sha_dev *dd)
 			 DMA_BIDIRECTIONAL);
 	dma_unmap_single(dd->dev, ctx->dma_buff, size, DMA_TO_DEVICE);
 	dd->tee_dma_mapped = false;
+}
+
+/*
+ * TSI cannot run an HMAC with a zero-length message, but the result is well
+ * defined: HMAC(key, "") . Compute it with the software implementation.
+ */
+static int nuvoton_hmac_empty_msg(struct ahash_request *req, struct nu_sha_ctx *tctx)
+{
+	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
+	struct crypto_shash *sh;
+	int err;
+
+	sh = crypto_alloc_shash(crypto_ahash_alg_name(tfm), 0, 0);
+	if (IS_ERR(sh))
+		return PTR_ERR(sh);
+
+	err = crypto_shash_setkey(sh, tctx->keybuf, tctx->hmac_key_len);
+	if (!err)
+		err = crypto_shash_tfm_digest(sh, NULL, 0, req->result);
+	crypto_free_shash(sh);
+	return err;
 }
 
 static int nuvoton_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
@@ -501,6 +523,8 @@ static void  nuvoton_sha_get_result(struct ahash_request *req)
 	int i;
 
 	if (ctx->dd->nu_cdev->use_optee) {
+		if (ctx->flags & SHA_FLAGS_EMPTY_HMAC)
+			return;
 		if (ctx->flags & SHA_FLAGS_EMPTY_SHA3) {
 			memcpy(req->result, nuvoton_sha3_empty_digest(ctx->digest_len),
 			       ctx->digest_len);
@@ -765,6 +789,15 @@ static int nuvoton_sha_update_start(struct nu_sha_dev *dd)
 	if (ctx->flags & SHA_FLAGS_KEY_BLK) {
 		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
 		    (ctx->bufcnt == 0) && (dd->req->nbytes == 0)) {
+			if (dd->nu_cdev->use_optee) {
+				err = nuvoton_hmac_empty_msg(dd->req,
+						crypto_tfm_ctx(dd->req->base.tfm));
+				if (!err)
+					ctx->flags |= SHA_FLAGS_EMPTY_HMAC |
+						      SHA_FLAGS_FINAL_DMA;
+				nuvoton_sha_finish_req(ctx, err);
+				return err;
+			}
 			pr_err("MA35D1 HMAC does not support 0 data length!\n");
 			nuvoton_sha_finish_req(ctx, -EINVAL);
 			return -EINVAL;

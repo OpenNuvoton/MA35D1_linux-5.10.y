@@ -780,6 +780,9 @@ config CRYPTO_DEV_NUVOTON
 	select CRYPTO_AEAD
 	select CRYPTO_BLKCIPHER
 	select CRYPTO_SHA256
+	select CRYPTO_SHA512
+	select CRYPTO_SHA3
+	select CRYPTO_HMAC
 
 	help
 	  This driver supports Nuvoton cryptographic hardware accelerator. It supports AES
@@ -792,6 +795,9 @@ config CRYPTO_DEV_MA35D0
 	select CRYPTO_AEAD
 	select CRYPTO_BLKCIPHER
 	select CRYPTO_SHA256
+	select CRYPTO_SHA512
+	select CRYPTO_SHA3
+	select CRYPTO_HMAC
 
 	help
 	  This driver supports Nuvoton cryptographic hardware accelerator. It supports AES
@@ -804,6 +810,9 @@ config CRYPTO_DEV_MA35H0
 	select CRYPTO_AEAD
 	select CRYPTO_BLKCIPHER
 	select CRYPTO_SHA256
+	select CRYPTO_SHA512
+	select CRYPTO_SHA3
+	select CRYPTO_HMAC
 
 	help
 	  This driver supports Nuvoton cryptographic hardware accelerator. It supports AES
