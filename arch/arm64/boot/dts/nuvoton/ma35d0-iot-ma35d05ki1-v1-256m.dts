@@ -90,6 +90,98 @@
 	pinctrl-0 = <&pinctrl_qspi0>;
 };
 
+/*
+ * CON2 and CON3 expose these interfaces without populated peripherals.
+ * Keep the controllers disabled until the required external device or CAN
+ * transceiver is connected.
+ */
+&adc0 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc0>;
+	/delete-property/ enable-ts;
+	/delete-property/ ts-type;
+};
+
+&i2c4 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c4>;
+};
+
+&i2c5 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c5>;
+};
+
+&uart4 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart4>;
+};
+
+&uart5 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart5>;
+};
+
+&uart7 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart7>;
+};
+
+&uart9 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart9>;
+};
+
+&uart13 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart13>;
+};
+
+&can0 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_can0>;
+};
+
+&can1 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_can1>;
+};
+
+&can2 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_can2>;
+};
+
+&can3 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_can3>;
+};
+
+&rtc {
+	status = "okay";
+};
+
+/* Enable a watchdog only when the system has a watchdog service policy. */
+&wdt1 {
+	status = "disabled";
+};
+
+&wwdt1 {
+	status = "disabled";
+};
+
 &pinctrl {
 	gmac0 {
 		pinctrl_gmac0: gmac0grp{
@@ -116,6 +208,104 @@
 			nuvoton,pins =
 				<SYS_GPL_MFPH_PL12MFP_HSUSBH_PWREN	&pcfg_default>,
 				<SYS_GPL_MFPH_PL13MFP_HSUSBH_OVC	&pcfg_default>;
+		};
+	};
+
+	adc0 {
+		pinctrl_adc0: adc0grp {
+			nuvoton,pins =
+				<SYS_GPB_MFPH_PB10MFP_ADC0_CH2	&pcfg_default>,
+				<SYS_GPB_MFPH_PB11MFP_ADC0_CH3	&pcfg_default>;
+		};
+	};
+
+	i2c4 {
+		pinctrl_i2c4: i2c4grp {
+			nuvoton,pins =
+				<SYS_GPC_MFPL_PC0MFP_I2C4_SDA	&pcfg_default>,
+				<SYS_GPC_MFPL_PC1MFP_I2C4_SCL	&pcfg_default>;
+		};
+	};
+
+	i2c5 {
+		pinctrl_i2c5: i2c5grp {
+			nuvoton,pins =
+				<SYS_GPC_MFPL_PC4MFP_I2C5_SDA	&pcfg_default>,
+				<SYS_GPC_MFPL_PC5MFP_I2C5_SCL	&pcfg_default>;
+		};
+	};
+
+	uart4 {
+		pinctrl_uart4: uart4grp {
+			nuvoton,pins =
+				<SYS_GPI_MFPH_PI8MFP_UART4_nCTS	&pcfg_default>,
+				<SYS_GPI_MFPH_PI9MFP_UART4_nRTS	&pcfg_default>,
+				<SYS_GPI_MFPH_PI10MFP_UART4_RXD	&pcfg_default>,
+				<SYS_GPI_MFPH_PI11MFP_UART4_TXD	&pcfg_default>;
+		};
+	};
+
+	uart5 {
+		pinctrl_uart5: uart5grp {
+			nuvoton,pins =
+				<SYS_GPG_MFPL_PG6MFP_UART5_RXD	&pcfg_default>,
+				<SYS_GPG_MFPL_PG7MFP_UART5_TXD	&pcfg_default>;
+		};
+	};
+
+	uart7 {
+		pinctrl_uart7: uart7grp {
+			nuvoton,pins =
+				<SYS_GPL_MFPH_PL14MFP_UART7_RXD	&pcfg_default>,
+				<SYS_GPG_MFPL_PG0MFP_UART7_TXD	&pcfg_default>;
+		};
+	};
+
+	uart9 {
+		pinctrl_uart9: uart9grp {
+			nuvoton,pins =
+				<SYS_GPG_MFPL_PG2MFP_UART9_RXD	&pcfg_default>,
+				<SYS_GPG_MFPL_PG3MFP_UART9_TXD	&pcfg_default>;
+		};
+	};
+
+	uart13 {
+		pinctrl_uart13: uart13grp {
+			nuvoton,pins =
+				<SYS_GPK_MFPL_PK4MFP_UART13_RXD	&pcfg_default>,
+				<SYS_GPG_MFPH_PG10MFP_UART13_TXD	&pcfg_default>;
+		};
+	};
+
+	can0 {
+		pinctrl_can0: can0grp {
+			nuvoton,pins =
+				<SYS_GPC_MFPL_PC2MFP_CAN0_RXD	&pcfg_default>,
+				<SYS_GPC_MFPL_PC3MFP_CAN0_TXD	&pcfg_default>;
+		};
+	};
+
+	can1 {
+		pinctrl_can1: can1grp {
+			nuvoton,pins =
+				<SYS_GPC_MFPL_PC6MFP_CAN1_RXD	&pcfg_default>,
+				<SYS_GPC_MFPL_PC7MFP_CAN1_TXD	&pcfg_default>;
+		};
+	};
+
+	can2 {
+		pinctrl_can2: can2grp {
+			nuvoton,pins =
+				<SYS_GPA_MFPH_PA15MFP_CAN2_RXD	&pcfg_default>,
+				<SYS_GPG_MFPL_PG1MFP_CAN2_TXD	&pcfg_default>;
+		};
+	};
+
+	can3 {
+		pinctrl_can3: can3grp {
+			nuvoton,pins =
+				<SYS_GPG_MFPH_PG8MFP_CAN3_RXD	&pcfg_default>,
+				<SYS_GPG_MFPH_PG9MFP_CAN3_TXD	&pcfg_default>;
 		};
 	};
 
