@@ -173,7 +173,7 @@ static void ma35d0_Rx_dma_callback(void *arg)
 {
 	struct ma35d0_dma_done *done = arg;
 	struct uart_ma35d0_port *p;
-	struct ma35d0_ip_rx_dma *pdma_rx;
+	struct ma35_ip_rx_dma *pdma_rx;
 	struct tty_port *tty_port;
 	struct dma_tx_state state = { 0 };
 	enum dma_status status;
