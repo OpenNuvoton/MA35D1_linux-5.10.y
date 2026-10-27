@@ -20,7 +20,7 @@
 #include <dt-bindings/pinctrl/ma35d1-pinfunc.h>
 
 / {
-	compatible = "nuvoton,ma35d1";
+	compatible = "nuvoton,ma35d05k", "nuvoton,ma35d1";
 	interrupt-parent = <&gic>;
 	#address-cells = <2>;
 	#size-cells = <2>;
@@ -63,8 +63,8 @@
 	a35_opp_table: opp-table {
 		compatible = "operating-points-v2";
 		opp-shared;
-		opp-800000000 {
-			opp-hz = /bits/ 64 <800000000>;
+		opp-650000000 {
+			opp-hz = /bits/ 64 <650000000>;
 			opp-microvolt = <1250000>;
 		};
 	};
@@ -93,7 +93,7 @@
 		assigned-clocks = <&clk CAPLL>,
 				<&clk DDRPLL>, <&clk APLL>,
 				<&clk EPLL>, <&clk VPLL>;
-		assigned-clock-rates =<800000000>,
+		assigned-clock-rates = <650000000>,
 				<266000000>, <200000000>,
 				<500000000>, <102000000>;
 		clock-pll-mode = <0>, <1>, <0>, <2>, <0>;

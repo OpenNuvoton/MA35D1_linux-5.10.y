@@ -12,6 +12,7 @@
 #include <linux/clk.h>
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
+#include <linux/err.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
@@ -31,44 +32,63 @@ static struct cpufreq_frequency_table ma35d1_freq_table[] = {
 	{0, 0, CPUFREQ_TABLE_END},
 };
 
+static struct cpufreq_frequency_table ma35d05k_freq_table[] = {
+	{ 0, 0x000006A2, 650000 },
+	{ 0, 0x00001396, 600000 },
+	{ 0, 0x0000137D, 500000 },
+	{ 0, 0x0000237D, 250000 },
+	{ 0, 0x0000337D, 125000 },
+	{ 0, 0, CPUFREQ_TABLE_END },
+};
+
+struct ma35d1_cpufreq_soc_data {
+	struct cpufreq_frequency_table *freq_table;
+};
+
+static const struct ma35d1_cpufreq_soc_data ma35d1_soc_data = {
+	.freq_table = ma35d1_freq_table,
+};
+
+static const struct ma35d1_cpufreq_soc_data ma35d05k_soc_data = {
+	.freq_table = ma35d05k_freq_table,
+};
+
 static struct regmap *clk_regmap;
 static struct platform_device *cpufreq_pdev;
+static const struct ma35d1_cpufreq_soc_data *soc_data;
 
 static int ma35d1_cpufreq_set_target(struct cpufreq_policy *policy, unsigned int index)
 {
 	unsigned int freq;
 	struct arm_smccc_res res;
 
-	freq = ma35d1_freq_table[index].frequency / 1000;
+	freq = soc_data->freq_table[index].frequency / 1000;
 	arm_smccc_smc(MA35D1_SIP_CPU_CLK, freq, 0, 0, 0, 0, 0, 0, &res);
-	// printk("%s - index=%d, set CPU to %d MHz, CAP-PLL should be 0x%x\n",
-	//	  __func__, index, freq, ma35d1_freq_table[index].driver_data);
-	return 0;
+	return res.a0 ? -EIO : 0;
 }
 
 static unsigned int ma35d1_cpufreq_get(unsigned int cpu)
 {
-	u32 capll, idx, freq = 800000;
+	struct cpufreq_frequency_table *freq_table = soc_data->freq_table;
+	u32 capll, idx;
+	int ret;
 
-	regmap_read(clk_regmap, 0x60, &capll);
+	ret = regmap_read(clk_regmap, 0x60, &capll);
+	if (ret)
+		return 0;
 	// printk("%s - capll is 0x%x\n", __func__, capll);
 
-	for (idx = 0; idx < ARRAY_SIZE(ma35d1_freq_table); idx++) {
-		if (ma35d1_freq_table[idx].frequency == CPUFREQ_TABLE_END)
-			break;
-		if (capll == ma35d1_freq_table[idx].driver_data) {
-			freq = ma35d1_freq_table[idx].frequency;
-			break;
-		}
+	for (idx = 0; freq_table[idx].frequency != CPUFREQ_TABLE_END; idx++) {
+		if (capll == freq_table[idx].driver_data)
+			return freq_table[idx].frequency;
 	}
-	return freq;
+
+	return 0;
 }
 
 static int ma35d1_cpufreq_init(struct cpufreq_policy *policy)
 {
-	cpufreq_generic_init(policy, ma35d1_freq_table, TRANSITION_LATENCY);
-	policy->max = 800000;
-	policy->min = 125000;
+	cpufreq_generic_init(policy, soc_data->freq_table, TRANSITION_LATENCY);
 	return 0;
 }
 
@@ -109,7 +129,8 @@ static struct platform_driver ma35d1_cpufreq_platdrv = {
 
 /* List of machines supported by this driver */
 static const struct of_device_id ma35d1_cpufreq_machines[] __initconst = {
-	{ .compatible = "nuvoton,ma35d1", },
+	{ .compatible = "nuvoton,ma35d05k", .data = &ma35d05k_soc_data },
+	{ .compatible = "nuvoton,ma35d1", .data = &ma35d1_soc_data },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ma35d1_cpufreq_machines);
@@ -130,10 +151,15 @@ static int __init ma35d1_cpufreq_driver_init(void)
 		pr_debug("Machine is not compatible with ma35d1-cpufreq\n");
 		return -ENODEV;
 	}
+	soc_data = match->data;
+	if (!soc_data)
+		return -EINVAL;
 
 	clk_regmap = syscon_regmap_lookup_by_compatible("nuvoton,ma35d1-clk");
-	if (!clk_regmap)
-		pr_debug("Failed to get nuvoton,ma35d1-clk regmap!\n");
+	if (IS_ERR(clk_regmap)) {
+		pr_err("Failed to get nuvoton,ma35d1-clk regmap!\n");
+		return PTR_ERR(clk_regmap);
+	}
 
 	err = platform_driver_register(&ma35d1_cpufreq_platdrv);
 	if (err)

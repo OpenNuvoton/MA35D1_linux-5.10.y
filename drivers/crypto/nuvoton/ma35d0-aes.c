@@ -345,6 +345,10 @@ static int ma35d0_aes_dma_start(struct nu_aes_dev *dd, int err)
 	u32 *iv = (u32 *)req->iv;
 	int i;
 
+	/* ECB has no IV: req->iv may be ZERO_SIZE_PTR. */
+	if ((ctx->mode & AES_CTL_OPMODE_MASK) == AES_MODE_ECB)
+		iv = NULL;
+
 	if ((req->cryptlen == 0) || (req->src == NULL) || (req->dst == NULL))
 		return ma35d0_aes_complete(dd, 0);  /* no data */
 

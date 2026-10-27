@@ -543,6 +543,7 @@ struct nu_ecc_dev {
 	struct nu_crypto_dev	*nu_cdev;
 	void __iomem		*reg_base;
 	spinlock_t		lock;
+	struct mutex		io_lock;	/* serializes users of va_shm and the TEE session */
 
 	/*
 	 * for optee client driver
