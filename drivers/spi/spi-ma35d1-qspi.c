@@ -9,6 +9,10 @@
  */
 
 #include <linux/clk.h>
+#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
+#include <linux/jiffies.h>
+#include <linux/slab.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
@@ -118,11 +122,8 @@ struct nuvoton_spi {
 	struct spi_master               *master;
 	struct device                   *dev;
 	struct nuvoton_qspi_info	*pdata;
-#ifdef CONFIG_PREEMPT_RT
+	/* Serialize SPI-mem operations; PDMA waits may sleep. */
 	struct mutex                    lock;
-#else
-	spinlock_t                      lock;
-#endif
 	struct resource                 *res;
 	struct ma35d1_dma_done          dma_slave_rxdone;
 	struct ma35d1_dma_done          dma_slave_txdone;
@@ -133,6 +134,7 @@ struct nuvoton_spi {
 	struct wait_queue_head          slave_rxdone;
 	unsigned int                    phyaddr;
 	unsigned int			cur_speed_hz;
+	unsigned int			last_xfer_len;
 };
 
 static inline struct nuvoton_spi *to_hw(struct spi_device *sdev)
@@ -146,8 +148,8 @@ static void ma35d1_slave_txdma_callback(void *arg)
 	struct ma35d1_dma_done *done = &hw->dma_slave_txdone;
 
 	done->done = true;
-	hw->slave_txdone_state = 1;
-	wake_up_interruptible(&hw->slave_txdone);
+	WRITE_ONCE(hw->slave_txdone_state, 1);
+	wake_up(&hw->slave_txdone);
 }
 
 static void ma35d1_slave_rxdma_callback(void *arg)
@@ -156,8 +158,8 @@ static void ma35d1_slave_rxdma_callback(void *arg)
 	struct ma35d1_dma_done *done = &hw->dma_slave_rxdone;
 
 	done->done = true;
-	hw->slave_rxdone_state = 1;
-	wake_up_interruptible(&hw->slave_rxdone);
+	WRITE_ONCE(hw->slave_rxdone_state, 1);
+	wake_up(&hw->slave_rxdone);
 }
 
 static int nuvoton_spi_clk_enable(struct nuvoton_spi *nuvoton)
@@ -341,11 +343,7 @@ static int nuvoton_spi_setupxfer(struct spi_device *spi)
 
 static void nuvoton_spi_hw_init(struct nuvoton_spi *hw)
 {
-#ifdef CONFIG_PREEMPT_RT
 	mutex_init(&hw->lock);
-#else
-	spin_lock_init(&hw->lock);
-#endif
 	if (hw->pdata->spimode & SPI_CPOL)
 		hw->pdata->clkpol = 1;
 	else
@@ -408,16 +406,66 @@ static inline void hw_rx(struct nuvoton_spi *hw, unsigned int data, int count)
 		rx_int[count] = data;
 }
 
+/* The callback's state may also carry a negative controller-specific error. */
+static int nuvoton_spi_dma_wait(struct nuvoton_spi *hw,
+			       wait_queue_head_t *queue, int *state,
+			       const char *direction)
+{
+	long timeout;
+	int status;
+
+	timeout = wait_event_killable_timeout(*queue,
+					   READ_ONCE(*state) != 0,
+					   msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS));
+	if (!timeout) {
+		dev_err(hw->dev, "QSPI %s DMA timeout: STATUS=0x%08x, len=%u\n",
+			direction, __raw_readl(hw->regs + REG_STATUS),
+			hw->last_xfer_len);
+		return -ETIMEDOUT;
+	}
+
+	if (timeout < 0) {
+		dev_err(hw->dev, "QSPI %s DMA wait interrupted: %ld\n",
+			direction, timeout);
+		return (int)timeout;
+	}
+
+	status = READ_ONCE(*state);
+	if (status < 0) {
+		dev_err(hw->dev, "QSPI %s DMA completion error: %d\n",
+			direction, status);
+		return status;
+	}
+
+	return 0;
+}
+
+/* Return to the baseline 8-bit PIO transfer configuration. */
+static void nuvoton_spi_pdma_restore(struct nuvoton_spi *hw)
+{
+	u32 ctl;
+
+	ctl = __raw_readl(hw->regs + REG_CTL);
+	__raw_writel(ctl & ~SPIEN, hw->regs + REG_CTL);
+	__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) &
+		     ~(TXPDMAEN | RXPDMAEN), hw->regs + REG_PDMACTL);
+
+	ctl = __raw_readl(hw->regs + REG_CTL);
+	ctl &= ~(DWIDTH_MASK | BYTE_REORDER | QUADIOEN | DATDIR);
+	ctl |= 8 << DWIDTH_POS;
+	__raw_writel(ctl, hw->regs + REG_CTL);
+	__raw_writel(ctl | SPIEN, hw->regs + REG_CTL);
+}
+
 static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 				void *rxbuf, unsigned int len)
 {
 	struct ma35d1_ip_dma *pdma = &hw->dma;
-	struct ma35d1_peripheral pcfg;
-	unsigned int  non_tx_align_len = 0;
-	unsigned int  non_rx_align_len = 0;
+	struct ma35d1_peripheral pcfg = { 0 };
 	unsigned long end;
 	unsigned int  i;
 
+	hw->last_xfer_len = len;
 	__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
 	end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
 	while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {
@@ -466,188 +514,224 @@ static int nuvoton_spi_data_xfer(struct nuvoton_spi *hw, const void *txbuf,
 			}
 
 		} else { /* Long length transfer by PDMA */
+			const void *dma_txbuf = txbuf;
+			void *dummy_txbuf = NULL;
+			dma_cookie_t cookie;
+			bool tx_mapped = false, rx_mapped = false;
+			bool tx_started = false, rx_started = false;
+			bool width_4;
 			int pdma_en = 0;
-			int ret;
-			int tx_dummy = 0;
+			int tx_ret = 0, rx_ret = 0;
+			int term_ret;
+			int ret = 0;
 
-			if (txbuf == NULL) {
-				tx_dummy = 1;
-				txbuf = (void *)(kmalloc(len, GFP_KERNEL));
+			/* RX needs dummy TX data to generate SPI clocks. */
+			if (!dma_txbuf) {
+				dummy_txbuf = kzalloc(len, GFP_KERNEL);
+				if (!dummy_txbuf)
+					return -ENOMEM;
+				dma_txbuf = dummy_txbuf;
 			}
 
 			end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
-			__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) | (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
+			__raw_writel(__raw_readl(hw->regs + REG_FIFOCTL) |
+				     (TXFBCLR | RXFBCLR), hw->regs + REG_FIFOCTL);
 			while (__raw_readl(hw->regs + REG_STATUS) & FIFOCLR) {
-				if (time_after(jiffies, end)) {
-					printk("SPI FIFOCLR timeout: %d\n", __LINE__);
-					return -ETIMEDOUT;
+				if (time_after_eq(jiffies, end)) {
+					dev_err(hw->dev,
+						"QSPI PDMA FIFO clear timeout: STATUS=0x%08x, len=%u\n",
+						__raw_readl(hw->regs + REG_STATUS), len);
+					ret = -ETIMEDOUT;
+					goto pdma_cleanup;
 				}
 			}
 
-			non_rx_align_len = 0;
-			non_tx_align_len = 0;
-			/* Transfer the rest data starting at alignment address by PDMA */
+			width_4 = !(len & 3) &&
+				  !((unsigned long)dma_txbuf & 3) &&
+				  (!rxbuf || !((unsigned long)rxbuf & 3));
+
+			/* Set completion states before issuing either DMA descriptor. */
+			WRITE_ONCE(hw->slave_txdone_state, 0);
+			WRITE_ONCE(hw->slave_rxdone_state, 0);
+			hw->dma_slave_txdone.done = false;
+			hw->dma_slave_rxdone.done = false;
+
 			if (rxbuf) {
-
-				/* prepare the RX dma transfer */
 				sg_init_table(&pdma->sgrx, 1);
-				pdma->slave_config.src_addr = (hw->phyaddr + REG_RX);
+				pdma->slave_config.src_addr = hw->phyaddr + REG_RX;
+				pdma->slave_config.src_addr_width = width_4 ?
+					DMA_SLAVE_BUSWIDTH_4_BYTES :
+					DMA_SLAVE_BUSWIDTH_1_BYTE;
+				/*
+				 * The Linux 5.10 PDMA provider expects transfer COUNT
+				 * here, not the standard DMAengine byte length. Keep this
+				 * legacy convention until both drivers change together.
+				 */
+				pdma->sgrx.dma_length = width_4 ? len >> 2 : len;
 
-				if (((len % 4) == 0) && (((unsigned long)rxbuf % 4) == 0) &&
-					((txbuf == NULL) || (((unsigned long)txbuf % 4) == 0))) {
-					pdma->slave_config.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-					pdma->sgrx.dma_length = (len - non_rx_align_len) >> 2; /* divide 4 */
-					__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK))
-						| BYTE_REORDER), hw->regs + REG_CTL); //32 bits, byte reorder
-
-				} else {
-					pdma->slave_config.src_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
-					pdma->sgrx.dma_length = len;
-				}
-
-				dmaengine_terminate_all(pdma->chan_rx);
 				pdma->slave_config.direction = DMA_DEV_TO_MEM;
 				pcfg.reqsel = hw->pdata->pdma_reqsel_rx;
 				pdma->slave_config.peripheral_config = &pcfg;
 				pdma->slave_config.peripheral_size = sizeof(pcfg);
-				dmaengine_slave_config(pdma->chan_rx, &(pdma->slave_config));
+				ret = dmaengine_slave_config(pdma->chan_rx,
+							     &pdma->slave_config);
+				if (ret) {
+					dev_err(hw->dev, "QSPI RX DMA config failed: %d\n", ret);
+					goto pdma_cleanup;
+				}
 
-
-				/* Map rxbuf to physical address including non-alignment part */
-				pdma->sgrx.dma_address = dma_map_single(hw->dev,
-									(void *)(rxbuf),
-									len, DMA_FROM_DEVICE);
-				if (dma_mapping_error(hw->dev, pdma->sgrx.dma_address))
-					dev_err(hw->dev, "tx dma map error\n");
-
-				/* Adjust physical address that skip non-alignment part */
-				pdma->sgrx.dma_address += non_rx_align_len;
+				pdma->sgrx.dma_address = dma_map_single(hw->dev, rxbuf,
+								   len, DMA_FROM_DEVICE);
+				if (dma_mapping_error(hw->dev, pdma->sgrx.dma_address)) {
+					dev_err(hw->dev, "QSPI RX DMA mapping failed\n");
+					ret = -ENOMEM;
+					goto pdma_cleanup;
+				}
+				rx_mapped = true;
 
 				pdma->rxdesc = dmaengine_prep_slave_sg(pdma->chan_rx,
-									&pdma->sgrx,
-									1,
-									DMA_FROM_DEVICE,
-									DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+									 &pdma->sgrx, 1,
+									 DMA_DEV_TO_MEM,
+									 DMA_PREP_INTERRUPT |
+									 DMA_CTRL_ACK);
 				if (!pdma->rxdesc) {
-					dev_err(hw->dev, "pdma->rxdesc=NULL\n");
-					BUG();
+					dev_err(hw->dev, "QSPI RX DMA descriptor failed\n");
+					ret = -EIO;
+					goto pdma_cleanup;
 				}
-				hw->dma_slave_rxdone.done = false;
+
 				pdma->rxdesc->callback = ma35d1_slave_rxdma_callback;
 				pdma->rxdesc->callback_param = hw;
-				dmaengine_submit(pdma->rxdesc);
-				dma_async_issue_pending(pdma->chan_rx);
-
-			} /* rxbuf */
-
-			if (txbuf) {
-				/* prepare the TX dma transfer */
-				sg_init_table(&pdma->sgtx, 1);
-				pdma->slave_config.dst_addr = (hw->phyaddr + REG_TX);
-				if (((len % 4) == 0) && (((unsigned long)txbuf % 4) == 0) &&
-					((rxbuf == NULL) || (((unsigned long)rxbuf % 4) == 0))) {
-					pdma->slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-					pdma->sgtx.dma_length = (len - non_tx_align_len) >> 2; /* divide 4 */
-					__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK))
-						| BYTE_REORDER), hw->regs + REG_CTL); //32 bits, byte reorder
-				} else {
-					pdma->slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
-					pdma->sgtx.dma_length = len;
+				cookie = dmaengine_submit(pdma->rxdesc);
+				ret = dma_submit_error(cookie);
+				if (ret) {
+					dev_err(hw->dev, "QSPI RX DMA submit failed: %d\n", ret);
+					goto pdma_cleanup;
 				}
+				rx_started = true;
+				dma_async_issue_pending(pdma->chan_rx);
+				pdma_en |= RXPDMAEN;
+			}
 
-				dmaengine_terminate_all(pdma->chan_tx);
+			if (dma_txbuf) {
+				sg_init_table(&pdma->sgtx, 1);
+				pdma->slave_config.dst_addr = hw->phyaddr + REG_TX;
+				pdma->slave_config.dst_addr_width = width_4 ?
+					DMA_SLAVE_BUSWIDTH_4_BYTES :
+					DMA_SLAVE_BUSWIDTH_1_BYTE;
+				pdma->sgtx.dma_length = width_4 ? len >> 2 : len;
+
 				pdma->slave_config.direction = DMA_MEM_TO_DEV;
 				pcfg.reqsel = hw->pdata->pdma_reqsel_tx;
 				pdma->slave_config.peripheral_config = &pcfg;
 				pdma->slave_config.peripheral_size = sizeof(pcfg);
-				dmaengine_slave_config(pdma->chan_tx, &(pdma->slave_config));
+				ret = dmaengine_slave_config(pdma->chan_tx,
+							     &pdma->slave_config);
+				if (ret) {
+					dev_err(hw->dev, "QSPI TX DMA config failed: %d\n", ret);
+					goto pdma_cleanup;
+				}
 
-				/* Map t->tx_buf to physical address including non-alignment part */
 				pdma->sgtx.dma_address = dma_map_single(hw->dev,
-									(void *)txbuf,
-									len, DMA_TO_DEVICE);
-				if (dma_mapping_error(hw->dev, pdma->sgtx.dma_address))
-					dev_err(hw->dev, "tx dma map error\n");
-
-				/* Adjust physical address that skip non-alignment part */
-				pdma->sgtx.dma_address += non_tx_align_len;
-				dma_sync_single_for_device(hw->dev, pdma->sgtx.dma_address - non_tx_align_len, len, DMA_TO_DEVICE);
+									   (void *)dma_txbuf,
+									   len, DMA_TO_DEVICE);
+				if (dma_mapping_error(hw->dev, pdma->sgtx.dma_address)) {
+					dev_err(hw->dev, "QSPI TX DMA mapping failed\n");
+					ret = -ENOMEM;
+					goto pdma_cleanup;
+				}
+				tx_mapped = true;
 
 				pdma->txdesc = dmaengine_prep_slave_sg(pdma->chan_tx,
-									&pdma->sgtx,
-									1,
-									DMA_TO_DEVICE,
-									DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+									 &pdma->sgtx, 1,
+									 DMA_MEM_TO_DEV,
+									 DMA_PREP_INTERRUPT |
+									 DMA_CTRL_ACK);
 				if (!pdma->txdesc) {
-					dev_err(hw->dev, "pdma->txdex=NULL\n");
-					BUG();
+					dev_err(hw->dev, "QSPI TX DMA descriptor failed\n");
+					ret = -EIO;
+					goto pdma_cleanup;
 				}
 
 				pdma->txdesc->callback = ma35d1_slave_txdma_callback;
 				pdma->txdesc->callback_param = hw;
-				dmaengine_submit(pdma->txdesc);
+				cookie = dmaengine_submit(pdma->txdesc);
+				ret = dma_submit_error(cookie);
+				if (ret) {
+					dev_err(hw->dev, "QSPI TX DMA submit failed: %d\n", ret);
+					goto pdma_cleanup;
+				}
+				tx_started = true;
 				dma_async_issue_pending(pdma->chan_tx);
-
-			} /* txbuf */
-
-			/* Trigger PDMA */
-			if (rxbuf) {
-				pdma_en |= RXPDMAEN;
-				hw->slave_rxdone_state = 0;
-			}
-
-			if (txbuf) {
-				hw->slave_txdone_state = 0;
 				pdma_en |= TXPDMAEN;
 			}
 
+			if (width_4)
+				__raw_writel((__raw_readl(hw->regs + REG_CTL) &
+					      ~DWIDTH_MASK) | BYTE_REORDER,
+					     hw->regs + REG_CTL);
+
 			__raw_writel(UNITIF, hw->regs + REG_STATUS);
-			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) | (pdma_en),
-						hw->regs + REG_PDMACTL); //Enable SPIx PDMA
+			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) | pdma_en,
+				     hw->regs + REG_PDMACTL);
 
-			if (txbuf) {
-				ret = wait_event_interruptible_timeout(hw->slave_txdone, hw->slave_txdone_state != 0,
-								 msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS));
-				if (!ret)
-					printk("\n\nSPI DMA TIMEOUT - %d\n", __LINE__);
-				hw->slave_txdone_state = 0;
-			}
-			if (rxbuf) {
-				ret = wait_event_interruptible_timeout(hw->slave_rxdone, hw->slave_rxdone_state != 0,
-								 msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS));
-				if (!ret)
-					printk("\n\nSPI DMA TIMEOUT - %d\n", __LINE__);
-				hw->slave_rxdone_state = 0;
-			}
+			if (tx_started)
+				tx_ret = nuvoton_spi_dma_wait(hw, &hw->slave_txdone,
+							    &hw->slave_txdone_state, "TX");
 
-			end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
-			while (__raw_readl(hw->regs + REG_STATUS) & BUSY) {
-				if (time_after(jiffies, end)) {
-					printk("SPI PDMA BUSY timeout: %d\n", __LINE__);
-					return -ETIMEDOUT;
+			/* Fatal-signal interruption should begin DMA recovery promptly. */
+			if (rx_started && tx_ret != -ERESTARTSYS && tx_ret != -EINTR)
+				rx_ret = nuvoton_spi_dma_wait(hw, &hw->slave_rxdone,
+							    &hw->slave_rxdone_state, "RX");
+
+			/* Keep TX/RX errors independent: successful RX must not mask TX. */
+			if (tx_ret)
+				ret = tx_ret;
+			else if (rx_ret)
+				ret = rx_ret;
+
+			if (!ret) {
+				end = jiffies + msecs_to_jiffies(SPI_GENERAL_TIMEOUT_MS);
+				while (__raw_readl(hw->regs + REG_STATUS) & BUSY) {
+					if (time_after_eq(jiffies, end)) {
+						dev_err(hw->dev,
+							"QSPI PDMA BUSY timeout: STATUS=0x%08x, len=%u\n",
+							__raw_readl(hw->regs + REG_STATUS), len);
+						ret = -ETIMEDOUT;
+						break;
+					}
 				}
 			}
 
-			__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~SPIEN), hw->regs + REG_CTL); //Disable SPIEN
-			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) & ~(TXPDMAEN | RXPDMAEN),
-					hw->regs + REG_PDMACTL); //Disable SPIx TX/RX PDMA
-			__raw_writel(((__raw_readl(hw->regs + REG_CTL) & ~(DWIDTH_MASK | BYTE_REORDER))
-					| (8 << DWIDTH_POS)), hw->regs + REG_CTL); //8 bits, no byte reorder
-			__raw_writel((__raw_readl(hw->regs + REG_CTL) & ~(QUADIOEN | DATDIR)),
-					hw->regs + REG_CTL); //Disable Quad mode, direction input
-			__raw_writel((__raw_readl(hw->regs + REG_CTL) | SPIEN), hw->regs + REG_CTL); //Enable SPIEN
-
-			/* unmap buffers if mapped above, restore map address that includes non-alignment part */
-			if (rxbuf)
-				dma_unmap_single(hw->dev, pdma->sgrx.dma_address - non_rx_align_len, len,
-						DMA_FROM_DEVICE);
-			if (txbuf) {
-				dma_unmap_single(hw->dev, pdma->sgtx.dma_address - non_tx_align_len, len,
-						DMA_TO_DEVICE);
-
-				if (tx_dummy == 1)
-					kfree((void *)txbuf);
+pdma_cleanup:
+			/* Stop QSPI requests before terminating incomplete PDMA work. */
+			__raw_writel(__raw_readl(hw->regs + REG_PDMACTL) &
+				     ~(TXPDMAEN | RXPDMAEN), hw->regs + REG_PDMACTL);
+			if (ret) {
+				if (tx_started) {
+					term_ret = dmaengine_terminate_sync(pdma->chan_tx);
+					if (term_ret)
+						dev_err(hw->dev, "QSPI TX DMA terminate failed: %d\n",
+							term_ret);
+				}
+				if (rx_started) {
+					term_ret = dmaengine_terminate_sync(pdma->chan_rx);
+					if (term_ret)
+						dev_err(hw->dev, "QSPI RX DMA terminate failed: %d\n",
+							term_ret);
+				}
 			}
+
+			nuvoton_spi_pdma_restore(hw);
+			if (rx_mapped)
+				dma_unmap_single(hw->dev, pdma->sgrx.dma_address,
+							 len, DMA_FROM_DEVICE);
+			if (tx_mapped)
+				dma_unmap_single(hw->dev, pdma->sgtx.dma_address,
+							 len, DMA_TO_DEVICE);
+			kfree(dummy_txbuf);
+			return ret;
+
 		}
 
 	} else { /* hw->pdata->use_pdma = 0 */
@@ -727,7 +811,10 @@ static void nuvoton_spi_set_cs(struct spi_device *spi, bool lvl)
 	end = jiffies + msecs_to_jiffies(3000);
 	while (__raw_readl(nuvoton->regs + REG_STATUS) & BUSY) {
 		if (time_after(jiffies, end)) {
-			printk("SPI BUSY timeout: %d, %s - %d\n", __LINE__, __func__, lvl);
+			dev_err(nuvoton->dev,
+				"QSPI CS BUSY timeout: STATUS=0x%08x, last transfer len=%u, cs=%u, level=%d\n",
+				__raw_readl(nuvoton->regs + REG_STATUS),
+				nuvoton->last_xfer_len, spi->chip_select, lvl);
 			return;
 		}
 	}
@@ -833,12 +920,7 @@ static int nuvoton_spi_mem_exec_op(struct spi_mem *mem,
 	int i, ret;
 	u8 addr[8];
 
-#ifdef CONFIG_PREEMPT_RT
 	mutex_lock(&nuvoton->lock);
-#else
-	unsigned long flags;
-	spin_lock_irqsave(&nuvoton->lock, flags);
-#endif
 	ret = nuvoton_spi_set_freq(nuvoton, mem->spi->max_speed_hz);
 	if (ret) {
 		printk("nuvoton_spi_set_freq failed!\n");
@@ -894,17 +976,13 @@ static int nuvoton_spi_mem_exec_op(struct spi_mem *mem,
 					op->data.buf.in : NULL,
 					op->data.nbytes);
 
-	__raw_writel((__raw_readl(nuvoton->regs + REG_CTL) & ~(QUADIOEN | DATDIR)),
-			nuvoton->regs + REG_CTL); //Restore to single mode, direction input
 out:
-
+	/* Restore normal bus width even when command/address/dummy fails. */
+	__raw_writel(__raw_readl(nuvoton->regs + REG_CTL) &
+		     ~(QUADIOEN | DATDIR), nuvoton->regs + REG_CTL);
 	nuvoton_spi_set_cs(mem->spi, 1); //Deactivate CS
 
-#ifdef CONFIG_PREEMPT_RT
 	mutex_unlock(&nuvoton->lock);
-#else
-	spin_unlock_irqrestore(&nuvoton->lock, flags);
-#endif
 	return ret;
 }
 
