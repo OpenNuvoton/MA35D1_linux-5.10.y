@@ -865,7 +865,6 @@ static int nuvoton_ecc_init_curve(int curve_id, struct nu_ecc_ctx *ctx)
 		pr_err("%s - invalid curve_id %d!\n", __func__, curve_id);
 		return -EINVAL;
 	}
-	ctx->curve_id = curve_id;
 	ctx->curve = curve;
 	ctx->keylen = (curve->key_len + 7) / 8;
 
@@ -989,36 +988,27 @@ static int nuvoton_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf,
 	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
 	struct nu_ecc_dev *dd = nuvoton_ecc_find_dev(ctx);
 	struct ecdh	params;
-	unsigned int	ndigits;
 	int		err;
 
 	ctx->dd = dd;
 	if (!dd->octx)
 		return -ENODEV;
 
-	if (crypto_ecdh_decode_key(buf, len, &params) < 0) {
+	if (crypto_ecdh_decode_key(buf, len, &params) < 0 ||
+	    params.key_size > sizeof(u64) * ctx->ndigits) {
 		pr_err("crypto_ecdh_decode_key failed!\n");
 		return -EINVAL;
 	}
 
-	if (params.curve_id == ECC_CURVE_NIST_P192) {
-		ndigits = 3;
-		err = nuvoton_ecc_init_curve(CURVE_P_192, ctx);
-	} else if (params.curve_id == ECC_CURVE_NIST_P256) {
-		ndigits = 4;
-		err = nuvoton_ecc_init_curve(CURVE_P_256, ctx);
-	} else {
-		pr_err("%s - Invalid curve id!\n", __func__);
-		return -EINVAL;
-	}
+	err = nuvoton_ecc_init_curve(ctx->curve->curve_id, ctx);
 	if (err)
 		return err;
 
 	if (!params.key || !params.key_size)
-		return ecc_gen_privkey(params.curve_id, ndigits,
+		return ecc_gen_privkey(ctx->curve_id, ctx->ndigits,
 					   (u64 *)ctx->private_key);
 
-	if (ecc_is_key_valid(params.curve_id, ndigits,
+	if (ecc_is_key_valid(ctx->curve_id, ctx->ndigits,
 			     (const u64 *)params.key,
 			     params.key_size) < 0) {
 		pr_err("[%s] - input key is invalid!\n", __func__);
@@ -1044,7 +1034,7 @@ static int __nuvoton_ecdh_compute_value(struct kpp_request *req)
 		return -ENODEV;
 
 	ctx->dd = dd;
-	ret = nuvoton_ecc_init_curve(ctx->curve_id, ctx);
+	ret = nuvoton_ecc_init_curve(ctx->curve->curve_id, ctx);
 	if (ret)
 		return ret;
 	nbytes = ctx->keylen;
@@ -1112,15 +1102,52 @@ static unsigned int nuvoton_ecdh_max_size(struct crypto_kpp *tfm)
 	return (ctx->keylen * 2);
 }
 
-static struct kpp_alg nuvoton_ecdh = {
+static int nuvoton_ecdh_p192_init_tfm(struct crypto_kpp *tfm)
+{
+	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
+
+	ctx->curve_id = ECC_CURVE_NIST_P192;
+	ctx->ndigits = 3;
+	ctx->curve = get_curve(CURVE_P_192);
+	return 0;
+}
+
+static int nuvoton_ecdh_p256_init_tfm(struct crypto_kpp *tfm)
+{
+	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
+
+	ctx->curve_id = ECC_CURVE_NIST_P256;
+	ctx->ndigits = 4;
+	ctx->curve = get_curve(CURVE_P_256);
+	return 0;
+}
+
+static struct kpp_alg nuvoton_ecdh_p192 = {
 	.set_secret = nuvoton_ecdh_set_secret,
 	.generate_public_key = nuvoton_ecdh_compute_value,
 	.compute_shared_secret = nuvoton_ecdh_compute_value,
 	.max_size = nuvoton_ecdh_max_size,
+	.init = nuvoton_ecdh_p192_init_tfm,
 	.base = {
 		.cra_flags = CRYPTO_ALG_NEED_FALLBACK,
-		.cra_name = "ecdh",
-		.cra_driver_name = "nuvoton-ecdh",
+		.cra_name = "ecdh-nist-p192",
+		.cra_driver_name = "nuvoton-ecdh-p192",
+		.cra_priority = 400,
+		.cra_module = THIS_MODULE,
+		.cra_ctxsize = sizeof(struct nu_ecc_ctx),
+	},
+};
+
+static struct kpp_alg nuvoton_ecdh_p256 = {
+	.set_secret = nuvoton_ecdh_set_secret,
+	.generate_public_key = nuvoton_ecdh_compute_value,
+	.compute_shared_secret = nuvoton_ecdh_compute_value,
+	.max_size = nuvoton_ecdh_max_size,
+	.init = nuvoton_ecdh_p256_init_tfm,
+	.base = {
+		.cra_flags = CRYPTO_ALG_NEED_FALLBACK,
+		.cra_name = "ecdh-nist-p256",
+		.cra_driver_name = "nuvoton-ecdh-p256",
 		.cra_priority = 400,
 		.cra_module = THIS_MODULE,
 		.cra_ctxsize = sizeof(struct nu_ecc_ctx),
@@ -1601,9 +1628,16 @@ int nuvoton_ecc_probe(struct device *dev,
 	if (nu_cryp_dev->ecc_ioctl == true) {
 		misc_register(&nvt_ecc_dev);
 	} else {
-		err = crypto_register_kpp(&nuvoton_ecdh);
+		err = crypto_register_kpp(&nuvoton_ecdh_p192);
 		if (err) {
-			dev_err(dev, "register ecdh failed\n");
+			dev_err(dev, "register ecdh p192 failed\n");
+			goto err_out;
+		}
+
+		err = crypto_register_kpp(&nuvoton_ecdh_p256);
+		if (err) {
+			dev_err(dev, "register ecdh p256 failed\n");
+			crypto_unregister_kpp(&nuvoton_ecdh_p192);
 			goto err_out;
 		}
 	}
@@ -1630,8 +1664,10 @@ int nuvoton_ecc_remove(struct device *dev,
 
 	if (nu_cryp_dev->ecc_ioctl == true)
 		misc_deregister(&nvt_ecc_dev);
-	else
-		crypto_unregister_kpp(&nuvoton_ecdh);
+	else {
+		crypto_unregister_kpp(&nuvoton_ecdh_p192);
+		crypto_unregister_kpp(&nuvoton_ecdh_p256);
+	}
 
 	spin_lock(&nu_ecc.lock);
 	list_del(&ecc_dd->list);

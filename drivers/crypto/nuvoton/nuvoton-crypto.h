@@ -531,7 +531,8 @@ struct ecc_curve {
 
 struct nu_ecc_ctx {
 	struct nu_ecc_dev  *dd;
-	int	   curve_id;
+	unsigned int	curve_id;	/* ECC_CURVE_NIST_*, ECDH only */
+	unsigned int	ndigits;
 	const struct ecc_curve	*curve;
 	int	   keylen;
 	u8	   private_key[NU_ECC_MAX_LEN];
