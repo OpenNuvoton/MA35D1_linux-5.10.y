@@ -3,9 +3,10 @@
  * Copyright (C) 2021 Nuvoton Technology Corp.
  *
  */
-#ifndef __SOC_MA35d1_SIP_H
+#ifndef __SOC_MA35D1_SIP_H
 #define __SOC_MA35D1_SIP_H
 
+#define MA35D1_SIP_READ_SRAM		0xC2000006
 #define MA35D1_SIP_GET_REGISTER		0xC2000007
 #define MA35D1_SIP_PMIC			0xC2000008
 #define MA35D1_SIP_CPU_CLK		0xC2000009

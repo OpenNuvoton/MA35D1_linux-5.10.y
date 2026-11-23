@@ -42,6 +42,7 @@
 #define FORCE_CHIP_RESET	0x1401
 #define GET_BL2_OFFSET		0x1501
 #define GET_REGISTER		0x1511
+#define GET_SRAM		0x1512
 
 struct ma35d1_misctrl {
 	int minor;
@@ -132,6 +133,13 @@ static long ma35d1_misctrl_ioctl(struct file *file, unsigned int cmd, unsigned l
 
 	case GET_REGISTER:
 		arm_smccc_smc(MA35D1_SIP_GET_REGISTER, arg, 0, 0, 0, 0, 0, 0, &res);
+		return res.a0;
+
+	case GET_SRAM:
+		/* arg is the physical address of a version-info SRAM word. */
+		arm_smccc_smc(MA35D1_SIP_READ_SRAM, arg, 0, 0, 0, 0, 0, 0, &res);
+		if ((long)res.a0 == SMCCC_RET_NOT_SUPPORTED)
+			return -EOPNOTSUPP;
 		return res.a0;
 
 	default:
