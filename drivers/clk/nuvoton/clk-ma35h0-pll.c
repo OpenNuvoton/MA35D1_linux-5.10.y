@@ -191,8 +191,9 @@ static unsigned long ma35h0_pll_frac_mode_find_closest(struct ma35h0_clk_pll *pl
 {
 	unsigned long min_diff = ULONG_MAX;
 	unsigned long fref, fclko_expect, fclko_best;
-	int p, m, n, p_best, m_best, n_best;
+	int p, m, n, p_best = 0, m_best = 0, n_best = 0;
 
+	fclko_best = 0;
 	fref = parent_rate / 1000;
 	fclko_expect = rate / 1000;
 
@@ -222,13 +223,23 @@ static unsigned long ma35h0_pll_frac_mode_find_closest(struct ma35h0_clk_pll *pl
 		}
 	}
 search_done:
+	if (!m_best) {
+		pr_err("MA35 PLL: no valid divider for rate %lu\n", rate);
+		return 0;
+	}
+
 	pr_info("p_best = %d m_best = %d n_best = %d, fclko_best = %ld\n",
 		p_best, m_best, n_best, fclko_best);
 
 	if (pll->mode == VSIPLL_SS_MODE) {
-		unsigned long ssrate, slope;
+		unsigned long ssrate, slope, ssbase;
 
-		ssrate = (fref / m) / ((VSIPLL_MODULATION_FREQ / 1000) * 2) - 1;
+		ssbase = (fref / m_best) / ((VSIPLL_MODULATION_FREQ / 1000) * 2);
+		if (ssbase < 2) {
+			pr_err("MA35 PLL: invalid spread spectrum rate\n");
+			return 0;
+		}
+		ssrate = ssbase - 1;
 		slope = ((u64)n_best * VSIPLL_SPREAD_RANGE * (1ULL << 24) +
 			(ssrate * 10000) / 2) / (ssrate * 10000);
 		pr_info("ssrate = 0x%lx slope = 0x%lx\n", ssrate, slope);
@@ -267,6 +278,8 @@ unsigned long CLK_SetPLLFreq(struct ma35h0_clk_pll *pll,
 		u64PllClk = ma35h0_pll_frac_mode_find_closest(pll, u64PllFreq,
 							      PllSrcClk, u32Reg,
 							      &u64PllClk);
+		if (!u64PllClk)
+			return 0;
 		val_ctl0 = u32Reg[0];
 		break;
 	}

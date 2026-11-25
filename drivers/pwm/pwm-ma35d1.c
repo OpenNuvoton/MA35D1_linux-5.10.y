@@ -330,8 +330,6 @@ static int ma35d1_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	/* don't want the minus 1 below change the value to -1 (0xFFFF) */
 	if (period == 0)
 		period = 1;
-	if (duty == 0)
-		duty = 1;
 
 	spin_lock_irqsave(&ma35d1->lock, flags);
 
